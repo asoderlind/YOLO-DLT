@@ -1,7 +1,7 @@
 from ultralytics import YOLO
 
 # Load a model
-model = YOLO("yolo11n.yaml")  # build from YAML and transfer weights
+model = YOLO("yolo11n.pt")
 
 # Train the model
-results = model.train(data="coco128.yaml", epochs=100, imgsz=640)
+results = model.train(data="../ultralytics/cfg/datasets/bdd1k.yaml", epochs=1, device="cpu")
