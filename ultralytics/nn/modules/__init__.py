@@ -60,6 +60,7 @@ from .block import (
 )
 from .conv import (
     CBAM,
+    GC,
     ChannelAttention,
     Concat,
     Conv,
@@ -71,6 +72,8 @@ from .conv import (
     GhostConv,
     Index,
     LightConv,
+    NewConv,
+    NewConv2,
     RepConv,
     SpatialAttention,
 )
@@ -160,4 +163,7 @@ __all__ = (
     "PSA",
     "TorchVision",
     "Index",
+    "GC",
+    "NewConv",
+    "NewConv2",
 )

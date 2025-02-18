@@ -348,3 +348,69 @@ class Index(nn.Module):
         Expects a list of tensors as input.
         """
         return x[self.index]
+
+
+class GC(nn.Module):
+    def __init__(self, in_channels: int, ratio: float = 1.0 / 16.0):
+        super().__init__()
+        # context modeling
+        self.channel_conv = nn.Conv2d(in_channels, 1, kernel_size=1, bias=False)
+        self.softmax = nn.Softmax(dim=2)
+
+        # transform
+        self.transform_channels_ = in_channels if not int(in_channels * ratio) else int(in_channels * ratio)
+        self.transform = nn.Sequential(
+            nn.Conv2d(in_channels, self.transform_channels_, kernel_size=1, bias=False),
+            nn.LayerNorm([self.transform_channels_, 1, 1]),
+            nn.ReLU(),
+            nn.Conv2d(self.transform_channels_, in_channels, kernel_size=1, bias=False),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        batch, channel, height, width = x.shape
+
+        # context modeling
+        weights: torch.Tensor = self.channel_conv(x).view(batch, height * width, 1)  # B, 1, H, W => # B, H*W, 1
+        weights = self.softmax(weights)  # B, H*W, 1
+        context = torch.matmul(x.view(batch, channel, height * width), weights).view(batch, channel, 1, 1)  # B, C, 1, 1
+
+        # transform and resiudal
+        return x + self.transform(context)
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        return super().__call__(x)
+
+
+class NewConv(nn.Module):
+    def __init__(self, c1, c2, g=1, d=1, act=True):
+        super().__init__()
+        self.c_ = c1 * 2  # hidden channels
+        self.conv = Conv(c1, self.c_, k=3, s=2, p=1, g=g, d=d, act=act)
+        self.channel_conv = nn.Conv2d(self.c_ + 4 * c1, c2, kernel_size=1, bias=False)
+
+    def spd(self, x: torch.Tensor) -> torch.Tensor:  # (b,c,w,h) -> (b,4c,w/2,h/2)
+        """space to depth operation according to https://arxiv.org/abs/2208.03641"""
+        return torch.cat((x[..., ::2, ::2], x[..., 1::2, ::2], x[..., ::2, 1::2], x[..., 1::2, 1::2]), 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.channel_conv(torch.cat((self.conv(x), self.spd(x)), 1))
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        return super().__call__(x)
+
+
+class NewConv2(nn.Module):
+    """Modified version of NewConv where we have a full SPD conv block instead of just the SPD operation."""
+
+    def __init__(self, c1, c2, g=1, d=1, act=True):
+        super().__init__()
+        self.c_ = c1 * 2
+        self.conv = Conv(c1, self.c_, k=3, s=2, p=1, g=g, d=d, act=act)
+        self.spd_conv = Focus(c1, self.c_, k=3, s=1, p=1, g=g, act=act)
+        self.channel_conv = Conv(2 * self.c_, c2, k=3, s=1, p=1, g=g, d=d, act=act)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        spd = self.spd_conv(x)  # (b,2c,w/2,h/2)
+        c = self.conv(x)  # (b,2c,w/2,h/2)
+        res = torch.cat((c, spd), 1)  # (b,4c,w/2,h/2)
+        return self.channel_conv(res)  # (b,c2,w/2,h/2)
