@@ -18,6 +18,7 @@ from ultralytics.nn.modules import (
     C3,
     C3TR,
     ELAN1,
+    GC,
     OBB,
     PSA,
     SPP,
@@ -51,6 +52,7 @@ from ultralytics.nn.modules import (
     HGStem,
     ImagePoolingAttn,
     Index,
+    NewConv,
     Pose,
     RepC3,
     RepConv,
@@ -981,6 +983,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             PSA,
             SCDown,
             C2fCIB,
+            NewConv,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
@@ -1062,6 +1065,9 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             c2 = args[0]
             c1 = ch[f]
             args = [*args[1:]]
+        elif m is GC:
+            c1 = ch[f]
+            args = [c1, *args]
         else:
             c2 = ch[f]
 
