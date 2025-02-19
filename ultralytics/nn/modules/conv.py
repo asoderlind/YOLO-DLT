@@ -351,19 +351,19 @@ class Index(nn.Module):
 
 
 class GC(nn.Module):
-    def __init__(self, in_channels: int, ratio: float = 1.0 / 16.0):
+    def __init__(self, c1: int, ratio: float = 1.0 / 16.0):
         super().__init__()
         # context modeling
-        self.channel_conv = nn.Conv2d(in_channels, 1, kernel_size=1, bias=False)
+        self.channel_conv = nn.Conv2d(c1, 1, kernel_size=1, bias=False)
         self.softmax = nn.Softmax(dim=2)
 
         # transform
-        self.transform_channels_ = in_channels if not int(in_channels * ratio) else int(in_channels * ratio)
+        self.transform_channels_ = c1 if not int(c1 * ratio) else int(c1 * ratio)
         self.transform = nn.Sequential(
-            nn.Conv2d(in_channels, self.transform_channels_, kernel_size=1, bias=False),
+            nn.Conv2d(c1, self.transform_channels_, kernel_size=1, bias=False),
             nn.LayerNorm([self.transform_channels_, 1, 1]),
             nn.ReLU(),
-            nn.Conv2d(self.transform_channels_, in_channels, kernel_size=1, bias=False),
+            nn.Conv2d(self.transform_channels_, c1, kernel_size=1, bias=False),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
