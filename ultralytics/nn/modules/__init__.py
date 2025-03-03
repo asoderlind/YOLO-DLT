@@ -56,6 +56,7 @@ from .block import (
     RepVGGDW,
     ResNetLayer,
     SCDown,
+    SimSPPF,
     TorchVision,
 )
 from .conv import (
@@ -166,4 +167,5 @@ __all__ = (
     "GC",
     "NewConv",
     "NewConv2",
+    "SimSPPF",
 )

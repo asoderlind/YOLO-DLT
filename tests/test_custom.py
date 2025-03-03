@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from ultralytics.nn.modules import GC, NewConv
+from ultralytics.nn.modules import GC, NewConv, SimSPPF
 
 
 class TestGC:
@@ -85,3 +85,39 @@ class TestNewConv:
         conv = NewConv(c1=64, c2=128).cuda()
         output = conv(x)
         assert output.device == x.device
+
+
+class TestSimSPPF:
+    @pytest.mark.parametrize("shape", [(2, 64, 32, 32), (1, 32, 16, 16), (4, 128, 64, 64)])
+    def test_output_shape(self, shape):
+        """Test that SimSPPF preserves spatial dimensions and produces expected output channels."""
+        x = torch.randn(*shape)
+        sppf = SimSPPF(shape[1], 64)
+        output = sppf(x)
+        expected_shape = (shape[0], 64, shape[2], shape[3])
+        assert output.shape == expected_shape
+
+    @pytest.mark.parametrize("batch_size,channels,spatial", [(2, 16, 8), (1, 32, 16), (4, 8, 4)])
+    def test_intermediate_shapes(self, batch_size, channels, spatial):
+        """Test shapes of intermediate feature maps after pooling."""
+        x = torch.randn(batch_size, channels, spatial, spatial)
+        sppf = SimSPPF(channels, 64)
+
+        # Get intermediate feature after first conv
+        inter = sppf.cv1(x)
+        expected_inter_channels = channels // 2
+        assert inter.shape == (batch_size, expected_inter_channels, spatial, spatial)
+
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    def test_device_consistency(self):
+        """Test that SimSPPF works correctly when moved to GPU."""
+        x = torch.randn(2, 64, 32, 32).cuda()
+        sppf = SimSPPF(64, 128).cuda()
+        output = sppf(x)
+        assert output.device == x.device
+
+    def test_activation_presence(self):
+        """Test that ReLU activations are present in the module."""
+        sppf = SimSPPF(64, 128)
+        assert isinstance(sppf.cv1.act, torch.nn.ReLU)
+        assert isinstance(sppf.cv2.act, torch.nn.ReLU)
