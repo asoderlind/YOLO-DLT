@@ -22,6 +22,7 @@ from ultralytics.nn.modules import (
     GC,
     OBB,
     PSA,
+    SE,
     SPP,
     SPPELAN,
     SPPF,
@@ -1069,7 +1070,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             c2 = args[0]
             c1 = ch[f]
             args = [*args[1:]]
-        elif m is GC:
+        elif m is GC or m is SE:
             c1 = ch[f]
             args = [c1, *args]
         else:
