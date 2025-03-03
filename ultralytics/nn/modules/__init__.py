@@ -26,6 +26,7 @@ from .block import (
     CIB,
     DFL,
     ELAN1,
+    FEM,
     PSA,
     SPP,
     SPPELAN,
@@ -168,4 +169,5 @@ __all__ = (
     "NewConv",
     "NewConv2",
     "SimSPPF",
+    "FEM",
 )

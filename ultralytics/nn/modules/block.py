@@ -1176,3 +1176,70 @@ class SimSPPF(nn.Module):
         y = [self.cv1(x)]
         y.extend(self.m(y[-1]) for _ in range(3))
         return self.cv2(torch.cat(y, 1))
+
+
+class FEM(nn.Module):
+    """
+    Feature Enhancement Module (FEM) block.
+    Adapted from https://www.mdpi.com/2227-7390/12/1/124
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int = 3,
+        padding: int | None = None,
+        stride: int = 1,
+        groups: int = 1,
+        dilation_1: int = 1,
+        dilation_2: int = 3,
+        dilation_3: int = 5,
+    ):
+        super().__init__()
+        self.conv1 = Conv(
+            c1=in_channels,
+            c2=out_channels,
+            k=kernel_size,
+            p=autopad(kernel_size, padding, dilation_1),
+            s=stride,
+            g=groups,
+            d=dilation_1,
+            act=nn.ReLU(),
+        )
+        self.conv2 = Conv(
+            c1=in_channels,
+            c2=out_channels,
+            k=kernel_size,
+            p=autopad(kernel_size, padding, dilation_2),
+            s=stride,
+            g=groups,
+            d=dilation_2,
+            act=nn.ReLU(),
+        )
+        self.conv3 = Conv(
+            c1=in_channels,
+            c2=out_channels,
+            k=kernel_size,
+            p=autopad(kernel_size, padding, dilation_3),
+            s=stride,
+            g=groups,
+            d=dilation_3,
+            act=nn.ReLU(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the FEM block.
+
+        Args:
+            x (torch.Tensor): Input tensor with shape [b, in_c, h, w]
+        Returns:
+            out (torch.Tensor): Output tensor with shape [b, out_c, h, w]
+        """
+
+        # branch pooled features through 3 convolutions
+        return (self.conv1(x) + self.conv2(x) + self.conv3(x)) / 3
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        return self.forward(x)

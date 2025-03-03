@@ -18,6 +18,7 @@ from ultralytics.nn.modules import (
     C3,
     C3TR,
     ELAN1,
+    FEM,
     GC,
     OBB,
     PSA,
@@ -986,6 +987,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             C2fCIB,
             NewConv,
             SimSPPF,
+            FEM,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments

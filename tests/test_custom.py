@@ -1,7 +1,8 @@
 import pytest
 import torch
+import torch.nn as nn
 
-from ultralytics.nn.modules import GC, NewConv, SimSPPF
+from ultralytics.nn.modules import FEM, GC, Conv, NewConv, SimSPPF
 
 
 class TestGC:
@@ -121,3 +122,84 @@ class TestSimSPPF:
         sppf = SimSPPF(64, 128)
         assert isinstance(sppf.cv1.act, torch.nn.ReLU)
         assert isinstance(sppf.cv2.act, torch.nn.ReLU)
+
+
+class TestFEM:
+    @pytest.mark.parametrize(
+        "in_channels, out_channels, kernel_size",
+        [
+            (64, 64, 3),
+            (128, 128, 3),
+            (256, 256, 3),
+            (32, 64, 3),
+        ],
+    )
+    def test_fem_output_shape(self, in_channels: int, out_channels: int, kernel_size: int) -> None:
+        """Test that FEM produces correct output shape."""
+        fem = FEM(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size)
+
+        x = torch.randn(2, in_channels, 32, 32)
+        output = fem(x)
+
+        expected_shape = (2, out_channels, 32, 32)
+        assert output.shape == expected_shape, f"Expected shape {expected_shape}, got {output.shape}"
+
+    def test_fem_components(self) -> None:
+        """Test that FEM components are initialized correctly."""
+        in_channels, out_channels = 64, 64
+        fem = FEM(in_channels=in_channels, out_channels=out_channels)
+
+        # Test that convolutions are properly initialized
+        assert isinstance(fem.conv1, Conv)
+        assert isinstance(fem.conv2, Conv)
+        assert isinstance(fem.conv3, Conv)
+
+        # Test dilation rates
+        assert fem.conv1.conv.dilation == (1, 1)
+        assert fem.conv2.conv.dilation == (3, 3)
+        assert fem.conv3.conv.dilation == (5, 5)
+
+        # Test activation functions
+        assert isinstance(fem.conv1.act, nn.ReLU)
+        assert isinstance(fem.conv2.act, nn.ReLU)
+        assert isinstance(fem.conv3.act, nn.ReLU)
+
+    @pytest.mark.parametrize("batch_size", [1, 2, 4])
+    def test_fem_batch_processing(self, batch_size: int) -> None:
+        """Test FEM with different batch sizes."""
+        in_channels, out_channels = 64, 64
+        fem = FEM(in_channels=in_channels, out_channels=out_channels)
+
+        x = torch.randn(batch_size, in_channels, 32, 32)
+        output = fem(x)
+
+        assert output.shape[0] == batch_size
+
+        # Check that output has valid values
+        assert not torch.isnan(output).any()
+        assert not torch.isinf(output).any()
+
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    def test_fem_device_consistency(self) -> None:
+        """Test FEM works correctly when moved to GPU."""
+        fem = FEM(64, 64).cuda()
+        x = torch.randn(2, 64, 32, 32).cuda()
+        output = fem(x)
+
+        assert output.device == x.device
+        assert not torch.isnan(output).any()
+        assert not torch.isinf(output).any()
+
+    def test_fem_gradient_flow(self) -> None:
+        """Test that gradients flow properly through FEM."""
+        fem = FEM(64, 64)
+        x = torch.randn(2, 64, 32, 32, requires_grad=True)
+
+        output = fem(x)
+        loss = output.sum()
+        loss.backward()  # type: ignore[no-untyped-call]
+
+        # Check that gradients are computed
+        assert x.grad is not None
+        assert not torch.isnan(x.grad).any()
+        assert not torch.isinf(x.grad).any()
