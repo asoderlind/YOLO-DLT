@@ -1129,7 +1129,7 @@ class TorchVision(nn.Module):
 
     def __init__(self, model, weights="DEFAULT", unwrap=True, truncate=2, split=False):
         """Load the model and weights from torchvision."""
-        import torchvision  # scope for faster 'import ultralytics'
+        import torchvision  # type: ignore[import-untyped] # scope for faster 'import ultralytics'
 
         super().__init__()
         if hasattr(torchvision.models, "get_model"):
