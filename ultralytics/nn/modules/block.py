@@ -1129,7 +1129,7 @@ class TorchVision(nn.Module):
 
     def __init__(self, model, weights="DEFAULT", unwrap=True, truncate=2, split=False):
         """Load the model and weights from torchvision."""
-        import torchvision  # scope for faster 'import ultralytics'
+        import torchvision  # type: ignore[import-untyped] # scope for faster 'import ultralytics'
 
         super().__init__()
         if hasattr(torchvision.models, "get_model"):
@@ -1240,6 +1240,64 @@ class FEM(nn.Module):
 
         # branch pooled features through 3 convolutions
         return (self.conv1(x) + self.conv2(x) + self.conv3(x)) / 3
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        return self.forward(x)
+
+
+class SE(nn.Module):
+    """
+    Squeeze and Excitation (SE) block.
+    Adapted from https://arxiv.org/abs/1709.01507v4
+    """
+
+    def __init__(self, in_channels: int, reduction: int = 16) -> None:
+        super().__init__()
+
+        if in_channels < reduction:
+            raise ValueError("The number of input channels must be greater than the reduction factor.")
+
+        self.squeeze = nn.AdaptiveAvgPool2d(1)
+
+        excitation_hidden = in_channels // reduction
+        self.excitation = nn.Sequential(
+            nn.Linear(in_channels, excitation_hidden),
+            nn.ReLU(inplace=True),
+            nn.Linear(excitation_hidden, in_channels),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the Squeeze-and-Excitation (SE) block.
+
+        The SE block adaptively recalibrates channel-wise feature responses by:
+        1. Squeeze: Aggregating spatial information via global average pooling
+        2. Excitation: Generating channel-specific weights through a bottleneck FC network
+        3. Scale: Applying these weights to selectively emphasize important channels
+
+        This channel attention mechanism helps the network focus on informative features
+        and suppress less useful ones, which is particularly valuable for detecting objects
+        in challenging conditions such as low-light environments.
+
+        Args:
+            x (torch.Tensor): Input feature tensor of shape [batch_size, channels, height, width]
+
+        Returns:
+            out (torch.Tensor): Channel-recalibrated feature tensor of same shape as input
+
+        Shape:
+            - Input: (B, C, H, W)
+            - Output: (B, C, H, W)
+        """
+
+        z = self.squeeze(x)  # [b, c, 1, 1]
+        # squeeze since linear expects [b, c]
+        z = z.view(z.shape[0], z.shape[1])  # [b, c]
+        z = self.excitation(z)  # [b, c]
+        # expand since we want to multiply with x
+        z = z.view(z.size(0), z.size(1), 1, 1)
+        return x * z
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         return self.forward(x)

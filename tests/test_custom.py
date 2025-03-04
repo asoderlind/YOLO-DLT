@@ -2,7 +2,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from ultralytics.nn.modules import FEM, GC, Conv, NewConv, SimSPPF
+from ultralytics.nn.modules import FEM, GC, SE, Conv, NewConv, SimSPPF
 
 
 class TestGC:
@@ -203,3 +203,69 @@ class TestFEM:
         assert x.grad is not None
         assert not torch.isnan(x.grad).any()
         assert not torch.isinf(x.grad).any()
+
+
+class TestSE:
+    """Tests for SE (Squeeze-and-Excitation) module."""
+
+    @pytest.fixture
+    def se_module(self):
+        """Create SE module fixture."""
+        return SE(in_channels=64, reduction=16)
+
+    def test_init(self, se_module):
+        """Test SE initialization."""
+        assert isinstance(se_module.squeeze, nn.AdaptiveAvgPool2d)
+        assert isinstance(se_module.excitation, nn.Sequential)
+        assert len(se_module.excitation) == 4
+        assert isinstance(se_module.excitation[0], nn.Linear)
+        assert isinstance(se_module.excitation[1], nn.ReLU)
+        assert isinstance(se_module.excitation[2], nn.Linear)
+        assert isinstance(se_module.excitation[3], nn.Sigmoid)
+
+        # Check dimensions
+        assert se_module.excitation[0].in_features == 64
+        assert se_module.excitation[0].out_features == 4
+        assert se_module.excitation[2].in_features == 4
+        assert se_module.excitation[2].out_features == 64
+
+    def test_forward_shape(self, se_module):
+        """Test if output shape matches input shape."""
+        batch_size = 4
+        channels = 64
+        height = 32
+        width = 32
+
+        x = torch.randn(batch_size, channels, height, width)
+        output = se_module(x)
+
+        assert output.shape == x.shape
+        assert output.dtype == x.dtype
+        assert output.device == x.device
+
+    def test_channel_attention(self, se_module):
+        """Test if SE applies channel-wise attention correctly."""
+        x = torch.ones(2, 64, 16, 16)
+        output = se_module(x)
+
+        # Check that attention modifies each channel
+        assert not torch.allclose(output[:, 0], output[:, 1])
+
+        # Check output range (should be between 0 and input due to sigmoid)
+        assert torch.all(output >= 0)
+        assert torch.all(output <= x)
+
+    @pytest.mark.parametrize("reduction", [4, 8, 16, 32])
+    def test_reduction_ratio(self, reduction):
+        """Test SE with different reduction ratios."""
+        channels = 64
+        se = SE(in_channels=channels, reduction=reduction)
+
+        hidden_dim = channels // reduction
+        assert se.excitation[0].out_features == hidden_dim
+        assert se.excitation[2].in_features == hidden_dim
+
+    def test_invalid_reduction(self):
+        """Test if SE raises error for invalid reduction ratio."""
+        with pytest.raises(ValueError, match="The number of input channels must be greater than the reduction factor."):
+            SE(in_channels=16, reduction=32)  # Reduction larger than channels
