@@ -18,6 +18,7 @@ from ultralytics.nn.modules import (
     C3,
     C3TR,
     ELAN1,
+    FEM,
     GC,
     OBB,
     PSA,
@@ -62,6 +63,7 @@ from ultralytics.nn.modules import (
     RTDETRDecoder,
     SCDown,
     Segment,
+    SimSPPF,
     TorchVision,
     WorldDetect,
     v10Detect,
@@ -984,6 +986,8 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             SCDown,
             C2fCIB,
             NewConv,
+            SimSPPF,
+            FEM,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments

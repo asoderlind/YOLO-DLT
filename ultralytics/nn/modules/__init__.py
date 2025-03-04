@@ -26,6 +26,7 @@ from .block import (
     CIB,
     DFL,
     ELAN1,
+    FEM,
     PSA,
     SPP,
     SPPELAN,
@@ -56,6 +57,7 @@ from .block import (
     RepVGGDW,
     ResNetLayer,
     SCDown,
+    SimSPPF,
     TorchVision,
 )
 from .conv import (
@@ -166,4 +168,6 @@ __all__ = (
     "GC",
     "NewConv",
     "NewConv2",
+    "SimSPPF",
+    "FEM",
 )

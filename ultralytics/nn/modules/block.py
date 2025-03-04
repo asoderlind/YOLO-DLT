@@ -1154,3 +1154,92 @@ class TorchVision(nn.Module):
         else:
             y = self.m(x)
         return y
+
+
+class SimSPPF(nn.Module):
+    """Spatial Pyramid Pooling - Fast (SPPF) layer for YOLOv5 by Glenn Jocher."""
+
+    def __init__(self, c1, c2, k=5):
+        """
+        Initializes the SPPF layer with given input/output channels and kernel size.
+
+        This module is equivalent to SPP(k=(5, 9, 13)).
+        """
+        super().__init__()
+        c_ = c1 // 2  # hidden channels
+        self.cv1 = Conv(c1, c_, 1, 1, act=nn.ReLU())
+        self.cv2 = Conv(c_ * 4, c2, 1, 1, act=nn.ReLU())
+        self.m = nn.MaxPool2d(kernel_size=k, stride=1, padding=k // 2)
+
+    def forward(self, x):
+        """Forward pass through Ghost Convolution block."""
+        y = [self.cv1(x)]
+        y.extend(self.m(y[-1]) for _ in range(3))
+        return self.cv2(torch.cat(y, 1))
+
+
+class FEM(nn.Module):
+    """
+    Feature Enhancement Module (FEM) block.
+    Adapted from https://www.mdpi.com/2227-7390/12/1/124
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int = 3,
+        padding: int | None = None,
+        stride: int = 1,
+        groups: int = 1,
+        dilation_1: int = 1,
+        dilation_2: int = 3,
+        dilation_3: int = 5,
+    ):
+        super().__init__()
+        self.conv1 = Conv(
+            c1=in_channels,
+            c2=out_channels,
+            k=kernel_size,
+            p=autopad(kernel_size, padding, dilation_1),
+            s=stride,
+            g=groups,
+            d=dilation_1,
+            act=nn.ReLU(),
+        )
+        self.conv2 = Conv(
+            c1=in_channels,
+            c2=out_channels,
+            k=kernel_size,
+            p=autopad(kernel_size, padding, dilation_2),
+            s=stride,
+            g=groups,
+            d=dilation_2,
+            act=nn.ReLU(),
+        )
+        self.conv3 = Conv(
+            c1=in_channels,
+            c2=out_channels,
+            k=kernel_size,
+            p=autopad(kernel_size, padding, dilation_3),
+            s=stride,
+            g=groups,
+            d=dilation_3,
+            act=nn.ReLU(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the FEM block.
+
+        Args:
+            x (torch.Tensor): Input tensor with shape [b, in_c, h, w]
+        Returns:
+            out (torch.Tensor): Output tensor with shape [b, out_c, h, w]
+        """
+
+        # branch pooled features through 3 convolutions
+        return (self.conv1(x) + self.conv2(x) + self.conv3(x)) / 3
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        return self.forward(x)
