@@ -416,6 +416,8 @@ class BaseTrainer:
                         L_c = torch.nn.functional.mse_loss(
                             avg_pool_enhanced_imgs, avg_pool_predictions
                         ) + torch.nn.functional.mse_loss(max_pool_enhanced_imgs, max_pool_predictions)
+                        lambda_c = 0.5  # experimentally found to be good
+                        L_c = L_c * lambda_c
                         L_c.backward()
                     #
                     # End FE loss
