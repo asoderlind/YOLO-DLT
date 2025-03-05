@@ -65,6 +65,7 @@ from .block import (
 )
 from .conv import (
     CBAM,
+    CBM,
     GC,
     ChannelAttention,
     Concat,
@@ -176,4 +177,5 @@ __all__ = (
     "SE",
     "ECA",
     "SimAM",
+    "CBM",
 )

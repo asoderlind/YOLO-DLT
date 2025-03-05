@@ -414,3 +414,16 @@ class NewConv2(nn.Module):
         c = self.conv(x)  # (b,2c,w/2,h/2)
         res = torch.cat((c, spd), 1)  # (b,4c,w/2,h/2)
         return self.channel_conv(res)  # (b,c2,w/2,h/2)
+
+
+class CBM(Conv):
+    """
+    Conv block with Mish activation.
+    """
+
+    def __init__(self, c1: int, c2: int, k: int = 1, s: int = 1, p: int | None = None, g: int = 1, d: int = 1) -> None:
+        super().__init__(c1, c2, k, s, p, g, d)
+        self.act = nn.Mish()
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        return self.forward(x)
