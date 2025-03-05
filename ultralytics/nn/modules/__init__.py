@@ -25,6 +25,7 @@ from .block import (
     C3TR,
     CIB,
     DFL,
+    ECA,
     ELAN1,
     FEM,
     PSA,
@@ -58,6 +59,7 @@ from .block import (
     RepVGGDW,
     ResNetLayer,
     SCDown,
+    SimAM,
     SimSPPF,
     TorchVision,
 )
@@ -172,4 +174,6 @@ __all__ = (
     "SimSPPF",
     "FEM",
     "SE",
+    "ECA",
+    "SimAM",
 )
