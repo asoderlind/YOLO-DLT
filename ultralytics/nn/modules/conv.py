@@ -362,7 +362,7 @@ class GC(nn.Module):
         self.transform = nn.Sequential(
             nn.Conv2d(c1, self.transform_channels_, kernel_size=1, bias=False),
             nn.LayerNorm([self.transform_channels_, 1, 1]),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Conv2d(self.transform_channels_, c1, kernel_size=1, bias=False),
         )
 

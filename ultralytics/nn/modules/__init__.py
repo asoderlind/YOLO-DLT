@@ -25,6 +25,7 @@ from .block import (
     C3TR,
     CIB,
     DFL,
+    ECA,
     ELAN1,
     FEM,
     PSA,
@@ -172,4 +173,5 @@ __all__ = (
     "SimSPPF",
     "FEM",
     "SE",
+    "ECA",
 )

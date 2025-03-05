@@ -1,6 +1,8 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 """Block modules."""
 
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -1257,13 +1259,14 @@ class SE(nn.Module):
         if in_channels < reduction:
             raise ValueError("The number of input channels must be greater than the reduction factor.")
 
-        self.squeeze = nn.AdaptiveAvgPool2d(1)
+        # squeeze operation
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
 
         excitation_hidden = in_channels // reduction
         self.excitation = nn.Sequential(
-            nn.Linear(in_channels, excitation_hidden),
+            nn.Linear(in_channels, excitation_hidden, bias=False),
             nn.ReLU(inplace=True),
-            nn.Linear(excitation_hidden, in_channels),
+            nn.Linear(excitation_hidden, in_channels, bias=False),
             nn.Sigmoid(),
         )
 
@@ -1291,13 +1294,96 @@ class SE(nn.Module):
             - Output: (B, C, H, W)
         """
 
-        z = self.squeeze(x)  # [b, c, 1, 1]
+        b, c, _, _ = x.size()
+        z: torch.Tensor = self.avg_pool(x)  # [b, c, 1, 1]
         # squeeze since linear expects [b, c]
-        z = z.view(z.shape[0], z.shape[1])  # [b, c]
+        z = z.view(b, c)  # [b, c]
         z = self.excitation(z)  # [b, c]
         # expand since we want to multiply with x
-        z = z.view(z.size(0), z.size(1), 1, 1)
+        z = z.view(b, c, 1, 1)
         return x * z
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        return self.forward(x)
+
+
+class ECA(nn.Module):
+    """
+    Efficient Channel Attention (ECA) block.
+    Adapted from https://arxiv.org/abs/1910.03151.
+    Code from https://github.com/BangguWu/ECANet/blob/master/models/eca_module.py
+    """
+
+    def __init__(self, channel: int, gamma: int = 2, b: int = 1) -> None:
+        """
+        Initializes the ECA block with the specified channel dimension and gamma value.
+
+        Args:
+            channel (int): Number of input channels.
+            gamma (int): Scaling factor for the kernel size. Default is 2.
+            b (int): Bias term for kernel size calculation. Default is 1.
+        """
+        super().__init__()
+        # Calculate kernel size based on channel dimension
+        t = int(abs((math.log(channel, 2) + b) / gamma))
+        # Ensure kernel size is odd
+        k_size = t if t % 2 else t + 1
+
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the Efficient Channel Attention (ECA) block.
+
+        The ECA module applies channel attention through these steps:
+        1. Global Average Pooling to squeeze spatial dimensions
+        2. 1D convolution across channels to capture channel dependencies
+        3. Sigmoid activation to generate attention weights
+        4. Channel-wise multiplication with input features
+
+        Key differences from SE block:
+        - Uses 1D convolution instead of fully connected layers
+        - Adaptive kernel size based on channel dimension
+        - No dimension reduction, preserving channel information
+
+        Args:
+            x (torch.Tensor): Input tensor of shape [batch_size, channels, height, width]
+
+        Returns:
+            torch.Tensor: Output tensor of shape [batch_size, channels, height, width]
+
+        Shape:
+            - Input: (B, C, H, W)
+            - After pooling: (B, C, 1, 1)
+            - After conv: (B, C, 1, 1)
+            - Output: (B, C, H, W) (same as input)
+
+        Examples:
+            >>> x = torch.randn(1, 64, 32, 32)
+            >>> eca = ECA(64)
+            >>> output = eca(x)
+            >>> print(output.shape)
+            torch.Size([1, 64, 32, 32])
+        """
+        y: torch.Tensor = self.avg_pool(x)  # [b, c, 1, 1]
+
+        # prepare for 1D convolution
+        y = y.squeeze(-1)  # [b, c, 1]
+        y = y.transpose(-1, -2)  # [b, 1, c]
+
+        # apply 1D convolution across channels
+        y = self.conv(y)  # [b, 1, c]
+
+        # restore original shape
+        y = y.transpose(-1, -2)  # [b, c, 1]
+        y = y.unsqueeze(-1)  # [b, c, 1, 1]
+
+        # generate attention weights
+        y = self.sigmoid(y)
+
+        return x * y  # broadcasting handles shape
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         return self.forward(x)

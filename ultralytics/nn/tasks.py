@@ -17,6 +17,7 @@ from ultralytics.nn.modules import (
     C2PSA,
     C3,
     C3TR,
+    ECA,
     ELAN1,
     FEM,
     GC,
@@ -1070,7 +1071,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             c2 = args[0]
             c1 = ch[f]
             args = [*args[1:]]
-        elif m is GC or m is SE:
+        elif m is GC or m is SE or m is ECA:
             c1 = ch[f]
             args = [c1, *args]
         else:

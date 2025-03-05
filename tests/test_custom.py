@@ -2,7 +2,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from ultralytics.nn.modules import FEM, GC, SE, Conv, NewConv, SimSPPF
+from ultralytics.nn.modules import ECA, FEM, GC, SE, Conv, NewConv, SimSPPF
 
 
 class TestGC:
@@ -215,7 +215,7 @@ class TestSE:
 
     def test_init(self, se_module):
         """Test SE initialization."""
-        assert isinstance(se_module.squeeze, nn.AdaptiveAvgPool2d)
+        assert isinstance(se_module.avg_pool, nn.AdaptiveAvgPool2d)
         assert isinstance(se_module.excitation, nn.Sequential)
         assert len(se_module.excitation) == 4
         assert isinstance(se_module.excitation[0], nn.Linear)
@@ -269,3 +269,116 @@ class TestSE:
         """Test if SE raises error for invalid reduction ratio."""
         with pytest.raises(ValueError, match="The number of input channels must be greater than the reduction factor."):
             SE(in_channels=16, reduction=32)  # Reduction larger than channels
+
+
+class TestECA:
+    """
+    Test suite for the Efficient Channel Attention (ECA) module.
+    """
+
+    @pytest.fixture
+    def sample_inputs(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Fixture to generate sample inputs for testing.
+
+        Returns:
+            Tuple of tensors with different shapes and channel counts
+        """
+        # Small input: [batch_size=2, channels=16, height=24, width=24]
+        x_small = torch.randn(2, 16, 24, 24)
+
+        # Medium input: [batch_size=1, channels=64, height=32, width=32]
+        x_medium = torch.randn(1, 64, 32, 32)
+
+        # Large input: [batch_size=4, channels=256, height=56, width=56]
+        x_large = torch.randn(4, 256, 56, 56)
+
+        return x_small, x_medium, x_large
+
+    def test_output_shape(self, sample_inputs):
+        """
+        Test that the output shape matches the input shape for various input sizes.
+        """
+        x_small, x_medium, x_large = sample_inputs
+
+        # Test small input
+        eca_small = ECA(channel=16)
+        output_small = eca_small(x_small)
+        assert output_small.shape == x_small.shape, f"Expected shape {x_small.shape}, got {output_small.shape}"
+
+        # Test medium input
+        eca_medium = ECA(channel=64)
+        output_medium = eca_medium(x_medium)
+        assert output_medium.shape == x_medium.shape, f"Expected shape {x_medium.shape}, got {output_medium.shape}"
+
+        # Test large input
+        eca_large = ECA(channel=256)
+        output_large = eca_large(x_large)
+        assert output_large.shape == x_large.shape, f"Expected shape {x_large.shape}, got {output_large.shape}"
+
+    @pytest.mark.parametrize(
+        "channels,gamma,b,expected_k_size",
+        [
+            (16, 2, 1, 3),  # Small channel count
+            (64, 2, 1, 3),  # Medium channel count
+            (256, 2, 1, 5),  # Large channel count
+            (1024, 2, 1, 5),  # Very large channel count
+        ],
+    )
+    def test_kernel_size_calculation(self, channels, gamma, b, expected_k_size):
+        """Test that the kernel size is calculated correctly based on channel count."""
+        eca = ECA(channel=channels, gamma=gamma, b=b)
+        # Access the kernel size from the Conv1d layer
+        actual_k_size = eca.conv.kernel_size[0]
+        assert actual_k_size == expected_k_size, (
+            f"For {channels} channels (gamma={gamma}, b={b}), "
+            f"expected kernel size {expected_k_size}, got {actual_k_size}"
+        )
+
+    def test_gradient_flow(self):
+        """
+        Test that gradients flow properly through the ECA module.
+        """
+        # Create a simple input with requires_grad=True
+        x = torch.randn(2, 32, 20, 20, requires_grad=True)
+        eca = ECA(channel=32)
+        output = eca(x)
+
+        # Compute loss (e.g., mean of output)
+        loss = output.mean()
+
+        # Backward pass
+        loss.backward()
+
+        # Check that gradients are computed
+        assert x.grad is not None, "Input gradients not computed"
+
+        # Check that all parameters have gradients
+        for name, param in eca.named_parameters():
+            assert param.grad is not None, f"Gradient not computed for parameter: {name}"
+            # Check that gradients are not all zeros
+            assert not torch.allclose(param.grad, torch.zeros_like(param.grad)), (
+                f"Gradient is all zeros for parameter: {name}"
+            )
+
+    def test_attention_values(self):
+        """
+        Test that the attention weights are properly bounded between 0 and 1.
+        """
+        x = torch.randn(2, 32, 20, 20)
+        eca = ECA(channel=32)
+
+        # Get the attention weights
+        with torch.no_grad():
+            # Replicate part of the forward pass to get attention weights
+            y = eca.avg_pool(x)
+            y = y.squeeze(-1)
+            y = y.transpose(-1, -2)
+            y = eca.conv(y)
+            y = y.transpose(-1, -2)
+            y = y.unsqueeze(-1)
+            attention_weights = eca.sigmoid(y)
+
+        # Check bounds
+        assert torch.all(attention_weights >= 0), "Attention weights contain negative values"
+        assert torch.all(attention_weights <= 1), "Attention weights exceed 1"
