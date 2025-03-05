@@ -59,6 +59,7 @@ from .block import (
     RepVGGDW,
     ResNetLayer,
     SCDown,
+    SimAM,
     SimSPPF,
     TorchVision,
 )
@@ -174,4 +175,5 @@ __all__ = (
     "FEM",
     "SE",
     "ECA",
+    "SimAM",
 )

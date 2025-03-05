@@ -1387,3 +1387,62 @@ class ECA(nn.Module):
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         return self.forward(x)
+
+
+class SimAM(torch.nn.Module):
+    """
+    Simple Attention Module (SimAM) block.
+    Adapted from https://proceedings.mlr.press/v139/yang21o.html.
+    Code based on https://github.com/ZjjConan/SimAM/blob/master/networks/attentions/simam_module.py.
+    """
+
+    def __init__(self, e_lambda: float = 1e-4) -> None:
+        """
+        Initializes the Simple Attention Module (SimAM) block with the specified lambda value.
+
+        Args:
+            e_lambda (float): Small constant value to prevent division by zero. Default is 1e-4.
+        """
+        super().__init__()
+
+        self.activation = nn.Sigmoid()
+        self.e_lambda = e_lambda
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply SimAM attention mechanism to input feature maps.
+
+        The method calculates attention weights based on how distinctive each value is from
+        the channel mean. Values that differ significantly from their channel's mean receive
+        higher attention weights. This is inspired by spatial suppression in neuroscience, where
+        distinctive neurons have higher importance.
+
+        The implementation uses a simplified version of the paper's energy function:
+        Original: e*_t = 4(σ² + λ)/((t - μ)² + 2σ² + 2λ)
+        Simplified: importance ≈ (t - μ)²/(4(σ² + λ)) + 0.5
+
+        This simplification preserves the key property (distinctive values get higher weights)
+        while being more efficient to compute.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape [batch_size, channels, height, width]
+
+        Returns:
+            out (torch.Tensor): Tensor of same shape as input with attention weights applied
+        """
+        _, _, h, w = x.size()
+
+        # Bessel's correction since we're estimating variance from a sample
+        sample_size = w * h - 1
+
+        # Calculate squared difference from mean for each value: (t - μ)²
+        diff_from_mean_squared = (x - x.mean(dim=[2, 3], keepdim=True)).pow(2)  # [b, c, h, w]
+
+        # Calculate the variance for each channel: σ²
+        variance = diff_from_mean_squared.sum(dim=[2, 3], keepdim=True) / sample_size  # [b, c, 1, 1]
+
+        # Calculate importance scores using simplified formula
+        # This is proportional to the inverse of the energy function
+        importance_scores = diff_from_mean_squared / (4 * (variance + self.e_lambda)) + 0.5  # [b, c, h, w]
+
+        # Apply activation (typically sigmoid) and multiply with input
+        return x * self.activation(importance_scores)

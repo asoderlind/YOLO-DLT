@@ -2,7 +2,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from ultralytics.nn.modules import ECA, FEM, GC, SE, Conv, NewConv, SimSPPF
+from ultralytics.nn.modules import ECA, FEM, GC, SE, Conv, NewConv, SimAM, SimSPPF
 
 
 class TestGC:
@@ -371,7 +371,7 @@ class TestECA:
         # Get the attention weights
         with torch.no_grad():
             # Replicate part of the forward pass to get attention weights
-            y = eca.avg_pool(x)
+            y: torch.Tensor = eca.avg_pool(x)
             y = y.squeeze(-1)
             y = y.transpose(-1, -2)
             y = eca.conv(y)
@@ -382,3 +382,137 @@ class TestECA:
         # Check bounds
         assert torch.all(attention_weights >= 0), "Attention weights contain negative values"
         assert torch.all(attention_weights <= 1), "Attention weights exceed 1"
+
+
+class TestSimAM:
+    """Test suite for the SimAM attention module."""
+
+    @pytest.fixture
+    def module(self):
+        """Fixture that returns a SimAM instance."""
+        return SimAM(e_lambda=1e-4)
+
+    @pytest.fixture(
+        params=[
+            (1, 3, 16, 16),  # Small feature map
+            (2, 8, 32, 32),  # Medium feature map
+            (4, 16, 64, 64),  # Larger feature map
+        ]
+    )
+    def input_shapes(self, request):
+        """Fixture providing various input tensor shapes for testing."""
+        return request.param
+
+    @pytest.fixture(params=[1e-2, 1e-4, 1e-6])
+    def lambda_values(self, request):
+        """Fixture providing various lambda values for testing."""
+        return request.param
+
+    def test_output_shape(self, module, input_shapes):
+        """Test that output shape matches input shape."""
+        x = torch.rand(input_shapes)
+        output = module(x)
+
+        assert output.shape == x.shape, f"Expected shape {x.shape}, got {output.shape}"
+
+    def test_no_nan_values(self, module, input_shapes):
+        """Test that the output contains no NaN values."""
+        x = torch.rand(input_shapes)
+        output = module(x)
+
+        assert not torch.isnan(output).any(), "Output contains NaN values"
+
+    def test_values_bounded(self, module, input_shapes):
+        """Test that output values are bounded by input values (attention can only reduce values)."""
+        x = torch.rand(input_shapes)
+        output = module(x)
+
+        # Since we're using sigmoid, values should be scaled between 0 and the original value
+        assert torch.all(output <= x), "Output values exceed input values"
+        assert torch.all(output >= 0), "Output contains negative values"
+
+    def test_distinctive_values_preserved(self, module):
+        """Test that distinctive values get higher attention weights."""
+        # Create a 1x1x5x5 tensor with mostly uniform values except one distinctive value
+        x = torch.ones(1, 1, 5, 5) * 0.2
+        x[0, 0, 2, 2] = 1.0  # Make the center value distinctive
+
+        output = module(x)
+
+        # The ratio of the center value to surrounding values should be higher in the output
+        input_ratio = x[0, 0, 2, 2] / x[0, 0, 0, 0]
+        output_ratio = output[0, 0, 2, 2] / output[0, 0, 0, 0]
+
+        assert output_ratio > input_ratio, "Distinctive values are not emphasized"
+
+    def test_lambda_effect(self, input_shapes):
+        """Test that different lambda values affect the output appropriately."""
+        x = torch.rand(input_shapes)
+
+        # With a very small lambda, distinctive values should get more emphasis
+        module_small_lambda = SimAM(e_lambda=1e-8)
+        out_small_lambda = module_small_lambda(x)
+
+        # With a large lambda, the attention effect should be reduced
+        module_large_lambda = SimAM(e_lambda=1.0)
+        out_large_lambda = module_large_lambda(x)
+
+        # Calculate variance of output values as a measure of contrast
+        var_small = torch.var(out_small_lambda)
+        var_large = torch.var(out_large_lambda)
+
+        # Smaller lambda should lead to more contrast (higher variance)
+        assert var_small >= var_large, "Expected smaller lambda to create more contrast"
+
+    def test_gradient_flow(self, module, input_shapes):
+        """Test that gradients flow properly through the SimAM module."""
+        x = torch.rand(input_shapes, requires_grad=True)
+
+        # Forward pass through the SimAM module
+        output = module(x)
+
+        # Create a dummy loss and perform backward pass
+        loss = output.sum()
+        loss.backward()
+
+        # Check that gradients are computed for the input
+        assert x.grad is not None, "No gradients computed for input"
+        assert not torch.isnan(x.grad).any(), "Gradient contains NaN values"
+        assert not torch.isinf(x.grad).any(), "Gradient contains infinite values"
+
+    def test_integration_with_cnn(self):
+        """Test SimAM in a small CNN architecture to ensure it integrates properly."""
+
+        class SimpleConvNet(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.conv1 = nn.Conv2d(3, 16, kernel_size=3, padding=1)
+                self.attn = SimAM()
+                self.conv2 = nn.Conv2d(16, 8, kernel_size=3, padding=1)
+                self.pool = nn.AdaptiveAvgPool2d(1)
+                self.fc = nn.Linear(8, 10)
+
+            def forward(self, x):
+                x = self.conv1(x)
+                x = self.attn(x)  # Apply SimAM
+                x = self.conv2(x)
+                x = self.pool(x)
+                x = x.view(x.size(0), -1)
+                x = self.fc(x)
+                return x
+
+        # Test with a random input
+        model = SimpleConvNet()
+        x = torch.rand(2, 3, 32, 32, requires_grad=True)
+
+        # Forward pass
+        output = model(x)
+
+        # Backward pass
+        loss = output.sum()
+        loss.backward()
+
+        # Check shapes and gradients
+        assert output.shape == (2, 10), "Unexpected output shape from CNN"
+        assert x.grad is not None, "No gradients computed for input in CNN test"
+        assert not torch.isnan(x.grad).any(), "Gradient contains NaN values in CNN test"
