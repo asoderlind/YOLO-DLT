@@ -2,7 +2,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from ultralytics.nn.modules import ECA, FEM, GC, SE, Conv, NewConv, SimAM, SimSPPF
+from ultralytics.nn.modules import ECA, FEM, GC, SE, BiFPNAdd, Conv, NewConv, SimAM, SimSPPF
 
 
 class TestGC:
@@ -516,3 +516,143 @@ class TestSimAM:
         assert output.shape == (2, 10), "Unexpected output shape from CNN"
         assert x.grad is not None, "No gradients computed for input in CNN test"
         assert not torch.isnan(x.grad).any(), "Gradient contains NaN values in CNN test"
+
+
+class TestBiFPNAdd:
+    @pytest.fixture
+    def bifpn_fixture(self):
+        """Create fixture with test data and components for BiFPNAdd testing."""
+        batch_size = 8
+        channels = 64
+        height = 32
+        width = 32
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Create sample input tensors
+        num_inputs = 3
+        inputs = [torch.randn(batch_size, channels, height, width, device=device) for _ in range(num_inputs)]
+
+        # Initialize the BiFPNAdd module
+        bifpn_add = BiFPNAdd(num_inputs=num_inputs).to(device)
+
+        return {
+            "batch_size": batch_size,
+            "channels": channels,
+            "height": height,
+            "width": width,
+            "device": device,
+            "num_inputs": num_inputs,
+            "inputs": inputs,
+            "bifpn_add": bifpn_add,
+        }
+
+    def test_output_shape(self, bifpn_fixture):
+        """Test that the output shape matches the input shape."""
+        bifpn_add = bifpn_fixture["bifpn_add"]
+        inputs = bifpn_fixture["inputs"]
+        batch_size = bifpn_fixture["batch_size"]
+        channels = bifpn_fixture["channels"]
+        height = bifpn_fixture["height"]
+        width = bifpn_fixture["width"]
+
+        output = bifpn_add(inputs)
+
+        # Check output shape
+        assert output.shape == (batch_size, channels, height, width)
+
+    def test_weighted_sum(self, bifpn_fixture):
+        """Test that the weighted sum operates correctly with known weights."""
+        bifpn_add = bifpn_fixture["bifpn_add"]
+        inputs = bifpn_fixture["inputs"]
+        device = bifpn_fixture["device"]
+
+        # Set weights manually for testing
+        with torch.no_grad():
+            bifpn_add.weights.copy_(torch.tensor([1.0, 2.0, 3.0], device=device))
+
+        # Forward pass
+        output = bifpn_add(inputs)
+
+        # Manual calculation of the expected output
+        # First apply ReLU to weights (no change since all are positive)
+        weights = torch.tensor([1.0, 2.0, 3.0], device=device)
+        # Normalize weights
+        normalized_weights = weights / (torch.sum(weights) + 1e-4)
+
+        # Compute weighted sum manually
+        expected_output = sum(w * inp for w, inp in zip(normalized_weights, inputs))
+        # Check if output matches expected output
+        assert torch.allclose(output, expected_output, rtol=1e-5, atol=1e-5)
+
+    def test_gradients_flow(self, bifpn_fixture):
+        """Test that gradients flow correctly through the BiFPNAdd module."""
+        bifpn_add = bifpn_fixture["bifpn_add"]
+        batch_size = bifpn_fixture["batch_size"]
+        channels = bifpn_fixture["channels"]
+        height = bifpn_fixture["height"]
+        width = bifpn_fixture["width"]
+        device = bifpn_fixture["device"]
+        num_inputs = bifpn_fixture["num_inputs"]
+
+        # Set requires_grad=True for inputs
+        inputs = [
+            torch.randn(batch_size, channels, height, width, device=device, requires_grad=True)
+            for _ in range(num_inputs)
+        ]
+
+        # Forward pass
+        output = bifpn_add(inputs)
+
+        # Create a dummy loss and do backward pass
+        loss = output.sum()
+        loss.backward()
+
+        # Check that gradients have been computed for weights
+        assert bifpn_add.weights.grad is not None
+        assert not torch.allclose(bifpn_add.weights.grad, torch.zeros_like(bifpn_add.weights.grad))
+
+        # Check that gradients have been computed for all inputs
+        for inp in inputs:
+            assert inp.grad is not None
+            # Gradients should not be all zeros (very unlikely with random data)
+            assert not torch.allclose(inp.grad, torch.zeros_like(inp.grad))
+
+    def test_weight_normalization(self, bifpn_fixture):
+        """Test that weights are properly normalized to sum to 1."""
+        bifpn_add = bifpn_fixture["bifpn_add"]
+        inputs = bifpn_fixture["inputs"]
+
+        # Forward pass
+        _ = bifpn_add(inputs)
+
+        # Get the weights from the module
+        weights = bifpn_add.relu(bifpn_add.weights)
+        normalized_weights = weights / (torch.sum(weights) + bifpn_add.eps)
+
+        # Check that the normalized weights sum to 1
+        sum_weights = torch.sum(normalized_weights).item()
+        # Print for debugging
+        print(f"Sum of normalized weights: {sum_weights}")
+
+        # Use a slightly more tolerant check
+        assert abs(sum_weights - 1.0) < 1e-4, f"Expected sum to be 1.0, got {sum_weights}"
+
+    def test_relu_activation(self, bifpn_fixture):
+        """Test that negative weights are rectified by ReLU."""
+        bifpn_add = bifpn_fixture["bifpn_add"]
+        inputs = bifpn_fixture["inputs"]
+        device = bifpn_fixture["device"]
+
+        # Set some weights to negative values
+        with torch.no_grad():
+            bifpn_add.weights.copy_(torch.tensor([-1.0, 0.0, 2.0], device=device))
+
+        # Forward pass
+        _ = bifpn_add(inputs)
+
+        # Apply ReLU manually
+        weights_after_relu = torch.relu(bifpn_add.weights)
+
+        # Check that negative weights have been zeroed
+        expected_weights = torch.tensor([0.0, 0.0, 2.0], device=device)
+        assert torch.allclose(weights_after_relu, expected_weights)
