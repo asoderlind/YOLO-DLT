@@ -36,6 +36,7 @@ from .block import (
     AConv,
     ADown,
     Attention,
+    BiFPNAdd,
     BNContrastiveHead,
     Bottleneck,
     BottleneckCSP,
@@ -178,4 +179,5 @@ __all__ = (
     "ECA",
     "SimAM",
     "CBM",
+    "BiFPNAdd",
 )

@@ -1446,3 +1446,57 @@ class SimAM(torch.nn.Module):
 
         # Apply activation (typically sigmoid) and multiply with input
         return x * self.activation(importance_scores)
+
+
+class BiFPNAdd(nn.Module):
+    """
+    Add operation in BiFPN that replaces the original concat operation.
+    """
+
+    def __init__(self, num_inputs: int, eps: float = 1e-4) -> None:
+        """
+        Initializes the BiFPNAdd module with the specified number of inputs.
+
+        Args:
+            num_inputs (int): Number of input feature maps to be fused
+            eps (float): Small constant value to prevent division by zero. Default is 1e-4.
+        """
+        super().__init__()
+        self.eps = eps
+        # One weight per input feature map
+        self.weights = nn.Parameter(torch.ones(num_inputs, dtype=torch.float32))  # [num_inputs]
+
+    def forward(self, inputs: list[torch.Tensor]) -> torch.Tensor:
+        """
+        Forward pass of the BiFPNAdd module performing weighted feature fusion.
+
+        This method implements learnable weighted feature fusion as described in the
+        EfficientDet paper (https://arxiv.org/abs/1911.09070). The key steps are:
+
+        1. Apply ReLU to weights to ensure they are non-negative
+        2. Normalize weights so they sum to 1 (with epsilon for numerical stability)
+        3. Stack input feature maps along a new dimension
+        4. Perform weighted summation using Einstein summation notation
+
+        The weighted fusion allows the network to learn the relative importance
+        of each input feature map rather than treating them equally.
+
+        Args:
+            inputs (list[torch.Tensor]): List of input tensors with identical shapes [B, C, H, W]
+
+        Returns:
+            output (torch.Tensor): Fused feature map with shape [B, C, H, W]
+
+        Shape:
+            - Inputs: List of tensors, each with shape [batch_size, channels, height, width]
+            - Weights: [num_inputs]
+            - Output: [batch_size, channels, height, width]
+        """
+        weights = F.relu(self.weights)
+        normalized_weights = weights / (torch.sum(weights) + self.eps)
+
+        # Stack inputs along a new dimension
+        stacked_inputs = torch.stack(inputs, dim=0)  # shape: [num_inputs, B, C, H, W]
+
+        # Use einsum for efficient weighted sum
+        return torch.einsum("i,ibchw->bchw", normalized_weights, stacked_inputs)

@@ -8,6 +8,7 @@ from ultralytics.utils.metrics import OKS_SIGMA
 from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
 from ultralytics.utils.tal import RotatedTaskAlignedAssigner, TaskAlignedAssigner, dist2bbox, dist2rbox, make_anchors
 from ultralytics.utils.torch_utils import autocast
+from ultralytics.DLN.model import DLN
 
 from .metrics import bbox_iou, probiou
 from .tal import bbox2dist
@@ -162,6 +163,7 @@ class v8DetectionLoss:
         device = next(model.parameters()).device  # get model device
         h = model.args  # hyperparameters
 
+        self.conv1 = model.model[0]  # first conv layer
         m = model.model[-1]  # Detect() module
         self.bce = nn.BCEWithLogitsLoss(reduction="none")
         self.hyp = h
@@ -176,6 +178,23 @@ class v8DetectionLoss:
         self.assigner = TaskAlignedAssigner(topk=tal_topk, num_classes=self.nc, alpha=0.5, beta=6.0)
         self.bbox_loss = BboxLoss(m.reg_max).to(device)
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
+
+        self.dln = DLN()
+        if torch.cuda.device_count() > 1:
+            self.dln = torch.nn.DataParallel(self.dln)
+            self.dln.load_state_dict(
+                torch.load("ultralytics/DLN/DLN_finetune_LOL.pth", map_location=lambda storage, loc: storage)
+            )
+        else:
+            new_state_dict = {}
+            checkpoint = torch.load("ultralytics/DLN/DLN_finetune_LOL.pth", map_location=lambda storage, loc: storage)
+            for key, value in checkpoint.items():
+                new_key = key.replace("module.", "")  # remove DataParallel prefix if it exists
+                new_state_dict[new_key] = value
+            self.dln.load_state_dict(new_state_dict)
+
+        self.dln.eval()
+        self.dln.to(self.device)
 
     def preprocess(self, targets, batch_size, scale_tensor):
         """Preprocesses the target counts and matches with the input batch size to output a tensor."""
@@ -205,7 +224,7 @@ class v8DetectionLoss:
 
     def __call__(self, preds, batch):
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
-        loss = torch.zeros(3, device=self.device)  # box, cls, dfl
+        loss = torch.zeros(4, device=self.device)  # box, cls, dfl, con
         feats = preds[1] if isinstance(preds, tuple) else preds
         pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
             (self.reg_max * 4, self.nc), 1
@@ -253,9 +272,37 @@ class v8DetectionLoss:
                 pred_distri, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask
             )
 
+        # Consistency loss
+        if self.hyp.use_fe:
+            imgs = batch["img"]  # shape [bs, 3, h, w]
+            enhanced_imgs = self.dln(imgs)  # shape [bs, 3, h, w]
+            predictions = self.conv1(imgs)  # shape [bs, 16, h/2, w/2]
+
+            enhanced_img_resized = torch.nn.functional.interpolate(
+                enhanced_imgs, size=predictions.shape[-2:]
+            )  # shape [bs, 3, h/2, w/2]
+
+            # pool images
+            avg_pool_enhanced_imgs = torch.mean(enhanced_img_resized, dim=1)  # shape [bs, 1, h/2, w/2]
+            max_pool_enhanced_imgs = torch.max(enhanced_img_resized, dim=1).values  # shape [bs, 1, h/2, w/2]
+
+            # pool predictions
+            avg_pool_predictions = torch.mean(predictions, dim=1)  # shape [bs, 1, h/2, w/2]
+            max_pool_predictions = torch.max(predictions, dim=1).values  # shape [bs, 1, h/2, w/2]
+
+            try:
+                avg_pool_loss = torch.nn.functional.mse_loss(avg_pool_enhanced_imgs, avg_pool_predictions)
+                max_pool_loss = torch.nn.functional.mse_loss(max_pool_enhanced_imgs, max_pool_predictions)
+            except RuntimeError as e:
+                raise RuntimeError(
+                    "ERROR ❌ Enhanced images and predictions must have the same shape for consistency loss."
+                ) from e
+            loss[3] = avg_pool_loss + max_pool_loss
+
         loss[0] *= self.hyp.box  # box gain
         loss[1] *= self.hyp.cls  # cls gain
         loss[2] *= self.hyp.dfl  # dfl gain
+        loss[3] *= self.hyp.lambda_c  # consistency gain
 
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
 
