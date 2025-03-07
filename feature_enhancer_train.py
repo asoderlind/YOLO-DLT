@@ -5,7 +5,7 @@ model = YOLO("yolo11n.yaml")
 
 model.train(
     data="../ultralytics/cfg/datasets/exDark128-yolo.yaml",
-    epochs=20,
+    epochs=1,
     batch=1,
     lr0=0.001,
     pretrained=True,

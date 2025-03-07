@@ -180,19 +180,10 @@ class v8DetectionLoss:
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
 
         self.dln = DLN()
-        if torch.cuda.device_count() > 1:
-            self.dln = torch.nn.DataParallel(self.dln)
-            self.dln.load_state_dict(
-                torch.load("ultralytics/DLN/DLN_finetune_LOL.pth", map_location=lambda storage, loc: storage)
-            )
-        else:
-            new_state_dict = {}
-            checkpoint = torch.load("ultralytics/DLN/DLN_finetune_LOL.pth", map_location=lambda storage, loc: storage)
-            for key, value in checkpoint.items():
-                new_key = key.replace("module.", "")  # remove DataParallel prefix if it exists
-                new_state_dict[new_key] = value
-            self.dln.load_state_dict(new_state_dict)
-
+        self.dln = torch.nn.DataParallel(self.dln)
+        self.dln.load_state_dict(
+            torch.load("ultralytics/DLN/DLN_finetune_LOL.pth", map_location=lambda storage, loc: storage)
+        )
         self.dln.eval()
         self.dln.to(self.device)
 
