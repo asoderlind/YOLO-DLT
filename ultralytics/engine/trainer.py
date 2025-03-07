@@ -21,7 +21,6 @@ import torch
 from torch import distributed as dist
 from torch import nn, optim
 
-from ultralytics.DLN.model import DLN
 from ultralytics.cfg import get_cfg, get_save_dir
 from ultralytics.data.utils import check_cls_dataset, check_det_dataset
 from ultralytics.nn.tasks import attempt_load_one_weight, attempt_load_weights
@@ -108,8 +107,6 @@ class BaseTrainer:
         self.plots = {}
         init_seeds(self.args.seed + 1 + RANK, deterministic=self.args.deterministic)
 
-        self.use_fe = self.args.use_fe if self.args.use_fe else False
-
         # Dirs
         self.save_dir = get_save_dir(self.args)
         self.args.name = self.save_dir.name  # update name for loggers
@@ -136,14 +133,6 @@ class BaseTrainer:
         with torch_distributed_zero_first(LOCAL_RANK):  # avoid auto-downloading dataset multiple times
             self.trainset, self.testset = self.get_dataset()
         self.ema = None
-
-        # Enhancer
-        dln_model_file = "ultralytics/DLN/DLN_finetune_LOL.pth"
-        self.dln = DLN()
-        self.dln = torch.nn.DataParallel(self.dln)
-        self.dln.load_state_dict(torch.load(dln_model_file, map_location=lambda storage, loc: storage))
-        self.dln.eval()
-        self.dln.to(self.device)
 
         # Optimization utils init
         self.lf = None
@@ -389,39 +378,6 @@ class BaseTrainer:
                 # Forward
                 with autocast(self.amp):
                     batch = self.preprocess_batch(batch)
-                    #
-                    # Start FE loss
-                    #
-                    L_c = torch.tensor(-1.0)
-                    if self.use_fe:
-                        first_block = self.model.model[0]
-                        imgs = batch["img"]  # shape [bs, 3, 640, 640]
-                        enhanced_imgs = self.dln(imgs)  # shape [bs, 3, 640, 640]
-                        enhanced_img_resized = torch.nn.functional.interpolate(
-                            enhanced_imgs, size=(320, 320)
-                        )  # shape [bs, 3, 320, 320]
-                        predictions = first_block(enhanced_imgs)  # shape [bs, 16, 320, 320]
-                        # pool images
-                        avg_pool_enhanced_imgs = torch.mean(
-                            enhanced_img_resized, dim=1, keepdim=True
-                        )  # shape [bs, 1, 320, 320]
-                        max_pool_enhanced_imgs = torch.max(
-                            enhanced_img_resized, dim=1, keepdim=True
-                        ).values  # shape [bs, 1, 320, 320]
-                        # pool predictions
-                        avg_pool_predictions = torch.mean(predictions, dim=1, keepdim=True)  # shape [bs, 1, 320, 320]
-                        max_pool_predictions = torch.max(
-                            predictions, dim=1, keepdim=True
-                        ).values  # shape [bs, 1, 320, 320]
-                        L_c = torch.nn.functional.mse_loss(
-                            avg_pool_enhanced_imgs, avg_pool_predictions
-                        ) + torch.nn.functional.mse_loss(max_pool_enhanced_imgs, max_pool_predictions)
-                        lambda_c = 0.5  # experimentally found to be good
-                        L_c = L_c * lambda_c
-                        L_c.backward()
-                    #
-                    # End FE loss
-                    #
                     self.loss, self.loss_items = self.model(batch)
                     if RANK != -1:
                         self.loss *= world_size
@@ -451,14 +407,13 @@ class BaseTrainer:
                 if RANK in {-1, 0}:
                     loss_length = self.tloss.shape[0] if len(self.tloss.shape) else 1
                     pbar.set_description(
-                        ("%11s" * 2 + "%11.4g" * (2 + loss_length) + "%11s")
+                        ("%11s" * 2 + "%11.4g" * (2 + loss_length))
                         % (
                             f"{epoch + 1}/{self.epochs}",
                             f"{self._get_memory():.3g}G",  # (GB) GPU memory util
                             *(self.tloss if loss_length > 1 else torch.unsqueeze(self.tloss, 0)),  # losses
                             batch["cls"].shape[0],  # batch size, i.e. 8
                             batch["img"].shape[-1],  # imgsz, i.e 640
-                            f"L_c: {L_c.item():.4g}",
                         )
                     )
                     self.run_callbacks("on_batch_end")
