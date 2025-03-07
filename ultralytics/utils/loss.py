@@ -278,6 +278,12 @@ class v8DetectionLoss:
             enhanced_imgs = self.dln(imgs)  # shape [bs, 3, h, w]
             predictions = self.conv1(imgs)  # shape [bs, 16, h/2, w/2]
 
+            # max-min normalize enhanced images
+            enhanced_imgs = (enhanced_imgs - enhanced_imgs.min()) / (enhanced_imgs.max() - enhanced_imgs.min())
+
+            # max-min normalize predictions
+            predictions = (predictions - predictions.min()) / (predictions.max() - predictions.min())
+
             enhanced_img_resized = torch.nn.functional.interpolate(
                 enhanced_imgs, size=predictions.shape[-2:]
             )  # shape [bs, 3, h/2, w/2]
