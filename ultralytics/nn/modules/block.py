@@ -1253,7 +1253,7 @@ class SE(nn.Module):
     Adapted from https://arxiv.org/abs/1709.01507v4
     """
 
-    def __init__(self, in_channels: int, reduction: int = 16) -> None:
+    def __init__(self, in_channels: int, reduction: int = 16, skip: bool = False) -> None:
         super().__init__()
 
         if in_channels < reduction:
@@ -1269,6 +1269,8 @@ class SE(nn.Module):
             nn.Linear(excitation_hidden, in_channels, bias=False),
             nn.Sigmoid(),
         )
+
+        self.skip = skip
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -1301,7 +1303,7 @@ class SE(nn.Module):
         z = self.excitation(z)  # [b, c]
         # expand since we want to multiply with x
         z = z.view(b, c, 1, 1)
-        return x * z
+        return x + x * z if self.skip else x * z
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         return self.forward(x)
@@ -1314,7 +1316,7 @@ class ECA(nn.Module):
     Code from https://github.com/BangguWu/ECANet/blob/master/models/eca_module.py
     """
 
-    def __init__(self, channel: int, gamma: int = 2, b: int = 1) -> None:
+    def __init__(self, channel: int, gamma: int = 2, b: int = 1, skip: bool = False) -> None:
         """
         Initializes the ECA block with the specified channel dimension and gamma value.
 
@@ -1332,6 +1334,7 @@ class ECA(nn.Module):
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False)
         self.sigmoid = nn.Sigmoid()
+        self.skip = skip
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -1383,7 +1386,7 @@ class ECA(nn.Module):
         # generate attention weights
         y = self.sigmoid(y)
 
-        return x * y  # broadcasting handles shape
+        return x + x * y if self.skip else x * y
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         return self.forward(x)
@@ -1396,7 +1399,7 @@ class SimAM(torch.nn.Module):
     Code based on https://github.com/ZjjConan/SimAM/blob/master/networks/attentions/simam_module.py.
     """
 
-    def __init__(self, e_lambda: float = 1e-4) -> None:
+    def __init__(self, e_lambda: float = 1e-4, skip: bool = False) -> None:
         """
         Initializes the Simple Attention Module (SimAM) block with the specified lambda value.
 
@@ -1407,6 +1410,7 @@ class SimAM(torch.nn.Module):
 
         self.activation = nn.Sigmoid()
         self.e_lambda = e_lambda
+        self.skip = skip
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Apply SimAM attention mechanism to input feature maps.
@@ -1445,7 +1449,7 @@ class SimAM(torch.nn.Module):
         importance_scores = diff_from_mean_squared / (4 * (variance + self.e_lambda)) + 0.5  # [b, c, h, w]
 
         # Apply activation (typically sigmoid) and multiply with input
-        return x * self.activation(importance_scores)
+        return x + x * self.activation(importance_scores) if self.skip else x * self.activation(importance_scores)
 
 
 class BiFPNAdd(nn.Module):
