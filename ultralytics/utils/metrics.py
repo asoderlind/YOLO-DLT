@@ -72,7 +72,7 @@ def box_iou(box1, box2, eps=1e-7):
     return inter / ((a2 - a1).prod(2) + (b2 - b1).prod(2) - inter + eps)
 
 
-IoUType = Literal["iou", "giou", "diou", "ciou"]
+IoUType = Literal["iou", "giou", "diou", "ciou", "nwd"]
 
 
 def bbox_iou(
@@ -92,11 +92,11 @@ def bbox_iou(
         xywh (bool, optional): If True, input boxes are in (x, y, w, h) format. If False, input boxes are in
                               (x1, y1, x2, y2) format. Defaults to True.
         iou_type (IoUType, optional): The type of IoU to calculate. Defaults to "iou".
-                                     Can be one of "iou", "giou", "diou", or "ciou".
+                                     Can be one of "iou", "giou", "diou", "ciou", or "nwd".
         eps (float, optional): A small value to avoid division by zero. Defaults to 1e-7.
 
     Returns:
-        (torch.Tensor): IoU, GIoU, DIoU, or CIoU values depending on the specified type.
+        (torch.Tensor): IoU, GIoU, DIoU, CIoU, or NWD values depending on the specified type.
     """
     # Get the coordinates of bounding boxes
     if xywh:  # transform from xywh to xyxy
@@ -110,6 +110,15 @@ def bbox_iou(
         w1, h1 = b1_x2 - b1_x1, b1_y2 - b1_y1 + eps
         w2, h2 = b2_x2 - b2_x1, b2_y2 - b2_y1 + eps
 
+    # Special handling for NWD which operates directly on xyxy format
+    iou_type = iou_type.lower()  # type: ignore[assignment]
+    if iou_type == "nwd":
+        # Reassemble boxes in xyxy format for NWD calculation
+        boxes1 = torch.cat([b1_x1, b1_y1, b1_x2, b1_y2], dim=-1)
+        boxes2 = torch.cat([b2_x1, b2_y1, b2_x2, b2_y2], dim=-1)
+        return calculate_nwd(boxes1, boxes2, eps)
+
+    # For other metrics, calculate intersection and union as before
     # Intersection area
     inter = (b1_x2.minimum(b2_x2) - b1_x1.maximum(b2_x1)).clamp_(0) * (
         b1_y2.minimum(b2_y2) - b1_y1.maximum(b2_y1)
@@ -121,7 +130,6 @@ def bbox_iou(
     # Standard IoU
     iou = inter / union
 
-    iou_type = iou_type.lower()  # type: ignore[assignment]
     # Return the appropriate IoU calculation based on the specified type
     if iou_type == "iou":
         return iou
@@ -134,6 +142,61 @@ def bbox_iou(
     else:
         valid_types = ", ".join(f"'{t}'" for t in get_args(IoUType))
         raise ValueError(f"Invalid IoU type: {iou_type}. Must be one of {valid_types}.")
+
+
+def calculate_nwd(
+    boxes1: torch.Tensor,
+    boxes2: torch.Tensor,
+    eps: float = 1e-7,
+    constant: float = 12.0,
+) -> torch.Tensor:
+    """
+    Calculate the Normalized Wasserstein Distance between sets of bounding boxes.
+
+    Args:
+        boxes1 (torch.Tensor): First set of boxes in xyxy format
+        boxes2 (torch.Tensor): Second set of boxes in xyxy format
+        eps (float): Small constant for numerical stability
+        constant (float): Normalization constant (default: 12.0)
+
+    Returns:
+        torch.Tensor: Normalized Wasserstein Distance (similarity score between 0-1)
+    """
+    # Ensure we're working with the same number of boxes for 1-to-1 comparison
+    if boxes1.shape != boxes2.shape:
+        raise ValueError(
+            f"boxes1 and boxes2 must have the same shape for 1-to-1 NWD calculation. "
+            f"Got {boxes1.shape} and {boxes2.shape}"
+        )
+
+    # Calculate centers of bounding boxes (for 1-to-1 comparison)
+    center1 = (boxes1[..., :2] + boxes1[..., 2:]) / 2
+    center2 = (boxes2[..., :2] + boxes2[..., 2:]) / 2
+    whs = center1 - center2
+
+    # Calculate center distance term
+    center_distance = whs[..., 0] * whs[..., 0] + whs[..., 1] * whs[..., 1] + eps
+
+    # Calculate width and height of boxes
+    w1 = boxes1[..., 2] - boxes1[..., 0] + eps
+    h1 = boxes1[..., 3] - boxes1[..., 1] + eps
+    w2 = boxes2[..., 2] - boxes2[..., 0] + eps
+    h2 = boxes2[..., 3] - boxes2[..., 1] + eps
+
+    # Calculate shape distance term (1-to-1)
+    wh_distance = ((w1 - w2) ** 2 + (h1 - h2) ** 2) / 4
+
+    # Calculate Wasserstein distance
+    wasserstein = torch.sqrt(center_distance + wh_distance)
+
+    # Normalize the distance
+    nwd = torch.exp(-wasserstein / constant)
+
+    # Return in the same format as other IoU functions (ensuring last dim is 1)
+    if nwd.dim() > 0 and nwd.shape[-1] != 1:
+        nwd = nwd.unsqueeze(-1)
+
+    return nwd
 
 
 def calculate_giou(
