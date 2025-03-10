@@ -98,7 +98,7 @@ class DETRLoss(nn.Module):
             return loss
 
         loss[name_bbox] = self.loss_gain["bbox"] * F.l1_loss(pred_bboxes, gt_bboxes, reduction="sum") / len(gt_bboxes)
-        loss[name_giou] = 1.0 - bbox_iou(pred_bboxes, gt_bboxes, xywh=True, GIoU=True)
+        loss[name_giou] = 1.0 - bbox_iou(pred_bboxes, gt_bboxes, xywh=True, iou_type="giou")
         loss[name_giou] = loss[name_giou].sum() / len(gt_bboxes)
         loss[name_giou] = self.loss_gain["giou"] * loss[name_giou]
         return {k: v.squeeze() for k, v in loss.items()}
@@ -241,7 +241,7 @@ class DETRLoss(nn.Module):
 
         gt_scores = torch.zeros([bs, nq], device=pred_scores.device)
         if len(gt_bboxes):
-            gt_scores[idx] = bbox_iou(pred_bboxes.detach(), gt_bboxes, xywh=True).squeeze(-1)
+            gt_scores[idx] = bbox_iou(pred_bboxes.detach(), gt_bboxes, xywh=True, iou_type="iou").squeeze(-1)
 
         return {
             **self._get_loss_class(pred_scores, targets, gt_scores, len(gt_bboxes), postfix),

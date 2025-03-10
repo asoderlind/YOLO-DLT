@@ -4,13 +4,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from ultralytics.DLN.model import DLN
 from ultralytics.utils.metrics import OKS_SIGMA
 from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
 from ultralytics.utils.tal import RotatedTaskAlignedAssigner, TaskAlignedAssigner, dist2bbox, dist2rbox, make_anchors
 from ultralytics.utils.torch_utils import autocast
-from ultralytics.DLN.model import DLN
 
-from .metrics import bbox_iou, probiou
+from .metrics import IoUType, bbox_iou, probiou
 from .tal import bbox2dist
 
 
@@ -92,15 +92,16 @@ class DFLoss(nn.Module):
 class BboxLoss(nn.Module):
     """Criterion class for computing training losses during training."""
 
-    def __init__(self, reg_max=16):
+    def __init__(self, reg_max=16, iou_type: IoUType = "ciou"):
         """Initialize the BboxLoss module with regularization maximum and DFL settings."""
         super().__init__()
         self.dfl_loss = DFLoss(reg_max) if reg_max > 1 else None
+        self.iou_type = iou_type
 
     def forward(self, pred_dist, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask):
         """IoU loss."""
         weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
-        iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
+        iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, iou_type=self.iou_type)
         loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
 
         # DFL loss
@@ -120,6 +121,7 @@ class RotatedBboxLoss(BboxLoss):
     def __init__(self, reg_max):
         """Initialize the BboxLoss module with regularization maximum and DFL settings."""
         super().__init__(reg_max)
+        self.iou_type = "probiou"
 
     def forward(self, pred_dist, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask):
         """IoU loss."""
@@ -174,9 +176,10 @@ class v8DetectionLoss:
         self.device = device
 
         self.use_dfl = m.reg_max > 1
-
-        self.assigner = TaskAlignedAssigner(topk=tal_topk, num_classes=self.nc, alpha=0.5, beta=6.0)
-        self.bbox_loss = BboxLoss(m.reg_max).to(device)
+        self.assigner = TaskAlignedAssigner(
+            topk=tal_topk, num_classes=self.nc, alpha=0.5, beta=6.0, iou_type=self.hyp.iou_type
+        )
+        self.bbox_loss = BboxLoss(m.reg_max, self.hyp.iou_type).to(device)
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
 
         self.dln = DLN()
@@ -659,7 +662,9 @@ class v8OBBLoss(v8DetectionLoss):
     def __init__(self, model):
         """Initializes v8OBBLoss with model, assigner, and rotated bbox loss; note model must be de-paralleled."""
         super().__init__(model)
-        self.assigner = RotatedTaskAlignedAssigner(topk=10, num_classes=self.nc, alpha=0.5, beta=6.0)
+        self.assigner = RotatedTaskAlignedAssigner(
+            topk=10, num_classes=self.nc, alpha=0.5, beta=6.0, iou_type="probiou"
+        )
         self.bbox_loss = RotatedBboxLoss(self.reg_max).to(self.device)
 
     def preprocess(self, targets, batch_size, scale_tensor):
