@@ -72,7 +72,7 @@ def box_iou(box1, box2, eps=1e-7):
     return inter / ((a2 - a1).prod(2) + (b2 - b1).prod(2) - inter + eps)
 
 
-IoUType = Literal["iou", "giou", "diou", "ciou", "nwd", "wiou", "wiou1", "wiou2", "wiou3", "siou"]
+IoUType = Literal["iou", "giou", "diou", "ciou", "nwd", "wiou", "wiou1", "wiou2", "wiou3", "siou", "ciou+nwd"]
 
 
 def bbox_iou(
@@ -157,6 +157,13 @@ def bbox_iou(
     elif iou_type == "siou":
         theta = kwargs.get("theta", 4.0)  # Default value from the original implementation
         return calculate_siou(iou, b1_x1, b1_y1, b1_x2, b1_y2, b2_x1, b2_y1, b2_x2, b2_y2, eps, theta)
+    # combination test from YOLO-EPF
+    elif iou_type == "ciou+nwd":
+        return 0.8 * calculate_ciou(
+            iou, b1_x1, b1_y1, b1_x2, b1_y2, b2_x1, b2_y1, b2_x2, b2_y2, w1, h1, w2, h2, eps
+        ) + 0.2 * calculate_nwd(
+            torch.cat([b1_x1, b1_y1, b1_x2, b1_y2], dim=-1), torch.cat([b2_x1, b2_y1, b2_x2, b2_y2], dim=-1), eps
+        )
     else:
         valid_types = "iou, giou, diou, ciou, wiou, wiou1, wiou2, wiou3, nwd"
         raise ValueError(f"Invalid IoU type: {iou_type}. Must be one of {valid_types}.")
