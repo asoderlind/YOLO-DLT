@@ -72,7 +72,7 @@ def box_iou(box1, box2, eps=1e-7):
     return inter / ((a2 - a1).prod(2) + (b2 - b1).prod(2) - inter + eps)
 
 
-IoUType = Literal["iou", "giou", "diou", "ciou", "nwd", "wiou", "wiou1", "wiou2", "wiou3"]
+IoUType = Literal["iou", "giou", "diou", "ciou", "nwd", "wiou", "wiou1", "wiou2", "wiou3", "siou"]
 
 
 def bbox_iou(
@@ -92,12 +92,12 @@ def bbox_iou(
         xywh (bool, optional): If True, input boxes are in (x, y, w, h) format. If False, input boxes are in
                               (x1, y1, x2, y2) format. Defaults to True.
         iou_type (IoUType, optional): The type of IoU to calculate. Defaults to "iou".
-                                     Can be one of "iou", "giou", "diou", "ciou", "wiou", "wiouv1", "wiouv2", "wiouv3" or "nwd".
+                                     Can be one of "iou", "giou", "diou", "ciou", "siou", "wiou", "wiouv1", "wiouv2", "wiouv3" or "nwd".
         eps (float, optional): A small value to avoid division by zero. Defaults to 1e-7.
-        **kwargs: Additional parameters for specific IoU types, e.g., momentum, alpha, delta for WIoU
+        **kwargs: Additional parameters for specific IoU types, e.g., momentum, alpha, delta for WIoU, theta for SIoU
 
     Returns:
-        (torch.Tensor): IoU, GIoU, DIoU, CIoU, WIoU, or NWD values depending on the specified type.
+        (torch.Tensor): IoU, GIoU, DIoU, CIoU, SIoU, WIoU, or NWD values depending on the specified type.
     """
     # Get the coordinates of bounding boxes
     if xywh:  # transform from xywh to xyxy
@@ -154,9 +154,96 @@ def bbox_iou(
         return calculate_diou(iou, b1_x1, b1_y1, b1_x2, b1_y2, b2_x1, b2_y1, b2_x2, b2_y2, eps)
     elif iou_type == "ciou":
         return calculate_ciou(iou, b1_x1, b1_y1, b1_x2, b1_y2, b2_x1, b2_y1, b2_x2, b2_y2, w1, h1, w2, h2, eps)
+    elif iou_type == "siou":
+        theta = kwargs.get("theta", 4.0)  # Default value from the original implementation
+        return calculate_siou(iou, b1_x1, b1_y1, b1_x2, b1_y2, b2_x1, b2_y1, b2_x2, b2_y2, eps, theta)
     else:
         valid_types = "iou, giou, diou, ciou, wiou, wiou1, wiou2, wiou3, nwd"
         raise ValueError(f"Invalid IoU type: {iou_type}. Must be one of {valid_types}.")
+
+
+def calculate_siou(
+    iou: torch.Tensor,
+    b1_x1: torch.Tensor,
+    b1_y1: torch.Tensor,
+    b1_x2: torch.Tensor,
+    b1_y2: torch.Tensor,
+    b2_x1: torch.Tensor,
+    b2_y1: torch.Tensor,
+    b2_x2: torch.Tensor,
+    b2_y2: torch.Tensor,
+    eps: float = 1e-7,
+    theta: float = 4.0,
+) -> torch.Tensor:
+    """
+    Calculate Scylla IoU (SIoU) metric.
+
+    Args:
+        iou: Standard IoU value
+        b1_x1, b1_y1, b1_x2, b1_y2: Coordinates of the first bounding box
+        b2_x1, b2_y1, b2_x2, b2_y2: Coordinates of the second bounding box
+        eps: Small value to avoid division by zero
+        theta: Parameter for shape cost (default: 4.0)
+
+    Returns:
+        torch.Tensor: SIoU value
+    """
+    # Calculate center points and their distance
+    center1_x = (b1_x1 + b1_x2) / 2
+    center1_y = (b1_y1 + b1_y2) / 2
+    center2_x = (b2_x1 + b2_x2) / 2
+    center2_y = (b2_y1 + b2_y2) / 2
+
+    # Calculate widths and heights
+    w1 = b1_x2 - b1_x1
+    h1 = b1_y2 - b1_y1
+    w2 = b2_x2 - b2_x1
+    h2 = b2_y2 - b2_y1
+
+    # Center distance
+    d_center_x = center1_x - center2_x
+    d_center_y = center1_y - center2_y
+
+    # Square distance vector
+    d_center_square = torch.square(d_center_x) + torch.square(d_center_y)
+
+    # Calculate the smallest enclosing box
+    wh_box_x = torch.maximum(b1_x2, b2_x2) - torch.minimum(b1_x1, b2_x1)
+    wh_box_y = torch.maximum(b1_y2, b2_y2) - torch.minimum(b1_y1, b2_y1)
+
+    # Angle Cost
+    # Calculate the minimum absolute coordinate difference
+    min_d_abs = torch.minimum(torch.abs(d_center_x), torch.abs(d_center_y))
+
+    # Calculate arcsin(min_d_abs / sqrt(d_center_square))
+    angle = torch.arcsin(min_d_abs / (torch.sqrt(d_center_square) + eps))
+    angle = torch.sin(2 * angle) - 2
+
+    # Distance Cost
+    # Calculate normalized distances
+    normalized_dx = torch.square(d_center_x / wh_box_x)
+    normalized_dy = torch.square(d_center_y / wh_box_y)
+
+    # Apply angle to distances
+    dist_cost_x = torch.exp(angle * normalized_dx)
+    dist_cost_y = torch.exp(angle * normalized_dy)
+    dist_cost = 2 - dist_cost_x - dist_cost_y
+
+    # Shape Cost
+    d_w = torch.abs(w1 - w2)
+    d_h = torch.abs(h1 - h2)
+    big_w = torch.maximum(w1, w2)
+    big_h = torch.maximum(h1, h2)
+
+    w_shape = 1 - torch.exp(-d_w / big_w)
+    h_shape = 1 - torch.exp(-d_h / big_h)
+
+    shape_cost = torch.pow(w_shape, theta) + torch.pow(h_shape, theta)
+
+    # Final SIoU
+    siou = iou + (dist_cost + shape_cost) / 2
+
+    return siou
 
 
 def calculate_wiou(
