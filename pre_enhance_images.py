@@ -48,8 +48,6 @@ for image in tqdm(raw_val_images, desc="Validation", unit="img"):
     path = f"{target_val_folder}/{os.path.basename(image)}"
     if os.path.exists(path):
         continue
-    else:
-        print(f"Enhancing {image}")
     enhanced_image = enhance_image(image, dln)
     if enhanced_image is not None:
         cv2.imwrite(path, enhanced_image)
