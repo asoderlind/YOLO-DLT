@@ -3,13 +3,13 @@ from ultralytics import YOLO
 model = YOLO("yolo11n.yaml")
 
 fe = True
-epochs = 100
+epochs = 20
 lc = 10.0
 
 model.train(
     data="../ultralytics/cfg/datasets/exDark128-yolo.yaml",
     epochs=epochs,
-    batch=1,
+    batch=2,
     pretrained=True,
     optimizer="auto",
     device="mps",
