@@ -93,7 +93,9 @@ class HungarianMatcher(nn.Module):
         cost_bbox = (pred_bboxes.unsqueeze(1) - gt_bboxes.unsqueeze(0)).abs().sum(-1)  # (bs*num_queries, num_gt)
 
         # Compute the GIoU cost between boxes, (bs*num_queries, num_gt)
-        cost_giou = 1.0 - bbox_iou(pred_bboxes.unsqueeze(1), gt_bboxes.unsqueeze(0), xywh=True, GIoU=True).squeeze(-1)
+        cost_giou = 1.0 - bbox_iou(
+            pred_bboxes.unsqueeze(1), gt_bboxes.unsqueeze(0), xywh=True, iou_type="giou"
+        ).squeeze(-1)
 
         # Final cost matrix
         C = (

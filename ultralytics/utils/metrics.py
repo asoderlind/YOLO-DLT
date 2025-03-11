@@ -4,6 +4,7 @@
 import math
 import warnings
 from pathlib import Path
+from typing import Literal
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -71,7 +72,12 @@ def box_iou(box1, box2, eps=1e-7):
     return inter / ((a2 - a1).prod(2) + (b2 - b1).prod(2) - inter + eps)
 
 
-def bbox_iou(box1, box2, xywh=True, GIoU=False, DIoU=False, CIoU=False, eps=1e-7):
+IoUType = Literal["iou", "giou", "diou", "ciou", "nwd", "wiou", "wiou1", "wiou2", "wiou3", "siou", "ciou+nwd"]
+
+
+def bbox_iou(
+    box1: torch.Tensor, box2: torch.Tensor, xywh: bool = True, iou_type: IoUType = "iou", eps: float = 1e-7, **kwargs
+) -> torch.Tensor:
     """
     Calculates the Intersection over Union (IoU) between bounding boxes.
 
@@ -84,14 +90,14 @@ def bbox_iou(box1, box2, xywh=True, GIoU=False, DIoU=False, CIoU=False, eps=1e-7
         box1 (torch.Tensor): A tensor representing one or more bounding boxes, with the last dimension being 4.
         box2 (torch.Tensor): A tensor representing one or more bounding boxes, with the last dimension being 4.
         xywh (bool, optional): If True, input boxes are in (x, y, w, h) format. If False, input boxes are in
-                               (x1, y1, x2, y2) format. Defaults to True.
-        GIoU (bool, optional): If True, calculate Generalized IoU. Defaults to False.
-        DIoU (bool, optional): If True, calculate Distance IoU. Defaults to False.
-        CIoU (bool, optional): If True, calculate Complete IoU. Defaults to False.
+                              (x1, y1, x2, y2) format. Defaults to True.
+        iou_type (IoUType, optional): The type of IoU to calculate. Defaults to "iou".
+                                     Can be one of "iou", "giou", "diou", "ciou", "siou", "wiou", "wiouv1", "wiouv2", "wiouv3" or "nwd".
         eps (float, optional): A small value to avoid division by zero. Defaults to 1e-7.
+        **kwargs: Additional parameters for specific IoU types, e.g., momentum, alpha, delta for WIoU, theta for SIoU
 
     Returns:
-        (torch.Tensor): IoU, GIoU, DIoU, or CIoU values depending on the specified flags.
+        (torch.Tensor): IoU, GIoU, DIoU, CIoU, SIoU, WIoU, or NWD values depending on the specified type.
     """
     # Get the coordinates of bounding boxes
     if xywh:  # transform from xywh to xyxy
@@ -105,6 +111,15 @@ def bbox_iou(box1, box2, xywh=True, GIoU=False, DIoU=False, CIoU=False, eps=1e-7
         w1, h1 = b1_x2 - b1_x1, b1_y2 - b1_y1 + eps
         w2, h2 = b2_x2 - b2_x1, b2_y2 - b2_y1 + eps
 
+    # Special handling for NWD which operates directly on xyxy format
+    iou_type = iou_type.lower()  # type: ignore[assignment]
+    if iou_type == "nwd":
+        # Reassemble boxes in xyxy format for NWD calculation
+        boxes1 = torch.cat([b1_x1, b1_y1, b1_x2, b1_y2], dim=-1)
+        boxes2 = torch.cat([b2_x1, b2_y1, b2_x2, b2_y2], dim=-1)
+        return calculate_nwd(boxes1, boxes2, eps)
+
+    # For other metrics, calculate intersection and union as before
     # Intersection area
     inter = (b1_x2.minimum(b2_x2) - b1_x1.maximum(b2_x1)).clamp_(0) * (
         b1_y2.minimum(b2_y2) - b1_y1.maximum(b2_y1)
@@ -113,25 +128,391 @@ def bbox_iou(box1, box2, xywh=True, GIoU=False, DIoU=False, CIoU=False, eps=1e-7
     # Union Area
     union = w1 * h1 + w2 * h2 - inter + eps
 
-    # IoU
+    # Standard IoU
     iou = inter / union
-    if CIoU or DIoU or GIoU:
-        cw = b1_x2.maximum(b2_x2) - b1_x1.minimum(b2_x1)  # convex (smallest enclosing box) width
-        ch = b1_y2.maximum(b2_y2) - b1_y1.minimum(b2_y1)  # convex height
-        if CIoU or DIoU:  # Distance or Complete IoU https://arxiv.org/abs/1911.08287v1
-            c2 = cw.pow(2) + ch.pow(2) + eps  # convex diagonal squared
-            rho2 = (
-                (b2_x1 + b2_x2 - b1_x1 - b1_x2).pow(2) + (b2_y1 + b2_y2 - b1_y1 - b1_y2).pow(2)
-            ) / 4  # center dist**2
-            if CIoU:  # https://github.com/Zzh-tju/DIoU-SSD-pytorch/blob/master/utils/box/box_utils.py#L47
-                v = (4 / math.pi**2) * ((w2 / h2).atan() - (w1 / h1).atan()).pow(2)
-                with torch.no_grad():
-                    alpha = v / (v - iou + (1 + eps))
-                return iou - (rho2 / c2 + v * alpha)  # CIoU
-            return iou - rho2 / c2  # DIoU
-        c_area = cw * ch + eps  # convex area
-        return iou - (c_area - union) / c_area  # GIoU https://arxiv.org/pdf/1902.09630.pdf
-    return iou  # IoU
+
+    # Handle WIoU versions
+    if iou_type in ["wiou", "wiou1", "wiou2", "wiou3"]:
+        version = 3  # Default to v3
+        if iou_type == "wiou1":
+            version = 1
+        elif iou_type == "wiou2":
+            version = 2
+        elif iou_type == "wiou3":
+            version = 3
+
+        return calculate_wiou(
+            iou, b1_x1, b1_y1, b1_x2, b1_y2, b2_x1, b2_y1, b2_x2, b2_y2, eps, version=version, **kwargs
+        )
+
+    # Return the appropriate IoU calculation based on the specified type
+    elif iou_type == "iou":
+        return iou
+    elif iou_type == "giou":
+        return calculate_giou(iou, b1_x1, b1_y1, b1_x2, b1_y2, b2_x1, b2_y1, b2_x2, b2_y2, union, eps)
+    elif iou_type == "diou":
+        return calculate_diou(iou, b1_x1, b1_y1, b1_x2, b1_y2, b2_x1, b2_y1, b2_x2, b2_y2, eps)
+    elif iou_type == "ciou":
+        return calculate_ciou(iou, b1_x1, b1_y1, b1_x2, b1_y2, b2_x1, b2_y1, b2_x2, b2_y2, w1, h1, w2, h2, eps)
+    elif iou_type == "siou":
+        theta = kwargs.get("theta", 4.0)  # Default value from the original implementation
+        return calculate_siou(iou, b1_x1, b1_y1, b1_x2, b1_y2, b2_x1, b2_y1, b2_x2, b2_y2, eps, theta)
+    # combination test from YOLO-EPF
+    elif iou_type == "ciou+nwd":
+        return 0.8 * calculate_ciou(
+            iou, b1_x1, b1_y1, b1_x2, b1_y2, b2_x1, b2_y1, b2_x2, b2_y2, w1, h1, w2, h2, eps
+        ) + 0.2 * calculate_nwd(
+            torch.cat([b1_x1, b1_y1, b1_x2, b1_y2], dim=-1), torch.cat([b2_x1, b2_y1, b2_x2, b2_y2], dim=-1), eps
+        )
+    else:
+        valid_types = "iou, giou, diou, ciou, wiou, wiou1, wiou2, wiou3, nwd"
+        raise ValueError(f"Invalid IoU type: {iou_type}. Must be one of {valid_types}.")
+
+
+def calculate_siou(
+    iou: torch.Tensor,
+    b1_x1: torch.Tensor,
+    b1_y1: torch.Tensor,
+    b1_x2: torch.Tensor,
+    b1_y2: torch.Tensor,
+    b2_x1: torch.Tensor,
+    b2_y1: torch.Tensor,
+    b2_x2: torch.Tensor,
+    b2_y2: torch.Tensor,
+    eps: float = 1e-7,
+    theta: float = 4.0,
+) -> torch.Tensor:
+    """
+    Calculate Scylla IoU (SIoU) metric.
+
+    Args:
+        iou: Standard IoU value
+        b1_x1, b1_y1, b1_x2, b1_y2: Coordinates of the first bounding box
+        b2_x1, b2_y1, b2_x2, b2_y2: Coordinates of the second bounding box
+        eps: Small value to avoid division by zero
+        theta: Parameter for shape cost (default: 4.0)
+
+    Returns:
+        torch.Tensor: SIoU value
+    """
+    # Calculate center points and their distance
+    center1_x = (b1_x1 + b1_x2) / 2
+    center1_y = (b1_y1 + b1_y2) / 2
+    center2_x = (b2_x1 + b2_x2) / 2
+    center2_y = (b2_y1 + b2_y2) / 2
+
+    # Calculate widths and heights
+    w1 = b1_x2 - b1_x1
+    h1 = b1_y2 - b1_y1
+    w2 = b2_x2 - b2_x1
+    h2 = b2_y2 - b2_y1
+
+    # Center distance
+    d_center_x = center1_x - center2_x
+    d_center_y = center1_y - center2_y
+
+    # Square distance vector
+    d_center_square = torch.square(d_center_x) + torch.square(d_center_y)
+
+    # Calculate the smallest enclosing box
+    wh_box_x = torch.maximum(b1_x2, b2_x2) - torch.minimum(b1_x1, b2_x1)
+    wh_box_y = torch.maximum(b1_y2, b2_y2) - torch.minimum(b1_y1, b2_y1)
+
+    # Angle Cost
+    # Calculate the minimum absolute coordinate difference
+    min_d_abs = torch.minimum(torch.abs(d_center_x), torch.abs(d_center_y))
+
+    # Calculate arcsin(min_d_abs / sqrt(d_center_square))
+    angle = torch.arcsin(min_d_abs / (torch.sqrt(d_center_square) + eps))
+    angle = torch.sin(2 * angle) - 2
+
+    # Distance Cost
+    # Calculate normalized distances
+    normalized_dx = torch.square(d_center_x / wh_box_x)
+    normalized_dy = torch.square(d_center_y / wh_box_y)
+
+    # Apply angle to distances
+    dist_cost_x = torch.exp(angle * normalized_dx)
+    dist_cost_y = torch.exp(angle * normalized_dy)
+    dist_cost = 2 - dist_cost_x - dist_cost_y
+
+    # Shape Cost
+    d_w = torch.abs(w1 - w2)
+    d_h = torch.abs(h1 - h2)
+    big_w = torch.maximum(w1, w2)
+    big_h = torch.maximum(h1, h2)
+
+    w_shape = 1 - torch.exp(-d_w / big_w)
+    h_shape = 1 - torch.exp(-d_h / big_h)
+
+    shape_cost = torch.pow(w_shape, theta) + torch.pow(h_shape, theta)
+
+    # Final SIoU
+    siou = iou + (dist_cost + shape_cost) / 2
+
+    return siou
+
+
+def calculate_wiou(
+    iou: torch.Tensor,
+    b1_x1: torch.Tensor,
+    b1_y1: torch.Tensor,
+    b1_x2: torch.Tensor,
+    b1_y2: torch.Tensor,
+    b2_x1: torch.Tensor,
+    b2_y1: torch.Tensor,
+    b2_x2: torch.Tensor,
+    b2_y2: torch.Tensor,
+    eps: float = 1e-7,
+    version: int = 3,
+    iou_mean: torch.Tensor | None = None,
+    alpha: float = 1.9,
+    delta: float = 3.0,
+) -> torch.Tensor:
+    """
+    Calculate Wise IoU (WIoU) metric.
+
+    Args:
+        iou: Standard IoU value
+        b1_x1, b1_y1, b1_x2, b1_y2: Coordinates of the first bounding box
+        b2_x1, b2_y1, b2_x2, b2_y2: Coordinates of the second bounding box
+        eps: Small value to avoid division by zero
+        version: WIoU version (1, 2, or 3)
+        iou_mean: IoU mean value tensor (required for v2 and v3)
+        alpha: Alpha parameter for v3 (controls the peak location)
+        delta: Delta parameter for v3 (controls the width of the curve)
+
+    Returns:
+        torch.Tensor: WIoU value based on specified version
+    """
+    # Calculate center points and their distance
+    center1_x = (b1_x1 + b1_x2) / 2
+    center1_y = (b1_y1 + b1_y2) / 2
+    center2_x = (b2_x1 + b2_x2) / 2
+    center2_y = (b2_y1 + b2_y2) / 2
+
+    center_distance_squared = (center1_x - center2_x) ** 2 + (center1_y - center2_y) ** 2
+
+    # Calculate the smallest enclosing box dimensions
+    cw = torch.maximum(b1_x2, b2_x2) - torch.minimum(b1_x1, b2_x1)
+    ch = torch.maximum(b1_y2, b2_y2) - torch.minimum(b1_y1, b2_y1)
+    c_area = cw * ch + eps
+
+    # WIoU v1: Basic attention-based IoU
+    # Uses distance between centers with normalization by enclosing box
+    wiou = torch.exp(center_distance_squared / c_area.detach()) * iou
+
+    # Handle different versions
+    if version == 1:
+        return wiou
+
+    # For v2 and v3, we need the running average of IoU
+    if iou_mean is None:
+        raise ValueError("iou_mean is required for WIoU v2 and v3")
+
+    # Calculate outlier degree (beta)
+    beta = iou.detach() / iou_mean
+
+    if version == 2:
+        # WIoU v2: Monotonic focusing mechanism
+        return (beta**0.5) * wiou
+
+    elif version == 3:
+        # WIoU v3: Dynamic non-monotonic focusing mechanism
+        # Using the formula from the paper: β/(δ+α^(β-δ))
+        r = beta / (delta * alpha ** (beta - delta))
+        return r * wiou
+
+    else:
+        raise ValueError(f"Invalid WIoU version: {version}. Must be 1, 2, or 3.")
+
+
+def calculate_nwd(
+    boxes1: torch.Tensor,
+    boxes2: torch.Tensor,
+    eps: float = 1e-7,
+    constant: float = 12.0,
+) -> torch.Tensor:
+    """
+    Calculate the Normalized Wasserstein Distance between sets of bounding boxes.
+
+    Args:
+        boxes1 (torch.Tensor): First set of boxes in xyxy format
+        boxes2 (torch.Tensor): Second set of boxes in xyxy format
+        eps (float): Small constant for numerical stability
+        constant (float): Normalization constant (default: 12.0)
+
+    Returns:
+        torch.Tensor: Normalized Wasserstein Distance (similarity score between 0-1)
+    """
+    # Ensure we're working with the same number of boxes for 1-to-1 comparison
+    if boxes1.shape != boxes2.shape:
+        raise ValueError(
+            f"boxes1 and boxes2 must have the same shape for 1-to-1 NWD calculation. "
+            f"Got {boxes1.shape} and {boxes2.shape}"
+        )
+
+    # Calculate centers of bounding boxes (for 1-to-1 comparison)
+    center1 = (boxes1[..., :2] + boxes1[..., 2:]) / 2
+    center2 = (boxes2[..., :2] + boxes2[..., 2:]) / 2
+    whs = center1 - center2
+
+    # Calculate center distance term
+    center_distance = whs[..., 0] * whs[..., 0] + whs[..., 1] * whs[..., 1] + eps
+
+    # Calculate width and height of boxes
+    w1 = boxes1[..., 2] - boxes1[..., 0] + eps
+    h1 = boxes1[..., 3] - boxes1[..., 1] + eps
+    w2 = boxes2[..., 2] - boxes2[..., 0] + eps
+    h2 = boxes2[..., 3] - boxes2[..., 1] + eps
+
+    # Calculate shape distance term (1-to-1)
+    wh_distance = ((w1 - w2) ** 2 + (h1 - h2) ** 2) / 4
+
+    # Calculate Wasserstein distance
+    wasserstein = torch.sqrt(center_distance + wh_distance)
+
+    # Normalize the distance
+    nwd = torch.exp(-wasserstein / constant)
+
+    # Return in the same format as other IoU functions (ensuring last dim is 1)
+    if nwd.dim() > 0 and nwd.shape[-1] != 1:
+        nwd = nwd.unsqueeze(-1)
+
+    return nwd
+
+
+def calculate_giou(
+    iou: torch.Tensor,
+    b1_x1: torch.Tensor,
+    b1_y1: torch.Tensor,
+    b1_x2: torch.Tensor,
+    b1_y2: torch.Tensor,
+    b2_x1: torch.Tensor,
+    b2_y1: torch.Tensor,
+    b2_x2: torch.Tensor,
+    b2_y2: torch.Tensor,
+    union: torch.Tensor,
+    eps: float,
+) -> torch.Tensor:
+    """
+    Calculate Generalized IoU (GIoU) from the standard IoU.
+
+    GIoU improves IoU by accounting for the area of the smallest enclosing box.
+    Reference: https://arxiv.org/pdf/1902.09630.pdf
+
+    Args:
+        iou: Standard IoU value
+        b1_x1, b1_y1, b1_x2, b1_y2: Coordinates of the first bounding box
+        b2_x1, b2_y1, b2_x2, b2_y2: Coordinates of the second bounding box
+        union: Union area of the two boxes
+        eps: Small value to avoid division by zero
+
+    Returns:
+        torch.Tensor: GIoU value
+    """
+    # Calculate the convex hull (smallest enclosing box)
+    cw = b1_x2.maximum(b2_x2) - b1_x1.minimum(b2_x1)  # convex width
+    ch = b1_y2.maximum(b2_y2) - b1_y1.minimum(b2_y1)  # convex height
+    c_area = cw * ch + eps  # convex area
+
+    # Calculate GIoU: IoU - (convex_area - union) / convex_area
+    return iou - (c_area - union) / c_area
+
+
+def calculate_diou(
+    iou: torch.Tensor,
+    b1_x1: torch.Tensor,
+    b1_y1: torch.Tensor,
+    b1_x2: torch.Tensor,
+    b1_y2: torch.Tensor,
+    b2_x1: torch.Tensor,
+    b2_y1: torch.Tensor,
+    b2_x2: torch.Tensor,
+    b2_y2: torch.Tensor,
+    eps: float,
+) -> torch.Tensor:
+    """
+    Calculate Distance IoU (DIoU) from the standard IoU.
+
+    DIoU improves IoU by considering the distance between the centers of the boxes.
+    Reference: https://arxiv.org/abs/1911.08287v1
+
+    Args:
+        iou: Standard IoU value
+        b1_x1, b1_y1, b1_x2, b1_y2: Coordinates of the first bounding box
+        b2_x1, b2_y1, b2_x2, b2_y2: Coordinates of the second bounding box
+        eps: Small value to avoid division by zero
+
+    Returns:
+        torch.Tensor: DIoU value
+    """
+    # Calculate the convex hull (smallest enclosing box)
+    cw = b1_x2.maximum(b2_x2) - b1_x1.minimum(b2_x1)  # convex width
+    ch = b1_y2.maximum(b2_y2) - b1_y1.minimum(b2_y1)  # convex height
+    c2 = cw.pow(2) + ch.pow(2) + eps  # convex diagonal squared
+
+    # Calculate the squared distance between the centers of the boxes
+    rho2 = (
+        (b2_x1 + b2_x2 - b1_x1 - b1_x2).pow(2) + (b2_y1 + b2_y2 - b1_y1 - b1_y2).pow(2)
+    ) / 4  # center distance squared
+
+    # Calculate DIoU: IoU - ρ²/c²
+    return iou - rho2 / c2
+
+
+def calculate_ciou(
+    iou: torch.Tensor,
+    b1_x1: torch.Tensor,
+    b1_y1: torch.Tensor,
+    b1_x2: torch.Tensor,
+    b1_y2: torch.Tensor,
+    b2_x1: torch.Tensor,
+    b2_y1: torch.Tensor,
+    b2_x2: torch.Tensor,
+    b2_y2: torch.Tensor,
+    w1: torch.Tensor,
+    h1: torch.Tensor,
+    w2: torch.Tensor,
+    h2: torch.Tensor,
+    eps: float,
+) -> torch.Tensor:
+    """
+    Calculate Complete IoU (CIoU) from the standard IoU.
+
+    CIoU improves DIoU by also considering aspect ratio consistency.
+    Reference: https://arxiv.org/abs/1911.08287v1
+
+    Args:
+        iou: Standard IoU value
+        b1_x1, b1_y1, b1_x2, b1_y2: Coordinates of the first bounding box
+        b2_x1, b2_y1, b2_x2, b2_y2: Coordinates of the second bounding box
+        w1, h1: Width and height of the first box
+        w2, h2: Width and height of the second box
+        eps: Small value to avoid division by zero
+
+    Returns:
+        torch.Tensor: CIoU value
+    """
+    # Calculate the convex hull (smallest enclosing box)
+    cw = b1_x2.maximum(b2_x2) - b1_x1.minimum(b2_x1)  # convex width
+    ch = b1_y2.maximum(b2_y2) - b1_y1.minimum(b2_y1)  # convex height
+    c2 = cw.pow(2) + ch.pow(2) + eps  # convex diagonal squared
+
+    # Calculate the squared distance between the centers of the boxes
+    rho2 = (
+        (b2_x1 + b2_x2 - b1_x1 - b1_x2).pow(2) + (b2_y1 + b2_y2 - b1_y1 - b1_y2).pow(2)
+    ) / 4  # center distance squared
+
+    # Calculate the consistency of aspect ratio
+    v = (4 / math.pi**2) * ((w2 / h2).atan() - (w1 / h1).atan()).pow(2)
+
+    # Calculate the trade-off parameter alpha
+    with torch.no_grad():
+        alpha = v / (v - iou + (1 + eps))
+
+    # Calculate CIoU: IoU - (ρ²/c² + α·v)
+    return iou - (rho2 / c2 + v * alpha)
 
 
 def mask_iou(mask1, mask2, eps=1e-7):
