@@ -35,7 +35,6 @@ print("Enhancing training images:")
 for image in tqdm(raw_train_images, desc="Train", unit="img"):
     path = f"{target_train_folder}/{os.path.basename(image)}"
     if os.path.exists(path):
-        print(f"Skipping {path}")
         continue
     else:
         print(f"Enhancing {image}")
@@ -48,7 +47,6 @@ print("Enhancing validation images:")
 for image in tqdm(raw_val_images, desc="Validation", unit="img"):
     path = f"{target_val_folder}/{os.path.basename(image)}"
     if os.path.exists(path):
-        print(f"Skipping {path}")
         continue
     else:
         print(f"Enhancing {image}")

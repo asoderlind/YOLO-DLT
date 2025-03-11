@@ -3,16 +3,16 @@ from ultralytics import YOLO
 model = YOLO("yolo11n.yaml")
 
 fe = True
-epochs = 20
+epochs = 1
 lc = 10.0
 
 model.train(
-    data="../ultralytics/cfg/datasets/exDark128-yolo.yaml",
+    data="../ultralytics/cfg/datasets/exDark-yolo.yaml",
     epochs=epochs,
-    batch=2,
+    batch=16,
     pretrained=True,
     optimizer="auto",
-    device="mps",
+    device="cuda",
     use_fe=fe,
     augment=False,
     mosaic=0.0,
