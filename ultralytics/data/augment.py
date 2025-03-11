@@ -2038,7 +2038,7 @@ class Format:
             >>> print(formatted_labels.keys())
         """
         img = labels.pop("img")
-        img_enhanced = labels.pop("img_enhanced")
+        img_enhanced = labels.pop("img_enhanced") if "img_enhanced" in labels else img
         h, w = img.shape[:2]
         cls = labels.pop("cls")
         instances = labels.pop("instances")
@@ -2056,7 +2056,7 @@ class Format:
                 )
             labels["masks"] = masks
         labels["img"] = self._format_img(img)
-        labels["img_enhanced"] = self._format_img(img_enhanced)
+        labels["img_enhanced"] = self._format_img(img_enhanced) if img_enhanced is not img else labels["img"]
         labels["cls"] = torch.from_numpy(cls) if nl else torch.zeros(nl)
         labels["bboxes"] = torch.from_numpy(instances.bboxes) if nl else torch.zeros((nl, 4))
         if self.return_keypoint:
