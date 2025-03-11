@@ -6,6 +6,7 @@ import math
 import numpy as np
 import torch
 import torch.nn as nn
+from einops import rearrange
 
 __all__ = (
     "Conv",
@@ -424,6 +425,87 @@ class CBM(Conv):
     def __init__(self, c1: int, c2: int, k: int = 1, s: int = 1, p: int | None = None, g: int = 1, d: int = 1) -> None:
         super().__init__(c1, c2, k, s, p, g, d)
         self.act = nn.Mish()
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        return self.forward(x)
+
+
+class RFAConv(nn.Module):  # RFAConv implemented based on Group Conv
+    """
+    Receptive-Field Attention Convolution (RFA Conv) block.
+    Adapted from: https://arxiv.org/abs/2304.03198
+    Code from:  https://github.com/Liuchen1997/RFAConv/blob/main/model.py
+
+    """
+
+    def __init__(self, in_channel: int, out_channel: int, kernel_size: int, stride: int = 1):
+        super().__init__()
+        self.kernel_size = kernel_size
+
+        self.get_weight = nn.Sequential(
+            nn.AvgPool2d(kernel_size=kernel_size, padding=kernel_size // 2, stride=stride),
+            nn.Conv2d(in_channel, in_channel * (kernel_size**2), kernel_size=1, groups=in_channel, bias=False),
+        )
+
+        self.generate_feature = Conv(
+            in_channel,
+            in_channel * (kernel_size**2),
+            k=kernel_size,
+            s=stride,
+            p=kernel_size // 2,
+            g=in_channel,
+            act=nn.ReLU(),
+        )
+
+        self.conv = Conv(
+            in_channel,
+            out_channel,
+            k=kernel_size,
+            s=kernel_size,
+            p=kernel_size // 2,
+            act=nn.ReLU(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of RFAConv (Receptive-Field Attention Convolution).
+
+        This method implements the core RFA algorithm which:
+        1. Generates spatial attention weights for each position in the receptive field
+        2. Extracts features from the input's receptive field
+        3. Applies the attention weights to modulate these features
+        4. Rearranges the weighted features into an expanded feature map
+        5. Applies convolution to produce the final output
+
+        The attention mechanism allows the network to focus on the most informative
+        parts of each receptive field, enhancing feature representation quality.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape [batch_size, channels, height, width]
+
+        Returns:
+            out (torch.Tensor): Output tensor after applying receptive field attention
+                          and convolution
+        """
+        b, c = x.shape[0:2]
+        weight: torch.Tensor = self.get_weight(x)
+        h, w = weight.shape[2:]
+        weighted = weight.view(b, c, self.kernel_size**2, h, w).softmax(
+            2
+        )  # [b, c*kernel**2,h,w] ->  [b, c, k**2, h, w]
+        feature: torch.Tensor = self.generate_feature(x)
+        feature = feature.view(
+            b, c, self.kernel_size**2, h, w
+        )  # [b, c*kernel**2,h,w] ->  [b, c, k**2, h, w]   obtain receptive field spatial features
+        weighted_data = feature * weighted
+        conv_data = rearrange(
+            weighted_data,
+            "b c (n1 n2) h w -> b c (h n1) (w n2)",
+            n1=self.kernel_size,  # [b, c, k**2, h, w] ->  [b, c, h*k, w*k]
+            n2=self.kernel_size,
+        )  # [b, c, h*k, w*k]
+
+        return self.conv(conv_data)  # [b, c, h*k, w*k] -> [b, c_out, h, w]
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         return self.forward(x)
