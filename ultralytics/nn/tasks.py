@@ -57,6 +57,7 @@ from ultralytics.nn.modules import (
     HGStem,
     ImagePoolingAttn,
     Index,
+    LDConv,
     NewConv,
     Pose,
     RepC3,
@@ -997,6 +998,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             RepConv,
             CBM,
             RFAConv,
+            LDConv,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments

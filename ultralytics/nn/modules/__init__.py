@@ -78,6 +78,7 @@ from .conv import (
     Focus,
     GhostConv,
     Index,
+    LDConv,
     LightConv,
     NewConv,
     NewConv2,
@@ -182,4 +183,5 @@ __all__ = (
     "CBM",
     "BiFPNAdd",
     "RFAConv",
+    "LDConv",
 )
