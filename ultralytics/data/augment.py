@@ -271,9 +271,9 @@ class Compose:
         """
         assert isinstance(index, (int, list)), f"The indices should be either list or int type but got {type(index)}"
         if isinstance(index, list):
-            assert isinstance(value, list), (
-                f"The indices should be the same type as values, but got {type(index)} and {type(value)}"
-            )
+            assert isinstance(
+                value, list
+            ), f"The indices should be the same type as values, but got {type(index)} and {type(value)}"
         if isinstance(index, int):
             index, value = [index], [value]
         for i, v in zip(index, value):
@@ -2038,6 +2038,7 @@ class Format:
             >>> print(formatted_labels.keys())
         """
         img = labels.pop("img")
+        img_enhanced = labels.pop("img_enhanced")
         h, w = img.shape[:2]
         cls = labels.pop("cls")
         instances = labels.pop("instances")
@@ -2055,6 +2056,7 @@ class Format:
                 )
             labels["masks"] = masks
         labels["img"] = self._format_img(img)
+        labels["img_enhanced"] = self._format_img(img_enhanced)
         labels["cls"] = torch.from_numpy(cls) if nl else torch.zeros(nl)
         labels["bboxes"] = torch.from_numpy(instances.bboxes) if nl else torch.zeros((nl, 4))
         if self.return_keypoint:

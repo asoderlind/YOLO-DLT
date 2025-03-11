@@ -301,17 +301,20 @@ class v8DetectionLoss:
         # Consistency loss
         if self.hyp.use_fe:
             imgs = batch["img"]  # shape [bs, 3, h, w]
-            enhanced_imgs = self.dln(imgs)  # shape [bs, 3, h, w]
+
+            enhanced_imgs = batch["img_enhanced"]
+            enhanced_imgs = enhanced_imgs.to(self.device)
+
             predictions = self.conv1(imgs)  # shape [bs, 16, h/2, w/2]
 
             # max-min normalize enhanced images
-            enhanced_imgs = (enhanced_imgs - enhanced_imgs.min()) / (enhanced_imgs.max() - enhanced_imgs.min())
+            enhanced_imgs_norm = (enhanced_imgs - enhanced_imgs.min()) / (enhanced_imgs.max() - enhanced_imgs.min())
 
             # max-min normalize predictions
-            predictions = (predictions - predictions.min()) / (predictions.max() - predictions.min())
+            predictions_norm = (predictions - predictions.min()) / (predictions.max() - predictions.min())
 
             enhanced_img_resized = torch.nn.functional.interpolate(
-                enhanced_imgs, size=predictions.shape[-2:]
+                enhanced_imgs_norm, size=predictions.shape[-2:]
             )  # shape [bs, 3, h/2, w/2]
 
             # pool images
@@ -319,8 +322,8 @@ class v8DetectionLoss:
             max_pool_enhanced_imgs = torch.max(enhanced_img_resized, dim=1).values  # shape [bs, 1, h/2, w/2]
 
             # pool predictions
-            avg_pool_predictions = torch.mean(predictions, dim=1)  # shape [bs, 1, h/2, w/2]
-            max_pool_predictions = torch.max(predictions, dim=1).values  # shape [bs, 1, h/2, w/2]
+            avg_pool_predictions = torch.mean(predictions_norm, dim=1)  # shape [bs, 1, h/2, w/2]
+            max_pool_predictions = torch.max(predictions_norm, dim=1).values  # shape [bs, 1, h/2, w/2]
 
             try:
                 avg_pool_loss = torch.nn.functional.mse_loss(avg_pool_enhanced_imgs, avg_pool_predictions)

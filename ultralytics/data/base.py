@@ -65,12 +65,14 @@ class BaseDataset(Dataset):
         """Initialize BaseDataset with given configuration and options."""
         super().__init__()
         self.img_path = img_path
+        self.img_enhanced_path = f"{img_path}_enhanced"
         self.imgsz = imgsz
         self.augment = augment
         self.single_cls = single_cls
         self.prefix = prefix
         self.fraction = fraction
         self.im_files = self.get_img_files(self.img_path)
+        self.im_enhanced_files = self.get_img_files(self.img_enhanced_path)
         self.labels = self.get_labels()
         self.update_labels(include_class=classes)  # single_cls and include_class
         self.ni = len(self.labels)  # number of images
@@ -88,7 +90,9 @@ class BaseDataset(Dataset):
 
         # Cache images (options are cache = True, False, None, "ram", "disk")
         self.ims, self.im_hw0, self.im_hw = [None] * self.ni, [None] * self.ni, [None] * self.ni
+        self.ims_enhanced = [None] * self.ni
         self.npy_files = [Path(f).with_suffix(".npy") for f in self.im_files]
+        self.npy_files_enhanced = [Path(f).with_suffix(".npy") for f in self.im_enhanced_files]
         self.cache = cache.lower() if isinstance(cache, str) else "ram" if cache is True else None
         if self.cache == "ram" and self.check_cache_ram():
             if hyp.deterministic:
@@ -148,11 +152,14 @@ class BaseDataset(Dataset):
             if self.single_cls:
                 self.labels[i]["cls"][:, 0] = 0
 
-    def load_image(self, i, rect_mode=True):
+    def load_image(self, i, enhanced=False, rect_mode=True):
         """Loads 1 image from dataset index 'i', returns (im, resized hw)."""
-        im, f, fn = self.ims[i], self.im_files[i], self.npy_files[i]
+        if not enhanced:
+            im, f, fn = self.ims[i], self.im_files[i], self.npy_files[i]
+        else:
+            im, f, fn = self.ims_enhanced[i], self.im_enhanced_files[i], self.npy_files_enhanced[i]
         if im is None:  # not cached in RAM
-            if fn.exists():  # load npy
+            if fn is not None and fn.exists():  # load npy
                 try:
                     im = np.load(fn)
                 except Exception as e:
@@ -292,6 +299,7 @@ class BaseDataset(Dataset):
         label = deepcopy(self.labels[index])  # requires deepcopy() https://github.com/ultralytics/ultralytics/pull/1948
         label.pop("shape", None)  # shape is for rect, remove it
         label["img"], label["ori_shape"], label["resized_shape"] = self.load_image(index)
+        label["img_enhanced"], _, _ = self.load_image(index, enhanced=True, rect_mode=False)
         label["ratio_pad"] = (
             label["resized_shape"][0] / label["ori_shape"][0],
             label["resized_shape"][1] / label["ori_shape"][1],
