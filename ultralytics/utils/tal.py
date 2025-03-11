@@ -153,7 +153,9 @@ class TaskAlignedAssigner(nn.Module):
 
     def iou_calculation(self, gt_bboxes, pd_bboxes):
         """IoU calculation for horizontal bounding boxes."""
-        return bbox_iou(gt_bboxes, pd_bboxes, xywh=False, iou_type="ciou").squeeze(-1).clamp_(0)
+        # still use CIoU for wiou to avoid tracking mean here
+        effective_iou_type = self.iou_type if not self.iou_type.startswith("wiou") else "ciou"
+        return bbox_iou(gt_bboxes, pd_bboxes, xywh=False, iou_type=effective_iou_type).squeeze(-1).clamp_(0)
 
     def select_topk_candidates(self, metrics, largest=True, topk_mask=None):
         """

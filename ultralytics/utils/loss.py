@@ -98,6 +98,9 @@ class BboxLoss(nn.Module):
         self.dfl_loss = DFLoss(reg_max) if reg_max > 1 else None
         self.iou_type = iou_type
 
+        if iou_type == "focal-eiou":
+            self.gamma = 0.5  # Default value based on the paper
+
         # Initialize IoU mean for WIoU if needed
         if iou_type.startswith("wiou"):
             self.register_buffer("iou_mean", torch.tensor(1.0))
@@ -110,7 +113,6 @@ class BboxLoss(nn.Module):
     def forward(self, pred_dist, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask):
         """IoU loss."""
         weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
-
         # Calculate IoU based on specified type
         if self.iou_type.startswith("wiou"):
             # For WIoU variants, check if we need to update the running mean
@@ -133,8 +135,16 @@ class BboxLoss(nn.Module):
         else:
             # Standard IoU types
             iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, iou_type=self.iou_type)
-
-        loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
+        if self.iou_type == "focal-eiou":
+            # Aply extra loss logic if focal eiou is used
+            std_iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, iou_type="iou")
+            focal_weight = torch.pow(std_iou, self.gamma)
+            weighted_eiou_loss = (1.0 - iou) * focal_weight * weight
+            total_focal_weight = (focal_weight * weight).sum()
+            eps = 1e-7  # to avoid division by zero
+            loss_iou = weighted_eiou_loss.sum() / (total_focal_weight + eps)
+        else:
+            loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
 
         # DFL loss
         if self.dfl_loss:
