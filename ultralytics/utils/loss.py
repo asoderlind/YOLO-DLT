@@ -110,13 +110,23 @@ class BboxLoss(nn.Module):
             self.delta = 3.0  # Default from the paper
             self.momentum = 1e-2  # based on the NWD code implementation
 
-    def forward(self, pred_dist, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask):
+    def forward(
+        self,
+        pred_dist,
+        pred_bboxes,
+        anchor_points,
+        target_bboxes,
+        target_scores,
+        target_scores_sum,
+        fg_mask,
+        is_validation=False,
+    ):
         """IoU loss."""
         weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
         # Calculate IoU based on specified type
         if self.iou_type.startswith("wiou"):
             # For WIoU variants, check if we need to update the running mean
-            if hasattr(self, "iou_mean") and self.iou_type != "wiouv1":
+            if hasattr(self, "iou_mean") and self.iou_type != "wiouv1" and not is_validation:
                 # Standard IoU calculation for tracking mean
                 with torch.no_grad():
                     std_iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, iou_type="iou")
@@ -258,7 +268,7 @@ class v8DetectionLoss:
             # pred_dist = (pred_dist.view(b, a, c // 4, 4).softmax(2) * self.proj.type(pred_dist.dtype).view(1, 1, -1, 1)).sum(2)
         return dist2bbox(pred_dist, anchor_points, xywh=False)
 
-    def __call__(self, preds, batch):
+    def __call__(self, preds, batch, **kwargs):
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
         loss = torch.zeros(4, device=self.device)  # box, cls, dfl, con
         feats = preds[1] if isinstance(preds, tuple) else preds
@@ -305,7 +315,14 @@ class v8DetectionLoss:
         if fg_mask.sum():
             target_bboxes /= stride_tensor
             loss[0], loss[2] = self.bbox_loss(
-                pred_distri, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask
+                pred_distri,
+                pred_bboxes,
+                anchor_points,
+                target_bboxes,
+                target_scores,
+                target_scores_sum,
+                fg_mask,
+                **kwargs,
             )
 
         # Consistency loss
