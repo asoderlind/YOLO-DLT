@@ -87,6 +87,7 @@ IoUType = Literal[
     "eiou",
     "focal-eiou",
     "isiou",
+    "thiou",
 ]
 
 
@@ -107,9 +108,9 @@ def bbox_iou(
         xywh (bool, optional): If True, input boxes are in (x, y, w, h) format. If False, input boxes are in
                               (x1, y1, x2, y2) format. Defaults to True.
         iou_type (IoUType, optional): The type of IoU to calculate. Defaults to "iou".
-                                     Can be one of "iou", "giou", "diou", "ciou", "siou", "eiou", "isiou" "wiou","wiouv1", "wiouv2", "wiouv3" or "nwd".
+                                     Can be one of "iou", "giou", "diou", "ciou", "siou", "eiou", "isiou", "thiou" "wiou","wiouv1", "wiouv2", "wiouv3" or "nwd".
         eps (float, optional): A small value to avoid division by zero. Defaults to 1e-7.
-        **kwargs: Additional parameters for specific IoU types, e.g., momentum, alpha, delta for WIoU, theta for SIoU, ratio for IS-IoU
+        **kwargs: Additional parameters for specific IoU types, e.g., momentum, alpha, delta for WIoU, theta for SIoU, ratio for IS-IoU, threshold for ThIoU.
 
     Returns:
         (torch.Tensor): IoU, GIoU, DIoU, CIoU, SIoU, WIoU, or NWD values depending on the specified type.
@@ -183,9 +184,52 @@ def bbox_iou(
         return calculate_eiou(iou, b1_x1, b1_y1, b1_x2, b1_y2, b2_x1, b2_y1, b2_x2, b2_y2, eps)
     elif iou_type == "isiou":
         return calculate_isiou(b1_x1, b1_y1, b1_x2, b1_y2, b2_x1, b2_y1, b2_x2, b2_y2, **kwargs)
+    elif iou_type == "thiou":
+        return calculate_thiou(iou, b1_x1, b1_y1, b1_x2, b1_y2, b2_x1, b2_y1, b2_x2, b2_y2, **kwargs)
     else:
         valid_types = "iou, giou, diou, ciou, wiou, wiou1, wiou2, wiou3, nwd"
         raise ValueError(f"Invalid IoU type: {iou_type}. Must be one of {valid_types}.")
+
+
+def calculate_thiou(
+    iou: torch.Tensor,
+    b1_x1: torch.Tensor,
+    b1_y1: torch.Tensor,
+    b1_x2: torch.Tensor,
+    b1_y2: torch.Tensor,
+    b2_x1: torch.Tensor,
+    b2_y1: torch.Tensor,
+    b2_x2: torch.Tensor,
+    b2_y2: torch.Tensor,
+    thresh: float = 0.01,
+    eps: float = 1e-7,
+) -> torch.Tensor:
+    # Calculate the squared distances between corners
+    d_1_2 = torch.pow(b2_x1 - b1_x1, 2) + torch.pow(b2_y1 - b1_y1, 2)
+    d_2_2 = torch.pow(b2_x2 - b1_x2, 2) + torch.pow(b2_y2 - b1_y2, 2)
+
+    # Calculate squared height and width of ground truth box
+    h_2_gt = torch.pow(b2_y1 - b2_y2, 2)
+    w_2_gt = torch.pow(b2_x1 - b2_x2, 2)
+
+    # Maximum squared distance between corners
+    D = torch.max(d_1_2, d_2_2)
+    # Minimum squared dimension of ground truth box
+    L = torch.min(h_2_gt, w_2_gt)
+
+    # Calculate the penalty terms
+    penalty_term = d_1_2 / (h_2_gt + w_2_gt + eps) + d_2_2 / (h_2_gt + w_2_gt + eps)
+
+    # Calculate ThresIoU
+    th_iou = iou - penalty_term
+
+    # Create a mask for the threshold condition
+    condition = (D / (L + eps)) > thresh
+
+    # Apply the threshold condition element-wise
+    result = torch.where(condition, th_iou, torch.ones_like(iou))
+
+    return result
 
 
 def calculate_isiou(
