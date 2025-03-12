@@ -27,6 +27,7 @@ from .block import (
     DFL,
     ECA,
     ELAN1,
+    FA,
     FEM,
     PSA,
     SE,
@@ -186,4 +187,5 @@ __all__ = (
     "RFAConv",
     "LDConv",
     "HybridConv",
+    "FA",
 )

@@ -2,7 +2,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from ultralytics.nn.modules import ECA, FEM, GC, SE, BiFPNAdd, Conv, HybridConv, NewConv, RFAConv, SimAM, SimSPPF
+from ultralytics.nn.modules import ECA, FA, FEM, GC, SE, BiFPNAdd, Conv, HybridConv, NewConv, RFAConv, SimAM, SimSPPF
 
 
 class TestGC:
@@ -1007,3 +1007,206 @@ class TestHybridConv:
 
         # Check shapes match
         assert output_cpu.shape == output_cuda.shape, "Output shapes don't match across devices"
+
+
+class TestFA:
+    """Test suite for the Feature Attention (FA) module."""
+
+    @pytest.fixture
+    def fa_fixture(self):
+        """Create test data and FA instances for testing."""
+        batch_size = 4
+        in_channels = 64
+        reduction = 16
+        height = 32
+        width = 32
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Create input tensor
+        x = torch.randn(batch_size, in_channels, height, width, device=device)
+
+        # Initialize FA module
+        fa = FA(in_channels=in_channels, reduction=reduction).to(device)
+
+        return {
+            "batch_size": batch_size,
+            "in_channels": in_channels,
+            "reduction": reduction,
+            "height": height,
+            "width": width,
+            "device": device,
+            "input": x,
+            "fa": fa,
+        }
+
+    def test_output_shape(self, fa_fixture):
+        """Test that the output shape matches the input shape."""
+        x = fa_fixture["input"]
+        fa = fa_fixture["fa"]
+        batch_size = fa_fixture["batch_size"]
+        in_channels = fa_fixture["in_channels"]
+        height = fa_fixture["height"]
+        width = fa_fixture["width"]
+
+        # Forward pass
+        output = fa(x)
+
+        # Check output shape
+        assert output.shape == (batch_size, in_channels, height, width), (
+            f"Expected shape {(batch_size, in_channels, height, width)}, got {output.shape}"
+        )
+
+    def test_gradients_flow(self, fa_fixture):
+        """Test that gradients flow correctly through the FA module."""
+        x = fa_fixture["input"].clone().requires_grad_(True)
+        fa = fa_fixture["fa"]
+
+        # Forward pass
+        output = fa(x)
+
+        # Create a dummy loss and do backward pass
+        loss = output.mean()
+        loss.backward()
+
+        # Check that gradients have been computed for the input
+        assert x.grad is not None, "Input gradient is None"
+        assert not torch.allclose(x.grad, torch.zeros_like(x.grad)), "Input gradient is all zeros"
+
+        # Check that gradients have been computed for FA parameters
+        for name, param in fa.named_parameters():
+            assert param.grad is not None, f"Parameter {name} gradient is None"
+            assert not torch.allclose(param.grad, torch.zeros_like(param.grad)), (
+                f"Parameter {name} gradient is all zeros"
+            )
+
+    def test_residual_connection(self, fa_fixture):
+        """Test that the FA module has a proper residual connection."""
+        x = fa_fixture["input"]
+        fa = fa_fixture["fa"]
+
+        # Get internal components for testing
+        with torch.no_grad():
+            # Forward through parts of the module
+            x_down = fa.downconv(x)
+            F1 = fa.CBS1(fa.CBR1(x_down) + x_down)
+            F2 = fa.attention(F1) * F1
+            F3 = fa.CBR2(F2) * F2
+            transformed = fa.upconv(F3)
+
+            # Get full module output
+            output = fa(x)
+
+            # Check residual connection: output should be transformed + x
+            assert torch.allclose(output, transformed + x, rtol=1e-4, atol=1e-4), (
+                "Residual connection is not properly implemented"
+            )
+
+    def test_attention_mechanism(self, fa_fixture):
+        """Test that the attention mechanism properly modulates features."""
+        x = fa_fixture["input"]
+        fa = fa_fixture["fa"]
+
+        # Examine the attention weights
+        with torch.no_grad():
+            x_down = fa.downconv(x)
+            F1 = fa.CBS1(fa.CBR1(x_down) + x_down)
+            attention_weights = fa.attention(F1)
+
+            # Check that attention weights are in [0, 1] (sigmoid output)
+            assert torch.all(attention_weights >= 0) and torch.all(attention_weights <= 1), (
+                "Attention weights are not in range [0, 1]"
+            )
+
+            # Check that attention modulates features
+            modulated_features = attention_weights * F1
+            assert not torch.allclose(modulated_features, F1, rtol=1e-3, atol=1e-3), (
+                "Attention mechanism is not modulating features"
+            )
+
+    @pytest.mark.parametrize("reduction", [8, 16, 32])
+    def test_different_reductions(self, reduction):
+        """Test the FA module with different reduction factors."""
+        batch_size = 2
+        in_channels = 64
+        height = 32
+        width = 32
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Create input tensor
+        x = torch.randn(batch_size, in_channels, height, width, device=device)
+
+        # Initialize FA module
+        fa = FA(in_channels=in_channels, reduction=reduction).to(device)
+
+        # Forward pass
+        output = fa(x)
+
+        # Expected hidden channels
+        expected_hidden_channels = in_channels // reduction
+
+        # Check internal channels
+        assert fa.hidden_channels == expected_hidden_channels, (
+            f"Expected hidden_channels to be {expected_hidden_channels}, got {fa.hidden_channels}"
+        )
+
+        # Check output shape
+        assert output.shape == (batch_size, in_channels, height, width), (
+            f"Expected shape {(batch_size, in_channels, height, width)}, got {output.shape}"
+        )
+
+    def test_invalid_reduction(self):
+        """Test that initializing FA with invalid reduction raises an error."""
+        in_channels = 16
+        reduction = 32  # This will make hidden_channels = 0
+
+        with pytest.raises(ValueError, match="division by zero"):
+            _ = FA(in_channels=in_channels, reduction=reduction)
+
+    def test_device_compatibility(self, fa_fixture):
+        """Test that FA works correctly when moved between devices."""
+        if not torch.cuda.is_available():
+            pytest.skip("CUDA not available, skipping device compatibility test")
+
+        x = fa_fixture["input"]
+        fa = fa_fixture["fa"]
+
+        # Move to CPU
+        fa_cpu = fa.to("cpu")
+        x_cpu = x.to("cpu")
+
+        # Forward pass on CPU
+        output_cpu = fa_cpu(x_cpu)
+
+        # Move back to CUDA
+        fa_cuda = fa_cpu.to("cuda")
+        x_cuda = x_cpu.to("cuda")
+
+        # Forward pass on CUDA
+        output_cuda = fa_cuda(x_cuda)
+
+        # Check shapes match
+        assert output_cpu.shape == output_cuda.shape, "Output shapes don't match across devices"
+
+    def test_module_structure(self, fa_fixture):
+        """Test the structure of the FA module components."""
+        fa = fa_fixture["fa"]
+        in_channels = fa_fixture["in_channels"]
+        reduction = fa_fixture["reduction"]
+        hidden_channels = in_channels // reduction
+
+        # Check downconv and upconv
+        assert fa.downconv.conv.in_channels == in_channels, "Incorrect downconv input channels"
+        assert fa.downconv.conv.out_channels == hidden_channels, "Incorrect downconv output channels"
+
+        assert fa.upconv.conv.in_channels == hidden_channels, "Incorrect upconv input channels"
+        assert fa.upconv.conv.out_channels == in_channels, "Incorrect upconv output channels"
+
+        # Check CBR blocks
+        assert fa.CBR1.conv.in_channels == hidden_channels, "Incorrect CBR1 input channels"
+        assert fa.CBR1.conv.out_channels == hidden_channels, "Incorrect CBR1 output channels"
+
+        assert fa.CBS1.conv.in_channels == hidden_channels, "Incorrect CBS1 input channels"
+        assert fa.CBS1.conv.out_channels == hidden_channels, "Incorrect CBS1 output channels"
+
+        assert fa.CBR2.conv.in_channels == hidden_channels, "Incorrect CBR2 input channels"
+        assert fa.CBR2.conv.out_channels == hidden_channels, "Incorrect CBR2 output channels"

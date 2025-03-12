@@ -20,6 +20,7 @@ from ultralytics.nn.modules import (
     CBM,
     ECA,
     ELAN1,
+    FA,
     FEM,
     GC,
     OBB,
@@ -1082,8 +1083,8 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             c2 = args[0]
             c1 = ch[f]
             args = [*args[1:]]
-        elif m is GC or m is SE or m is ECA:
-            c1 = ch[f]
+        elif m is GC or m is SE or m is ECA or m is FA:
+            c1 = c2 = ch[f]
             args = [c1, *args]
         elif m is SimAM:
             c2 = ch[f]
