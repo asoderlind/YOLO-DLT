@@ -513,7 +513,7 @@ class RFAConv(nn.Module):  # RFAConv implemented based on Group Conv
 
 class LDConv(nn.Module):
     def __init__(self, in_c: int, out_c: int, num_param: int, stride: int = 1) -> None:
-        super(LDConv, self).__init__()
+        super().__init__()
         self.num_param = num_param
         self.stride = stride
         self.conv = Conv(in_c, out_c, k=(num_param, 1), s=(num_param, 1), p=0)
