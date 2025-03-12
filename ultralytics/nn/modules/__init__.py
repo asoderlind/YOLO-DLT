@@ -77,6 +77,7 @@ from .conv import (
     DWConvTranspose2d,
     Focus,
     GhostConv,
+    HybridConv,
     Index,
     LDConv,
     LightConv,
@@ -184,4 +185,5 @@ __all__ = (
     "BiFPNAdd",
     "RFAConv",
     "LDConv",
+    "HybridConv",
 )

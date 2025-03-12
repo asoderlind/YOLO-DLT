@@ -651,3 +651,45 @@ class LDConv(nn.Module):
 
         x_offset = rearrange(x_offset, "b c h w n -> b c (h n) w")
         return x_offset
+
+
+class HybridConv(nn.Module):
+    """
+    Hybric Conv (HConv) block implementation.
+    Adapted from: https://www.mdpi.com/2072-4292/16/23/4493
+    """
+
+    def __init__(
+        self,
+        c1: int,
+        c2: int,
+        k: int = 1,
+        s: int = 1,
+        p: int | None = None,
+        g: int = 1,
+        d: int = 1,
+        act: bool | nn.Module = True,
+    ) -> None:
+        super().__init__()
+        assert c2 % 2 == 0, "c2 must be divisible by 2"
+
+        half_c2 = c2 // 2
+
+        self.conv = Conv(c1, half_c2, k=k, s=s, p=p, g=g, d=d, act=act)
+        self.dwconv = DWConv(c1, half_c2, k=k, s=s, d=d, act=act)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Applies DwConv and Conv to input tensor and concatenates the output.
+        DwConv and Conv outputs c2 / 2 channels each, which are concatenated to form the final output.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape [batch_size, in_channels, height, width]
+
+        Returns:
+            out (torch.Tensor): Output tensor after applying Hybrid Convolution of shape [batch_size, out_channels, height2, width2]
+        """
+        return torch.cat([self.dwconv(x), self.conv(x)], dim=1)
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        return self.forward(x)
