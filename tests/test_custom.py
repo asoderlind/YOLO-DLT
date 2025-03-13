@@ -2,7 +2,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from ultralytics.nn.modules import ECA, FEM, GC, SE, BiFPNAdd, Conv, NewConv, SimAM, SimSPPF
+from ultralytics.nn.modules import ECA, FEM, GC, SE, BiFPNAdd, Conv, HybridConv, NewConv, RFAConv, SimAM, SimSPPF
 
 
 class TestGC:
@@ -656,3 +656,354 @@ class TestBiFPNAdd:
         # Check that negative weights have been zeroed
         expected_weights = torch.tensor([0.0, 0.0, 2.0], device=device)
         assert torch.allclose(weights_after_relu, expected_weights)
+
+
+class TestRFAConv:
+    @pytest.fixture
+    def rfaconv_fixture(self):
+        """Create fixture with test data and RFAConv instances for testing."""
+        batch_size = 4
+        in_channels = 16
+        out_channels = 32
+        kernel_size = 3
+        stride = 1
+        height = 24
+        width = 24
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Create input tensor
+        x = torch.randn(batch_size, in_channels, height, width, device=device)
+
+        # Initialize RFAConv module
+        rfaconv = RFAConv(in_channels, out_channels, kernel_size, stride).to(device)
+
+        return {
+            "batch_size": batch_size,
+            "in_channels": in_channels,
+            "out_channels": out_channels,
+            "kernel_size": kernel_size,
+            "stride": stride,
+            "height": height,
+            "width": width,
+            "device": device,
+            "input": x,
+            "rfaconv": rfaconv,
+        }
+
+    def test_output_shape(self, rfaconv_fixture):
+        """Test that the output shape is correct."""
+        x = rfaconv_fixture["input"]
+        rfaconv = rfaconv_fixture["rfaconv"]
+        batch_size = rfaconv_fixture["batch_size"]
+        out_channels = rfaconv_fixture["out_channels"]
+        height = rfaconv_fixture["height"]
+        width = rfaconv_fixture["width"]
+
+        # Forward pass
+        output = rfaconv(x)
+
+        # Expected output dimensions (should not change spatial dimensions)
+        expected_height = height
+        expected_width = width
+
+        # Check output shape
+        assert output.shape == (batch_size, out_channels, expected_height, expected_width), (
+            f"Expected shape {(batch_size, out_channels, expected_height, expected_width)}, got {output.shape}"
+        )
+
+    def test_gradients_flow(self, rfaconv_fixture):
+        """Test that gradients flow correctly through the RFAConv module."""
+        x = rfaconv_fixture["input"].clone().requires_grad_(True)
+        rfaconv = rfaconv_fixture["rfaconv"]
+
+        # Forward pass
+        output = rfaconv(x)
+
+        # Create a dummy loss and do backward pass
+        loss = output.sum()
+        loss.backward()
+
+        # Check that gradients have been computed for the input
+        assert x.grad is not None, "Input gradient is None"
+        assert not torch.allclose(x.grad, torch.zeros_like(x.grad)), "Input gradient is all zeros"
+
+        # Check that gradients have been computed for RFAConv parameters
+        for name, param in rfaconv.named_parameters():
+            assert param.grad is not None, f"Parameter {name} gradient is None"
+            assert not torch.allclose(param.grad, torch.zeros_like(param.grad)), (
+                f"Parameter {name} gradient is all zeros"
+            )
+
+    def test_attention_weights(self, rfaconv_fixture):
+        """Test that attention weights are properly computed and normalized."""
+        x = rfaconv_fixture["input"]
+        rfaconv = rfaconv_fixture["rfaconv"]
+
+        # Access the attention weights directly
+        with torch.no_grad():
+            weight = rfaconv.get_weight(x)
+            b, c = x.shape[0:2]
+            h, w = weight.shape[2:]
+
+            # Reshape and apply softmax as in the forward method
+            weighted = weight.view(b, c, rfaconv.kernel_size**2, h, w).softmax(2)
+
+            # Check that weights sum to 1 along the appropriate dimension (dim=2)
+            weight_sum = weighted.sum(dim=2)
+
+            # All values should be very close to 1
+            assert torch.allclose(weight_sum, torch.ones_like(weight_sum), rtol=1e-5, atol=1e-5), (
+                "Attention weights do not sum to 1"
+            )
+
+    def test_feature_modulation(self, rfaconv_fixture):
+        """Test the feature modulation step of RFAConv."""
+        x = rfaconv_fixture["input"]
+        rfaconv = rfaconv_fixture["rfaconv"]
+
+        # Extract intermediate outputs to verify feature modulation
+        with torch.no_grad():
+            b, c = x.shape[0:2]
+
+            # Get weights and features
+            weight = rfaconv.get_weight(x)
+            feature = rfaconv.generate_feature(x)
+
+            h, w = weight.shape[2:]
+
+            # Reshape as in the forward method
+            weighted = weight.view(b, c, rfaconv.kernel_size**2, h, w).softmax(2)
+            feature = feature.view(b, c, rfaconv.kernel_size**2, h, w)
+
+            # Check modulated features
+            weighted_data = feature * weighted
+
+            # Check that modulation occurs (weighted_data should be different from feature)
+            assert not torch.allclose(weighted_data, feature, rtol=1e-3, atol=1e-3), "Feature modulation had no effect"
+
+    @pytest.mark.parametrize("kernel_size", [3, 5])
+    @pytest.mark.parametrize("stride", [1, 2])
+    def test_different_configurations(self, kernel_size, stride):
+        """Test RFAConv with different kernel sizes and strides."""
+        batch_size = 2
+        in_channels = 8
+        out_channels = 16
+        height = 32
+        width = 32
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Create input tensor
+        x = torch.randn(batch_size, in_channels, height, width, device=device)
+
+        # Initialize RFAConv module
+        rfaconv = RFAConv(in_channels, out_channels, kernel_size, stride).to(device)
+
+        # Forward pass
+        output = rfaconv(x)
+
+        # Expected output dimensions based on kernel size and stride
+        if stride == 1:
+            expected_height = height
+            expected_width = width
+        else:
+            # When stride > 1, both the generate_feature Conv and the final Conv affect dimensions
+            # generate_feature downsamples by stride, and the final Conv downsamples by kernel_size
+            expected_height = height // stride
+            expected_width = width // stride
+
+        # Check output shape
+        assert output.shape == (batch_size, out_channels, expected_height, expected_width), (
+            f"Expected shape {(batch_size, out_channels, expected_height, expected_width)}, got {output.shape}"
+        )
+
+    def test_device_compatibility(self, rfaconv_fixture):
+        """Test that RFAConv works correctly when moved between devices."""
+        if not torch.cuda.is_available():
+            pytest.skip("CUDA not available, skipping device compatibility test")
+
+        x = rfaconv_fixture["input"]
+        rfaconv = rfaconv_fixture["rfaconv"]
+
+        # Move to CPU
+        rfaconv_cpu = rfaconv.to("cpu")
+        x_cpu = x.to("cpu")
+
+        # Forward pass on CPU
+        output_cpu = rfaconv_cpu(x_cpu)
+
+        # Move back to CUDA
+        rfaconv_cuda = rfaconv_cpu.to("cuda")
+        x_cuda = x_cpu.to("cuda")
+
+        # Forward pass on CUDA
+        output_cuda = rfaconv_cuda(x_cuda)
+
+        # Check shapes match
+        assert output_cpu.shape == output_cuda.shape, "Output shapes don't match across devices"
+
+
+class TestHybridConv:
+    """Test suite for the HybridConv module."""
+
+    @pytest.fixture
+    def hybridconv_fixture(self):
+        """Create test data and HybridConv instances for testing."""
+        batch_size = 4
+        in_channels = 16
+        out_channels = 32  # Must be divisible by 2
+        kernel_size = 3
+        stride = 1
+        height = 24
+        width = 24
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Create input tensor
+        x = torch.randn(batch_size, in_channels, height, width, device=device)
+
+        # Initialize HybridConv module
+        hybridconv = HybridConv(c1=in_channels, c2=out_channels, k=kernel_size, s=stride).to(device)
+
+        return {
+            "batch_size": batch_size,
+            "in_channels": in_channels,
+            "out_channels": out_channels,
+            "kernel_size": kernel_size,
+            "stride": stride,
+            "height": height,
+            "width": width,
+            "device": device,
+            "input": x,
+            "hybridconv": hybridconv,
+        }
+
+    def test_output_shape(self, hybridconv_fixture):
+        """Test that the output shape is correct."""
+        x = hybridconv_fixture["input"]
+        hybridconv = hybridconv_fixture["hybridconv"]
+        batch_size = hybridconv_fixture["batch_size"]
+        out_channels = hybridconv_fixture["out_channels"]
+        height = hybridconv_fixture["height"]
+        width = hybridconv_fixture["width"]
+        stride = hybridconv_fixture["stride"]
+
+        # Calculate expected height and width after convolution with stride
+        expected_height = height // stride
+        expected_width = width // stride
+
+        # Forward pass
+        output = hybridconv(x)
+
+        # Check output shape
+        assert output.shape == (batch_size, out_channels, expected_height, expected_width), (
+            f"Expected shape {(batch_size, out_channels, expected_height, expected_width)}, got {output.shape}"
+        )
+
+    def test_gradients_flow(self, hybridconv_fixture):
+        """Test that gradients flow correctly through the HybridConv module."""
+        x = hybridconv_fixture["input"].clone().requires_grad_(True)
+        hybridconv = hybridconv_fixture["hybridconv"]
+
+        # Forward pass
+        output = hybridconv(x)
+
+        # Create a dummy loss and do backward pass
+        loss = output.mean()
+        loss.backward()
+
+        # Check that gradients have been computed for the input
+        assert x.grad is not None, "Input gradient is None"
+        assert not torch.allclose(x.grad, torch.zeros_like(x.grad)), "Input gradient is all zeros"
+
+        # Check that gradients have been computed for HybridConv parameters
+        for name, param in hybridconv.named_parameters():
+            assert param.grad is not None, f"Parameter {name} gradient is None"
+            assert not torch.allclose(param.grad, torch.zeros_like(param.grad)), (
+                f"Parameter {name} gradient is all zeros"
+            )
+
+    def test_channel_splitting(self, hybridconv_fixture):
+        """Test that the channel splitting works correctly in HybridConv."""
+        x = hybridconv_fixture["input"]
+        hybridconv = hybridconv_fixture["hybridconv"]
+        out_channels = hybridconv_fixture["out_channels"]
+
+        # Forward pass through individual components
+        conv_out = hybridconv.conv(x)
+        dwconv_out = hybridconv.dwconv(x)
+
+        # Check that each component outputs half the channels
+        assert conv_out.shape[1] == out_channels // 2, (
+            f"Conv output should have {out_channels // 2} channels, got {conv_out.shape[1]}"
+        )
+        assert dwconv_out.shape[1] == out_channels // 2, (
+            f"DWConv output should have {out_channels // 2} channels, got {dwconv_out.shape[1]}"
+        )
+
+        # Forward pass through the entire module
+        output = hybridconv(x)
+
+        # Check that the output is the concatenation of the two components
+        combined = torch.cat([dwconv_out, conv_out], dim=1)
+        assert torch.allclose(output, combined), "Output is not the concatenation of dwconv and conv outputs"
+
+    @pytest.mark.parametrize("kernel_size", [1, 3, 5])
+    @pytest.mark.parametrize("stride", [1, 2])
+    def test_different_configurations(self, kernel_size, stride):
+        """Test HybridConv with different kernel sizes and strides."""
+        batch_size = 2
+        in_channels = 8
+        out_channels = 16  # Must be divisible by 2
+        height = 32
+        width = 32
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Create input tensor
+        x = torch.randn(batch_size, in_channels, height, width, device=device)
+
+        # Initialize HybridConv module
+        hybridconv = HybridConv(c1=in_channels, c2=out_channels, k=kernel_size, s=stride).to(device)
+
+        # Forward pass
+        output = hybridconv(x)
+
+        # Calculate expected dimensions
+        expected_height = height // stride
+        expected_width = width // stride
+
+        # Check output shape
+        assert output.shape == (batch_size, out_channels, expected_height, expected_width), (
+            f"Expected shape {(batch_size, out_channels, expected_height, expected_width)}, got {output.shape}"
+        )
+
+    def test_assertion_for_even_channels(self):
+        """Test that initialization with odd number of output channels raises an AssertionError."""
+        in_channels = 16
+        out_channels = 33  # Not divisible by 2
+
+        with pytest.raises(AssertionError, match="c2 must be divisible by 2"):
+            _ = HybridConv(c1=in_channels, c2=out_channels)
+
+    def test_device_compatibility(self, hybridconv_fixture):
+        """Test that HybridConv works correctly when moved between devices."""
+        if not torch.cuda.is_available():
+            pytest.skip("CUDA not available, skipping device compatibility test")
+
+        x = hybridconv_fixture["input"]
+        hybridconv = hybridconv_fixture["hybridconv"]
+
+        # Move to CPU
+        hybridconv_cpu = hybridconv.to("cpu")
+        x_cpu = x.to("cpu")
+
+        # Forward pass on CPU
+        output_cpu = hybridconv_cpu(x_cpu)
+
+        # Move back to CUDA
+        hybridconv_cuda = hybridconv_cpu.to("cuda")
+        x_cuda = x_cpu.to("cuda")
+
+        # Forward pass on CUDA
+        output_cuda = hybridconv_cuda(x_cuda)
+
+        # Check shapes match
+        assert output_cpu.shape == output_cuda.shape, "Output shapes don't match across devices"

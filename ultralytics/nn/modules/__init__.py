@@ -77,11 +77,14 @@ from .conv import (
     DWConvTranspose2d,
     Focus,
     GhostConv,
+    HybridConv,
     Index,
+    LDConv,
     LightConv,
     NewConv,
     NewConv2,
     RepConv,
+    RFAConv,
     SpatialAttention,
 )
 from .head import OBB, Classify, Detect, Pose, RTDETRDecoder, Segment, WorldDetect, v10Detect
@@ -180,4 +183,7 @@ __all__ = (
     "SimAM",
     "CBM",
     "BiFPNAdd",
+    "RFAConv",
+    "LDConv",
+    "HybridConv",
 )

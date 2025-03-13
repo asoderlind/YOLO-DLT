@@ -98,6 +98,9 @@ class BboxLoss(nn.Module):
         self.dfl_loss = DFLoss(reg_max) if reg_max > 1 else None
         self.iou_type = iou_type
 
+        if iou_type == "focal-eiou":
+            self.gamma = 0.5  # Default value based on the paper
+
         # Initialize IoU mean for WIoU if needed
         if iou_type.startswith("wiou"):
             self.register_buffer("iou_mean", torch.tensor(1.0))
@@ -107,14 +110,23 @@ class BboxLoss(nn.Module):
             self.delta = 3.0  # Default from the paper
             self.momentum = 1e-2  # based on the NWD code implementation
 
-    def forward(self, pred_dist, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask):
+    def forward(
+        self,
+        pred_dist,
+        pred_bboxes,
+        anchor_points,
+        target_bboxes,
+        target_scores,
+        target_scores_sum,
+        fg_mask,
+        is_validation=False,
+    ):
         """IoU loss."""
         weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
-
         # Calculate IoU based on specified type
         if self.iou_type.startswith("wiou"):
             # For WIoU variants, check if we need to update the running mean
-            if hasattr(self, "iou_mean") and self.iou_type != "wiouv1":
+            if hasattr(self, "iou_mean") and self.iou_type != "wiouv1" and not is_validation:
                 # Standard IoU calculation for tracking mean
                 with torch.no_grad():
                     std_iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, iou_type="iou")
@@ -133,8 +145,16 @@ class BboxLoss(nn.Module):
         else:
             # Standard IoU types
             iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, iou_type=self.iou_type)
-
-        loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
+        if self.iou_type == "focal-eiou":
+            # Aply extra loss logic if focal eiou is used
+            std_iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, iou_type="iou")
+            focal_weight = torch.pow(std_iou, self.gamma)
+            weighted_eiou_loss = (1.0 - iou) * focal_weight * weight
+            total_focal_weight = (focal_weight * weight).sum()
+            eps = 1e-7  # to avoid division by zero
+            loss_iou = weighted_eiou_loss.sum() / (total_focal_weight + eps)
+        else:
+            loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
 
         # DFL loss
         if self.dfl_loss:
@@ -248,7 +268,7 @@ class v8DetectionLoss:
             # pred_dist = (pred_dist.view(b, a, c // 4, 4).softmax(2) * self.proj.type(pred_dist.dtype).view(1, 1, -1, 1)).sum(2)
         return dist2bbox(pred_dist, anchor_points, xywh=False)
 
-    def __call__(self, preds, batch):
+    def __call__(self, preds, batch, **kwargs):
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
         loss = torch.zeros(4, device=self.device)  # box, cls, dfl, con
         feats = preds[1] if isinstance(preds, tuple) else preds
@@ -295,7 +315,14 @@ class v8DetectionLoss:
         if fg_mask.sum():
             target_bboxes /= stride_tensor
             loss[0], loss[2] = self.bbox_loss(
-                pred_distri, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask
+                pred_distri,
+                pred_bboxes,
+                anchor_points,
+                target_bboxes,
+                target_scores,
+                target_scores_sum,
+                fg_mask,
+                **kwargs,
             )
 
         # Consistency loss
