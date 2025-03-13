@@ -4,7 +4,7 @@ from tqdm import tqdm
 from notebooks.utils import get_dln_model, enhance_image
 import cv2
 
-dataset = "exDark-yolo"
+dataset = "bdd100k_night"
 
 # Define paths
 dataset_path = f"../yolo-testing/datasets/{dataset}/images"
@@ -36,8 +36,6 @@ for image in tqdm(raw_train_images, desc="Train", unit="img"):
     path = f"{target_train_folder}/{os.path.basename(image)}"
     if os.path.exists(path):
         continue
-    else:
-        print(f"Enhancing {image}")
     enhanced_image = enhance_image(image, dln)
     if enhanced_image is not None:
         cv2.imwrite(path, enhanced_image)
