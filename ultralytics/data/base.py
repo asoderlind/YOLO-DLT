@@ -61,18 +61,18 @@ class BaseDataset(Dataset):
         single_cls=False,
         classes=None,
         fraction=1.0,
+        use_fe=False,
     ):
         """Initialize BaseDataset with given configuration and options."""
         super().__init__()
         self.img_path = img_path
-        self.img_enhanced_path = f"{img_path}_enhanced"
+        self.use_fe = use_fe
         self.imgsz = imgsz
         self.augment = augment
         self.single_cls = single_cls
         self.prefix = prefix
         self.fraction = fraction
         self.im_files = self.get_img_files(self.img_path)
-        self.im_enhanced_files = self.get_img_files(self.img_enhanced_path)
         self.labels = self.get_labels()
         self.update_labels(include_class=classes)  # single_cls and include_class
         self.ni = len(self.labels)  # number of images
@@ -83,6 +83,14 @@ class BaseDataset(Dataset):
         if self.rect:
             assert self.batch_size is not None
             self.set_rectangle()
+
+        # Feature enhanced images
+        if self.use_fe:
+            self.img_enhanced_path = f"{img_path}_enhanced"
+            self.im_enhanced_files = self.get_img_files(self.img_enhanced_path)
+        else:
+            self.img_enhanced_path = ""
+            self.im_enhanced_files = []
 
         # Buffer thread for mosaic images
         self.buffer = []  # buffer size = batch size
@@ -154,10 +162,13 @@ class BaseDataset(Dataset):
 
     def load_image(self, i, enhanced=False, rect_mode=True):
         """Loads 1 image from dataset index 'i', returns (im, resized hw)."""
+
+        # Check if we are loading an enhanced image
         if not enhanced:
             im, f, fn = self.ims[i], self.im_files[i], self.npy_files[i]
         else:
             im, f, fn = self.ims_enhanced[i], self.im_enhanced_files[i], self.npy_files_enhanced[i]
+
         if im is None:  # not cached in RAM
             if fn is not None and fn.exists():  # load npy
                 try:
@@ -299,7 +310,8 @@ class BaseDataset(Dataset):
         label = deepcopy(self.labels[index])  # requires deepcopy() https://github.com/ultralytics/ultralytics/pull/1948
         label.pop("shape", None)  # shape is for rect, remove it
         label["img"], label["ori_shape"], label["resized_shape"] = self.load_image(index)
-        label["img_enhanced"], _, _ = self.load_image(index, enhanced=True, rect_mode=False)
+        if self.use_fe:
+            label["img_enhanced"], _, _ = self.load_image(index, enhanced=True, rect_mode=False)
         label["ratio_pad"] = (
             label["resized_shape"][0] / label["ori_shape"][0],
             label["resized_shape"][1] / label["ori_shape"][1],
