@@ -8,11 +8,11 @@ from ultralytics import YOLO
 
 # Create a function to measure training time
 def train_with_timing(args):
+    name = args.name
     model_path = args.model
     data_path = args.data
     epochs = args.epochs
     device = args.device
-    name = args.tag
     use_fe = args.use_fe
     augment = args.augment
     pretrained = args.pretrained
@@ -25,10 +25,13 @@ def train_with_timing(args):
     start_time = time.time()
 
     # Build name
-    dataset_name = os.path.basename(data_path).split(".")[0]
-    _fe = "-fe" if use_fe else ""
-    _model = model_path.split(".")[0]
-    name = f"{dataset_name}-{_model}-{_fe}-{name}"
+    final_name = name.format(
+        data=os.path.basename(data_path).split(".")[0],
+        epochs=epochs,
+        augment=f"{'aug' if augment else 'noAug'}",
+        fe=f"{'fe' if use_fe else 'noFe'}",
+        model=os.path.basename(model_path).split(".")[0],
+    )
 
     # Train the model
     results = model.train(
@@ -42,7 +45,7 @@ def train_with_timing(args):
         momentum=0.9,
         use_fe=use_fe,
         augment=augment,
-        name=name,
+        name=final_name,
         iou_type=iou_type,
     )
 
@@ -54,7 +57,7 @@ def train_with_timing(args):
     minutes, seconds = divmod(remainder, 60)
     formatted_time = f"{int(hours)}h {int(minutes)}m {seconds:.2f}s"
 
-    output_path = f"runs/detect/{name}/"
+    output_path = f"runs/detect/{final_name}/"
 
     # Create output directory if it doesn't exist
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -78,13 +81,13 @@ def train_with_timing(args):
 
 def main() -> None:
     parser = ArgumentParser()
+    parser.add_argument("--name", type=str, default="{data}-{model}-{fe}-{augment}-{epochs}e")
     parser.add_argument("--param_path", type=str, default="default.yaml")
     parser.add_argument("--model", type=str, default="yolo11n.yaml")
-    parser.add_argument("--data", type=str, default="exDark128-yolo.yaml")
-    parser.add_argument("--batch", type=int, default=16)
+    parser.add_argument("--data", type=str, default="coco8.yaml")
+    parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--tag", type=str, default="noName")
     parser.add_argument("--use_fe", type=bool, default=False)
     parser.add_argument("--augment", type=bool, default=True)
     parser.add_argument("--pretrained", type=bool, default=False)
