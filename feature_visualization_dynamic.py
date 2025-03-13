@@ -5,6 +5,7 @@ import numpy as np
 import cv2
 import glob
 from notebooks.utils import enhance_image, get_dln_model
+import os
 import random
 
 device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu")
@@ -49,7 +50,15 @@ def show_loss(imgs, model, dataset, img_name):
         enhanced_imgs, size=predictions.shape[-2:]
     )  # shape [bs, 3, h/2, w/2]
 
-    # pool images
+    img_resized = cv2.resize(
+        imgs[0].permute(1, 2, 0).detach().cpu().numpy(), (predictions.shape[3], predictions.shape[2])
+    )  # resize the image to the feature map size
+
+    # pool orignal image
+    avg_pool_img_resized = np.mean(img_resized, axis=2)
+    max_pool_img_resized = np.max(img_resized, axis=2)
+
+    # pool enhanced
     avg_pool_enhanced_imgs = torch.mean(enhanced_img_resized, dim=1)  # shape [bs, 1, h/2, w/2]
     max_pool_enhanced_imgs = torch.max(enhanced_img_resized, dim=1).values  # shape [bs, 1, h/2, w/2]
 
@@ -68,31 +77,42 @@ def show_loss(imgs, model, dataset, img_name):
     print(f"Max pool loss {max_pool_loss:.2f}")
 
     # visualize the difference between the enhanced image and the prediction
-    fig, axs = plt.subplots(2, 2, figsize=(10, 10))
+    fig, axs = plt.subplots(3, 2, figsize=(10, 10))
     fig.suptitle(f"Model: {model.model_name}")
 
     axs[0, 0].imshow(avg_pool_enhanced_imgs[0].detach().cpu().numpy(), cmap="gray")
     axs[0, 0].set_title("Avg pool enhanced image")
     axs[0, 0].axis("off")
 
-    axs[0, 1].imshow(avg_pool_predictions[0].detach().cpu().numpy(), cmap="gray")
-    axs[0, 1].set_title("Avg pool prediction")
+    axs[0, 1].imshow(max_pool_enhanced_imgs[0].detach().cpu().numpy(), cmap="gray")
+    axs[0, 1].set_title("Max pool enhanced image")
     axs[0, 1].axis("off")
 
-    axs[1, 0].imshow(max_pool_enhanced_imgs[0].detach().cpu().numpy(), cmap="gray")
-    axs[1, 0].set_title("Max pool enhanced image")
+    axs[1, 0].imshow(avg_pool_predictions[0].detach().cpu().numpy(), cmap="gray")
+    axs[1, 0].set_title("Avg pool prediction")
     axs[1, 0].axis("off")
 
     axs[1, 1].imshow(max_pool_predictions[0].detach().cpu().numpy(), cmap="gray")
     axs[1, 1].set_title("Max pool prediction")
     axs[1, 1].axis("off")
 
+    # show original image pools
+    axs[2, 0].imshow(avg_pool_img_resized, cmap="gray")
+    axs[2, 0].set_title("Avg pool original image")
+    axs[2, 0].axis("off")
+
+    axs[2, 1].imshow(max_pool_img_resized, cmap="gray")
+    axs[2, 1].set_title("Max pool original image")
+    axs[2, 1].axis("off")
+
     # save the figure
     model_name = model.model_name
     model_name = model_name.split("/")[-1]
-    plt.savefig(f"../yolo-testing/feature_visualization/{img_name}--{dataset}-{model_name}.png")
 
-    plt.show()
+    if not os.path.exists("feature_visualization"):
+        os.makedirs("feature_visualization")
+    plt.savefig(f"feature_visualization/{img_name}--{dataset}-{model_name}.png")
+    # plt.show()
 
 
 def get_img_features_pools_edges(_model, _img):
@@ -177,15 +197,19 @@ def visualize_features(_dataset, _img_name, _model, images):
 ############################################################################################################
 
 target_checkpoints = [
-    "runs/detect/exDark128-yolo-fe-20-only-conv1-lr0-0.001/weights/best.pt",
-    "yolo11n.pt",
-    "runs/detect/exDark128-yolo-fe-20-only-conv1-lr0-0.001/weights/last.pt",
+    "exDark-conv1-e10-lc0.1.pt",
+    "exDark-conv1-e10-lc0.5.pt",
+    "exDark-conv1-e10-lc0.1-freeze1-e100_.pt",
+    "exDark-fe-100-allLoss-lc0.1-Auto-aug-preLoad.pt",
+    "exDark-fe-100-allLoss-lc0.5-Auto-aug-preLoad.pt",
+    "exDark128-100-allLoss-lc10.0-Auto-aug-preLoad.pt",
+    "yolo11x.pt",
 ]
 
 # load dataset
 # dataset = "bdd128_DLN"
 dataset = "exDark128-yolo"
-images = glob.glob(f"../yolo-testing/datasets/{dataset}/images/train/2015_00112.jpg")
+images = glob.glob(f"../yolo-testing/datasets/{dataset}/images/train/*.jpg")
 img_filename = random.sample(images, 1)[0]
 name = img_filename.split("/")[-1]
 img_enhanced_filename = f"../yolo-testing/datasets/{dataset}/images_enhanced_VOC_LOL/train/{name[:-4]}_enhanced.png"
@@ -193,7 +217,8 @@ img_enhanced_filename = f"../yolo-testing/datasets/{dataset}/images_enhanced_VOC
 # load images
 img = cv2.imread(img_filename, cv2.IMREAD_COLOR)
 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-img_enhanced = enhance_image(img_filename)
+dln = get_dln_model()
+img_enhanced = enhance_image(img_filename, dln)
 
 # compare_images(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), img_enhanced)
 
