@@ -10,7 +10,7 @@ model.train(
     lr0=0.001,
     pretrained=True,
     optimizer="AdamW",
-    device="mps",
+    device="cuda",
     use_fe=True,
     augment=False,
     val=False,

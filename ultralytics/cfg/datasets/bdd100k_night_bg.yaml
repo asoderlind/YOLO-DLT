@@ -9,7 +9,7 @@
 #     └── coco128  ← downloads here (7 MB)
 
 # Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
-path: ../yolo-testing/datasets/bdd100k # dataset root dir
+path: ../yolo-testing/datasets/bdd100k_night_bg # dataset root dir
 train: images/train # train images (relative to 'path') 69863 images
 val: images/val # val images (relative to 'path') 10000 images
 #test: images/test
@@ -30,5 +30,7 @@ names:
   10: tl_none
   11: traffic_sign
   12: "train"
+
 # Download script/URL (optional)
 # download: http://128.32.162.150/bdd100k/bdd100k_images_100k.zip
+# download: https://files.soderlind.dev/bdd100k_night.zip
