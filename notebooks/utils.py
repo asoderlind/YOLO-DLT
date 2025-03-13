@@ -65,16 +65,16 @@ def compare_images(image1, image2):
 def get_dln_model(dln_chpt="ultralytics/DLN/DLN_finetune_LOL.pth"):
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu")
     model = DLN()
-    model = torch.nn.DataParallel(model)
-    model.load_state_dict(torch.load(dln_chpt, map_location=lambda storage, loc: storage))
+    checkpoint = torch.load(dln_chpt, map_location=device)
+    new_state_dict = {k.replace("module.", ""): v for k, v in checkpoint.items()}
+    model.load_state_dict(new_state_dict)
     model.eval()
     model.to(device)
     return model
 
 
-def enhance_image(filename, dln_chpt="ultralytics/DLN/DLN_finetune_LOL.pth"):
+def enhance_image(filename, dln):
     device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu")
-    dln = get_dln_model()
     trans = transforms.ToTensor()
     torch.manual_seed(0)
     with torch.no_grad():

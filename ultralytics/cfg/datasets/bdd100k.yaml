@@ -31,4 +31,5 @@ names:
   11: traffic_sign
   12: "train"
 # Download script/URL (optional)
-# download: http://128.32.162.150/bdd100k/bdd100k_images_100k.zip
+# download: # download: https://files.soderlind.dev/berkeley/bdd100k.zip
+
