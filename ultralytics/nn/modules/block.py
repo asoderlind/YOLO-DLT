@@ -1504,3 +1504,54 @@ class BiFPNAdd(nn.Module):
 
         # Use einsum for efficient weighted sum
         return torch.einsum("i,ibchw->bchw", normalized_weights, stacked_inputs)
+
+
+class FA(nn.Module):
+    """
+    Implements the Feature Attention (FA) block
+    Adapted from: https://www.mdpi.com/2072-4292/16/23/4493
+    """
+
+    def __init__(self, in_channels: int, reduction: int = 16) -> None:
+        """
+        Initializes the Feature Attention (FA) block with the specified input channels and reduction factor.
+
+        Args:
+            in_channels (int): Number of input channels
+            reduction (int): Reduction factor for the number of channels. Default is 16.
+        """
+        super().__init__()
+
+        self.hidden_channels = in_channels // reduction
+
+        self.downconv = Conv(in_channels, self.hidden_channels, 1, 1)
+        self.upconv = Conv(self.hidden_channels, in_channels, 1, 1)
+
+        self.CBR1 = Conv(self.hidden_channels, self.hidden_channels, 3, act=nn.ReLU())
+        self.CBS1 = Conv(self.hidden_channels, self.hidden_channels, 3)
+
+        self.attention = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(self.hidden_channels, self.hidden_channels, kernel_size=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(self.hidden_channels, self.hidden_channels, kernel_size=1),
+            nn.Sigmoid(),
+        )
+
+        self.CBR2 = Conv(self.hidden_channels, self.hidden_channels, 3, act=nn.ReLU())
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the Feature Attention (FA) block.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape [batch_size, channels, height, width]
+
+        Returns:
+            out (torch.Tensor): Output tensor of shape [batch_size, channels, height, width]
+        """
+        x_down: torch.Tensor = self.downconv(x)  # [b, c_hidden, h, w]
+        F1: torch.Tensor = self.CBS1(self.CBR1(x_down) + x_down)  # [b, c_hidden, h, w]
+        F2: torch.Tensor = F1 * self.attention(F1)  # [b, c_hidden, h, w]
+        F3: torch.Tensor = self.CBR2(F2) * F2  # [b, c_hidden, h, w]
+        return self.upconv(F3) + x  # [b, c, h, w]

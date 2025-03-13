@@ -2,7 +2,7 @@ from ultralytics import YOLO
 
 
 # With training first layer at same time as rest of net
-'''
+"""
 fe = True
 epochs = 100
 lcs = [0.2, 0.3, 0.4]
@@ -22,7 +22,7 @@ for lc in lcs:
     )
 
 
-'''
+"""
 # With training only first layer then freezing
 fe = True
 epochs_list = [10]
@@ -47,11 +47,11 @@ for epochs in epochs_list:
             cls=0.0,
             dfl=0.0,
             save_json=True,
-            name=pathConv1
+            name=pathConv1,
         )
 
         freezeNum = 1
-        model=YOLO(f"runs/detect/{pathConv1}/weights/last.pt")
+        model = YOLO(f"runs/detect/{pathConv1}/weights/last.pt")
         model.train(
             data="../ultralytics/cfg/datasets/exDark-yolo.yaml",
             epochs=100,
@@ -65,8 +65,5 @@ for epochs in epochs_list:
             augment=True,
             name=f"{pathConv1}-freeze{freezeNum}-e100_",
             save_json=True,
-            freeze=freezeNum
+            freeze=freezeNum,
         )
-
-
-
