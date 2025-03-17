@@ -1,29 +1,32 @@
 from ultralytics import YOLO
 
 
-aug = True
+# Defaults
 model_path = "yolo11n.pt"
+model = YOLO(model_path)
 data_path = "coco8-dist.yaml"
 device = "mps"
 use_fe = False
-use_dist = True
-epochs = 10
+epochs = 30
+opt = "auto"
 
-# Load the model
-model = YOLO(model_path)
-results = model.train(
-    data=data_path,
-    batch=2,
-    epochs=epochs,
-    device=device,
-    optimizer="SGD",
-    lr0=0.01,
-    momentum=0.9,
-    use_fe=use_fe,
-    mosaic=1.0 if aug else 0.0,
-    translate=0.1 if aug else 0.0,
-    scale=0.5 if aug else 0.0,
-    name=f"{data_path}-{model_path}-{epochs}e-{'dist' if use_dist else 'noDist'}-{'fe' if use_fe else 'noFe'}-{'aug' if aug else 'noAug'}",
-    iou_type="ciou",
-    use_dist=True,
-)
+
+use_dists = [True, False]
+augs = [True, False]
+
+for use_dist in use_dists:
+    for aug in augs:
+        model.train(
+            data=data_path,
+            batch=1,
+            epochs=epochs,
+            device=device,
+            optimizer=opt,
+            use_fe=use_fe,
+            mosaic=1.0 if aug else 0.0,
+            translate=0.1 if aug else 0.0,
+            scale=0.5 if aug else 0.0,
+            name=f"{data_path}-{model_path}-{epochs}e-{'dist' if use_dist else 'noDist'}-{'fe' if use_fe else 'noFe'}-{'aug' if aug else 'noAug'}-{opt}",
+            iou_type="ciou",
+            use_dist=use_dist,
+        )
