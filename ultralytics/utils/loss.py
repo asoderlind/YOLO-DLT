@@ -319,16 +319,6 @@ class v8DetectionLoss:
         imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]  # image size (h,w)
         anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
 
-        # TODO remove this ugly hack
-        if self.hyp.use_dist and ((self.hyp.mosaic != 0) or (self.hyp.translate != 0) or (self.hyp.scale != 0)):
-            raise NotImplementedError("Distance loss is not yet supported with augmentations.")
-
-        # TODO remove this ugly hack
-        if batch["distances"] is not None:
-            if batch["distances"].device != batch["batch_idx"].device:
-                print("WARNING: batch['distances'] is not on the same device as batch['batch_idx']")
-                batch["distances"] = batch["distances"].to(batch["batch_idx"].device)
-
         # Targets
         if not self.hyp.use_dist:
             targets = torch.cat((batch["batch_idx"].view(-1, 1), batch["cls"].view(-1, 1), batch["bboxes"]), 1)

@@ -842,15 +842,18 @@ class Mosaic(BaseMixTransform):
         if len(mosaic_labels) == 0:
             return {}
         cls = []
+        distances = []
         instances = []
         imgsz = self.imgsz * 2  # mosaic imgsz
         for labels in mosaic_labels:
             cls.append(labels["cls"])
+            distances.append(labels["distances"])
             instances.append(labels["instances"])
         # Final labels
         final_labels = {
             "im_file": mosaic_labels[0]["im_file"],
             "ori_shape": mosaic_labels[0]["ori_shape"],
+            "distances": np.concatenate(distances, 0),
             "resized_shape": (imgsz, imgsz),
             "cls": np.concatenate(cls, 0),
             "instances": Instances.concatenate(instances, axis=0),
@@ -859,6 +862,7 @@ class Mosaic(BaseMixTransform):
         final_labels["instances"].clip(imgsz, imgsz)
         good = final_labels["instances"].remove_zero_area_boxes()
         final_labels["cls"] = final_labels["cls"][good]
+        final_labels["distances"] = final_labels["distances"][good]
         if "texts" in mosaic_labels[0]:
             final_labels["texts"] = mosaic_labels[0]["texts"]
         return final_labels
@@ -1223,6 +1227,7 @@ class RandomPerspective:
 
         img = labels["img"]
         cls = labels["cls"]
+        distances = labels["distances"]
         instances = labels.pop("instances")
         # Make sure the coord formats are right
         instances.convert_bbox(format="xyxy")
@@ -1256,6 +1261,7 @@ class RandomPerspective:
         )
         labels["instances"] = new_instances[i]
         labels["cls"] = cls[i]
+        labels["distances"] = distances[i]
         labels["img"] = img
         labels["resized_shape"] = img.shape[:2]
         return labels
