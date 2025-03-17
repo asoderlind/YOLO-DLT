@@ -252,6 +252,7 @@ class v8DetectionLoss:
         self.no = m.nc + m.reg_max * 4 + ndo
         self.reg_max = m.reg_max
         self.device = device
+        self.use_dist = h.use_dist
 
         self.use_dfl = m.reg_max > 1
         self.assigner = TaskAlignedAssigner(
@@ -260,7 +261,7 @@ class v8DetectionLoss:
             alpha=0.5,
             beta=6.0,
             iou_type=self.hyp.iou_type,
-            use_dist=self.hyp.use_dist,
+            use_dist=self.use_dist,
         )
         self.bbox_loss = BboxLoss(m.reg_max, self.hyp.iou_type).to(device)
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
@@ -320,7 +321,7 @@ class v8DetectionLoss:
         anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
 
         # Targets
-        if not self.hyp.use_dist:
+        if not self.use_dist:
             targets = torch.cat((batch["batch_idx"].view(-1, 1), batch["cls"].view(-1, 1), batch["bboxes"]), 1)
             targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
             gt_labels, gt_bboxes = targets.split((1, 4), 2)  # cls, xyxy
@@ -351,7 +352,7 @@ class v8DetectionLoss:
             gt_labels,
             gt_bboxes,
             mask_gt,
-            gt_distances if self.hyp.use_dist else None,
+            gt_distances if self.use_dist else None,
         )
 
         target_scores_sum = max(target_scores.sum(), 1)
@@ -375,7 +376,7 @@ class v8DetectionLoss:
             )
 
         # Distance loss
-        if self.hyp.use_dist:
+        if self.use_dist:
             # use mse for distance loss
             loss[4] = self.distance_loss(pred_distance, target_distance, fg_mask)
 
