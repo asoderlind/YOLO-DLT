@@ -222,11 +222,14 @@ class DistanceLoss(nn.Module):
         """Initialize the DistanceLoss class."""
         super().__init__()
 
-    # def forward(self, pred_dist, gt_dist, mask):
-    def forward(self, pred_dist, feats, batch):
-        """Calculates distance loss factor and Euclidean distance loss for predicted and actual keypoints."""
-        return torch.tensor(1.0).to(pred_dist.device)
-        # return (d * mask).mean()
+    def forward(self, pred_dist, target_dist):
+        # MSE loss for distance
+        if target_dist is None:
+            return torch.tensor(0.0).to(pred_dist.device)
+        if pred_dist.shape != target_dist.shape:
+            print("WARNING: pred_dist and target_dist shapes do not match.")
+            return torch.tensor(0.0).to(pred_dist.device)
+        return F.mse_loss(pred_dist, target_dist)
 
 
 class v8DetectionLoss:
@@ -250,7 +253,12 @@ class v8DetectionLoss:
 
         self.use_dfl = m.reg_max > 1
         self.assigner = TaskAlignedAssigner(
-            topk=tal_topk, num_classes=self.nc, alpha=0.5, beta=6.0, iou_type=self.hyp.iou_type
+            topk=tal_topk,
+            num_classes=self.nc,
+            alpha=0.5,
+            beta=6.0,
+            iou_type=self.hyp.iou_type,
+            use_dist=self.hyp.use_dist,
         )
         self.bbox_loss = BboxLoss(m.reg_max, self.hyp.iou_type).to(device)
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
@@ -302,16 +310,40 @@ class v8DetectionLoss:
 
         pred_scores = pred_scores.permute(0, 2, 1).contiguous()
         pred_distri = pred_distri.permute(0, 2, 1).contiguous()
+        pred_dist = pred_dist.permute(0, 2, 1).contiguous()
 
         dtype = pred_scores.dtype
         batch_size = pred_scores.shape[0]
         imgsz = torch.tensor(feats[0].shape[2:], device=self.device, dtype=dtype) * self.stride[0]  # image size (h,w)
         anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
 
+        # TODO remove this ugly hack
+        if self.hyp.use_dist and ((self.hyp.mosaic != 0) or (self.hyp.translate != 0) or (self.hyp.scale != 0)):
+            raise NotImplementedError("Distance loss is not yet supported with augmentations.")
+
+        # TODO remove this ugly hack
+        if batch["distances"] is not None:
+            if batch["distances"].device != batch["batch_idx"].device:
+                print("WARNING: batch['distances'] is not on the same device as batch['batch_idx']")
+                batch["distances"] = batch["distances"].to(batch["batch_idx"].device)
+
         # Targets
-        targets = torch.cat((batch["batch_idx"].view(-1, 1), batch["cls"].view(-1, 1), batch["bboxes"]), 1)
-        targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
-        gt_labels, gt_bboxes = targets.split((1, 4), 2)  # cls, xyxy
+        if not self.hyp.use_dist:
+            targets = torch.cat((batch["batch_idx"].view(-1, 1), batch["cls"].view(-1, 1), batch["bboxes"]), 1)
+            targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
+            gt_labels, gt_bboxes = targets.split((1, 4), 2)  # cls, xyxy
+        else:
+            targets = torch.cat(
+                (
+                    batch["batch_idx"].view(-1, 1),
+                    batch["cls"].view(-1, 1),
+                    batch["bboxes"],
+                    batch["distances"].view(-1, 1),
+                ),
+                1,
+            )
+            targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
+            gt_labels, gt_bboxes, gt_distances = targets.split((1, 4, 1), 2)  # cls, xyxy, dist
         mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0.0)
 
         # Pboxes
@@ -319,7 +351,7 @@ class v8DetectionLoss:
         # dfl_conf = pred_distri.view(batch_size, -1, 4, self.reg_max).detach().softmax(-1)
         # dfl_conf = (dfl_conf.amax(-1).mean(-1) + dfl_conf.amax(-1).amin(-1)) / 2
 
-        _, target_bboxes, target_scores, fg_mask, _ = self.assigner(
+        _, target_bboxes, target_scores, fg_mask, _, target_dist = self.assigner(
             # pred_scores.detach().sigmoid() * 0.8 + dfl_conf.unsqueeze(-1) * 0.2,
             pred_scores.detach().sigmoid(),
             (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
@@ -327,6 +359,7 @@ class v8DetectionLoss:
             gt_labels,
             gt_bboxes,
             mask_gt,
+            gt_distances if self.hyp.use_dist else None,
         )
 
         target_scores_sum = max(target_scores.sum(), 1)
@@ -351,7 +384,8 @@ class v8DetectionLoss:
 
         # Distance loss
         if self.hyp.use_dist:
-            loss[4] = self.distance_loss(pred_dist, pred_dist, batch)
+            # use mse for distance loss
+            loss[4] = self.distance_loss(pred_dist, target_dist)
 
         # Consistency loss
         if self.hyp.use_fe:
