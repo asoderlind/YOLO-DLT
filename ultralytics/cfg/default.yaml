@@ -8,6 +8,7 @@ mode: train # (str) YOLO mode, i.e. train, val, predict, export, track, benchmar
 
 # Train settings -------------------------------------------------------------------------------------------------------
 use_fe: False # (bool) use feature enhancement for training
+use_dist: False # (bool) use distance estimation
 iou_type: ciou # (str) iou loss type, i.e. "iou", "giou", "diou", "ciou", "nwd", "wiou", "wiou1", "wiou2", "wiou3", "siou", "ciou+nwd (80/20)", "eiou", "focal-eiou", "isiou", "thiou"
 model: # (str, optional) path to model file, i.e. yolov8n.pt, yolov8n.yaml
 data: # (str, optional) path to data file, i.e. coco8.yaml
@@ -102,6 +103,7 @@ box: 7.5 # (float) box loss gain
 cls: 0.5 # (float) cls loss gain (scale with pixels)
 dfl: 1.5 # (float) dfl loss gain
 lambda_c: 0.5 # (float) loss weight for class label smoothing
+dist: 1.0 # (float) distance loss gain
 pose: 12.0 # (float) pose loss gain
 kobj: 1.0 # (float) keypoint obj loss gain
 nbs: 64 # (int) nominal batch size
