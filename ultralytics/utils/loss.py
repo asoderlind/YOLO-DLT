@@ -209,6 +209,26 @@ class KeypointLoss(nn.Module):
         return (kpt_loss_factor.view(-1, 1) * ((1 - torch.exp(-e)) * kpt_mask)).mean()
 
 
+class DistanceLoss(nn.Module):
+    """
+    shape of pred_dist is more or less [bs, 1, h, w]
+    TODO: iterate over all grid cells, and all anchors
+    TODO: decode the batch distances to find the distances for relevant anchor points
+    TODO: filter the predictions to only include the relevant anchor points
+    TODO: calculate the mean squared error between the predicted distances and the ground truth distances
+    """
+
+    def __init__(self) -> None:
+        """Initialize the DistanceLoss class."""
+        super().__init__()
+
+    # def forward(self, pred_dist, gt_dist, mask):
+    def forward(self, pred_dist, feats, batch):
+        """Calculates distance loss factor and Euclidean distance loss for predicted and actual keypoints."""
+        return torch.tensor(1.0).to(pred_dist.device)
+        # return (d * mask).mean()
+
+
 class v8DetectionLoss:
     """Criterion class for computing training losses."""
 
@@ -223,7 +243,8 @@ class v8DetectionLoss:
         self.hyp = h
         self.stride = m.stride  # model strides
         self.nc = m.nc  # number of classes
-        self.no = m.nc + m.reg_max * 4
+        ndo = 1  # number of distance outputs
+        self.no = m.nc + m.reg_max * 4 + ndo
         self.reg_max = m.reg_max
         self.device = device
 
@@ -233,6 +254,7 @@ class v8DetectionLoss:
         )
         self.bbox_loss = BboxLoss(m.reg_max, self.hyp.iou_type).to(device)
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
+        self.distance_loss = DistanceLoss().to(device)
 
         self.dln = DLN()
         self.dln = torch.nn.DataParallel(self.dln)
@@ -268,13 +290,15 @@ class v8DetectionLoss:
             # pred_dist = (pred_dist.view(b, a, c // 4, 4).softmax(2) * self.proj.type(pred_dist.dtype).view(1, 1, -1, 1)).sum(2)
         return dist2bbox(pred_dist, anchor_points, xywh=False)
 
-    def __call__(self, preds, batch, **kwargs):
+    def __call__(self, preds: list, batch, **kwargs):
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
-        loss = torch.zeros(4, device=self.device)  # box, cls, dfl, con
-        feats = preds[1] if isinstance(preds, tuple) else preds
-        pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
-            (self.reg_max * 4, self.nc), 1
-        )
+        loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, dist
+
+        feats = preds[1] if isinstance(preds, tuple) else preds  # tuple during validation, otherwise list
+
+        pred_distri, pred_scores, pred_dist = torch.cat(
+            [xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2
+        ).split((self.reg_max * 4, self.nc, 1), 1)
 
         pred_scores = pred_scores.permute(0, 2, 1).contiguous()
         pred_distri = pred_distri.permute(0, 2, 1).contiguous()
@@ -325,6 +349,10 @@ class v8DetectionLoss:
                 **kwargs,
             )
 
+        # Distance loss
+        if self.hyp.use_dist:
+            loss[4] = self.distance_loss(pred_dist, pred_dist, batch)
+
         # Consistency loss
         if self.hyp.use_fe:
             imgs = batch["img"]  # shape [bs, 3, h, w]
@@ -365,6 +393,7 @@ class v8DetectionLoss:
         loss[1] *= self.hyp.cls  # cls gain
         loss[2] *= self.hyp.dfl  # dfl gain
         loss[3] *= self.hyp.lambda_c  # consistency gain
+        loss[4] *= self.hyp.dist  # distance gain
 
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
 
