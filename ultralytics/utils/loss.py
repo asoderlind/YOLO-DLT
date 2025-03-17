@@ -222,14 +222,16 @@ class DistanceLoss(nn.Module):
         """Initialize the DistanceLoss class."""
         super().__init__()
 
-    def forward(self, pred_dist, target_dist):
+    def forward(self, pred_dist, target_distance, fg_mask):
         # MSE loss for distance
-        if target_dist is None:
+        if target_distance is None:
             return torch.tensor(0.0).to(pred_dist.device)
-        if pred_dist.shape != target_dist.shape:
-            print("WARNING: pred_dist and target_dist shapes do not match.")
+        if pred_dist.shape != target_distance.shape:
+            print("WARNING: pred_dist and target_distance shapes do not match.")
             return torch.tensor(0.0).to(pred_dist.device)
-        return F.mse_loss(pred_dist, target_dist)
+        pred_dist = pred_dist[fg_mask]
+        target_distance = target_distance[fg_mask]
+        return F.mse_loss(pred_dist, target_distance)
 
 
 class v8DetectionLoss:
@@ -304,13 +306,13 @@ class v8DetectionLoss:
 
         feats = preds[1] if isinstance(preds, tuple) else preds  # tuple during validation, otherwise list
 
-        pred_distri, pred_scores, pred_dist = torch.cat(
+        pred_distri, pred_scores, pred_distance = torch.cat(
             [xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2
         ).split((self.reg_max * 4, self.nc, 1), 1)
 
         pred_scores = pred_scores.permute(0, 2, 1).contiguous()
         pred_distri = pred_distri.permute(0, 2, 1).contiguous()
-        pred_dist = pred_dist.permute(0, 2, 1).contiguous()
+        pred_distance = pred_distance.permute(0, 2, 1).contiguous()
 
         dtype = pred_scores.dtype
         batch_size = pred_scores.shape[0]
@@ -351,7 +353,7 @@ class v8DetectionLoss:
         # dfl_conf = pred_distri.view(batch_size, -1, 4, self.reg_max).detach().softmax(-1)
         # dfl_conf = (dfl_conf.amax(-1).mean(-1) + dfl_conf.amax(-1).amin(-1)) / 2
 
-        _, target_bboxes, target_scores, fg_mask, _, target_dist = self.assigner(
+        _, target_bboxes, target_scores, fg_mask, _, target_distance = self.assigner(
             # pred_scores.detach().sigmoid() * 0.8 + dfl_conf.unsqueeze(-1) * 0.2,
             pred_scores.detach().sigmoid(),
             (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
@@ -385,7 +387,7 @@ class v8DetectionLoss:
         # Distance loss
         if self.hyp.use_dist:
             # use mse for distance loss
-            loss[4] = self.distance_loss(pred_dist, target_dist)
+            loss[4] = self.distance_loss(pred_distance, target_distance, fg_mask)
 
         # Consistency loss
         if self.hyp.use_fe:

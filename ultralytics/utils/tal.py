@@ -114,7 +114,12 @@ class TaskAlignedAssigner(nn.Module):
         target_gt_idx, fg_mask, mask_pos = self.select_highest_overlaps(mask_pos, overlaps, self.n_max_boxes)
 
         # Assigned target
-        target_labels, target_bboxes, target_scores = self.get_targets(gt_labels, gt_bboxes, target_gt_idx, fg_mask)
+        if self.use_dist:
+            target_labels, target_bboxes, target_scores, target_dist = self.get_targets(
+                gt_labels, gt_bboxes, target_gt_idx, fg_mask, gt_distances
+            )
+        else:
+            target_labels, target_bboxes, target_scores = self.get_targets(gt_labels, gt_bboxes, target_gt_idx, fg_mask)
 
         # Normalize
         align_metric *= mask_pos
@@ -123,9 +128,10 @@ class TaskAlignedAssigner(nn.Module):
         norm_align_metric = (align_metric * pos_overlaps / (pos_align_metrics + self.eps)).amax(-2).unsqueeze(-1)
         target_scores = target_scores * norm_align_metric
 
-        target_dist = gt_distances  # TODO: implement distance assignment
-
-        return target_labels, target_bboxes, target_scores, fg_mask.bool(), target_gt_idx, target_dist
+        if self.use_dist:
+            return target_labels, target_bboxes, target_scores, fg_mask.bool(), target_gt_idx, target_dist
+        else:
+            return target_labels, target_bboxes, target_scores, fg_mask.bool(), target_gt_idx, None
 
     def get_pos_mask(self, pd_scores, pd_bboxes, gt_labels, gt_bboxes, anc_points, mask_gt):
         """Get in_gts mask, (b, max_num_obj, h*w)."""
@@ -201,7 +207,7 @@ class TaskAlignedAssigner(nn.Module):
 
         return count_tensor.to(metrics.dtype)
 
-    def get_targets(self, gt_labels, gt_bboxes, target_gt_idx, fg_mask):
+    def get_targets(self, gt_labels, gt_bboxes, target_gt_idx, fg_mask, gt_distances=None):
         """
         Compute target labels, target bounding boxes, and target scores for the positive anchor points.
 
@@ -247,7 +253,12 @@ class TaskAlignedAssigner(nn.Module):
         fg_scores_mask = fg_mask[:, :, None].repeat(1, 1, self.num_classes)  # (b, h*w, 80)
         target_scores = torch.where(fg_scores_mask > 0, target_scores, 0)
 
-        return target_labels, target_bboxes, target_scores
+        if self.use_dist and gt_distances is not None:
+            # Assign target distances by indexing from gt_distances using the target_gt_idx
+            target_distances = gt_distances.view(-1, gt_distances.shape[-1])[target_gt_idx]
+            return target_labels, target_bboxes, target_scores, target_distances
+        else:
+            return target_labels, target_bboxes, target_scores
 
     @staticmethod
     def select_candidates_in_gts(xy_centers, gt_bboxes, eps=1e-9):
