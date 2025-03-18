@@ -238,8 +238,8 @@ class YOLODataset(BaseDataset):
         if type(batch[0]["distances"]) != torch.Tensor:
             for b in batch:
                 dist = torch.tensor(b["distances"]).to(batch[0]["bboxes"].device)
-                if dist.size == 0:
-                    dist = np.empty((0, 1), dtype=dist.dtype)
+                if dist.numel() == 0 or dist.shape == torch.Size([0, 0]):
+                    dist = torch.empty((0, 1), dtype=dist.dtype, device=dist.device)
                 b["distances"] = dist
         values = list(zip(*[list(b.values()) for b in batch]))
         for i, k in enumerate(keys):
