@@ -1,6 +1,7 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
 import json
+import random
 from collections import defaultdict
 from itertools import repeat
 from multiprocessing.pool import ThreadPool
@@ -246,6 +247,96 @@ class YOLODataset(BaseDataset):
             new_batch["batch_idx"][i] += i  # add target image index for build_targets()
         new_batch["batch_idx"] = torch.cat(new_batch["batch_idx"], 0)
         return new_batch
+
+
+class TemporaYOLODataset(YOLODataset):
+    """
+    Dataset class for loading temporal object detection labels in YOLO format.
+
+    It assumes that the images in the dataset are on named according to the format:
+        `vidx_framey_image_z`
+
+    Args:
+        data (dict, optional): A dataset YAML dictionary. Defaults to None.
+        task (str): An explicit arg to point current task, Defaults to 'detect'.
+        temporal_window (int): Number of frames in the temporal window. Defaults to 3.
+        temporal_stride (int): Temporal stride for sampling frames. Defaults to 1.
+
+    """
+
+    def __init__(self, *args, data=None, task="detect", **kwargs):
+        """Initializes the TemporalYOLODataset with optional temporal window and stride."""
+        hyp = kwargs.pop("hyp", None)
+        self.temporal_window = hyp.get("temporal_window", 3)
+        self.temporal_stride = hyp.get("temporal_stride", 1)
+        super().__init__(*args, data=data, task=task, **kwargs)
+        self._build_video_index()  # map frames to videos
+
+    def _build_video_index(self) -> None:
+        """
+        Create mapping of videos to frames and vice versa.
+        """
+
+        # video id to a list of tuples of frame id and index in the dataset
+        self.video_to_frames: defaultdict[int, list[tuple[int, int]]] = defaultdict(list[tuple[int, int]])
+
+        self.frame_to_video: dict[int, int] = {}  # Maps frame indicies to video IDs
+        # Parse filenames to extract video and frame IDs
+        for idx, path in enumerate(self.im_files):
+            vid_id, frame_id = self._parse_path(path)
+            self.video_to_frames[vid_id].append((frame_id, idx))
+            self.frame_to_video[idx] = vid_id
+
+        # Sort frames in each video by frame ID
+        for vid_id in self.video_to_frames:
+            self.video_to_frames[vid_id].sort()
+
+    def _parse_path(self, path: str) -> tuple[int, int]:
+        """
+        Parse the image path to extract video and frame IDs.
+        Assumes image filenames are in the format `vidx_framey_image_z`.
+
+        Args:
+            path (str): Path to the image file.
+
+        Returns:
+            tuple[str,str]: Video ID and frame ID.
+        """
+
+        # Split over '/' to get the filename, then split over '_' to get the video and frame IDs
+        parts = path.split("/")[-1].split("_")
+        if len(parts) < 3:
+            raise ValueError(f"Invalid image filename: {path}, expected format: `vidx_framey_image_z`")
+        vid_str = parts[0]  # vidx
+        frame_str = parts[1]  # framey
+
+        # Extract video and frame IDs
+        vid_id = int(vid_str[3:])  # remove 'vid' prefix
+        frame_id = int(frame_str[5:])
+        return vid_id, frame_id
+
+    def get_reference_frames(self, idx: int, global_sampling=False):
+        """
+        Get reference frames indicies for a given frame index.
+        """
+        vid_id = self.frame_to_video[idx]
+        frames = self.video_to_frames[vid_id]
+
+        if not global_sampling:
+            # Get loca temporal window
+            frame_id = next(f_id for f_id, f_idx in frames if f_idx == idx)
+            reference_frames: list[int] = []
+            for i in range(self.temporal_window):
+                ref_frame_id = frame_id - i * self.temporal_stride
+                if ref_frame_id < 0:
+                    break
+                reference_frames.append(ref_frame_id)
+            return reference_frames
+        else:
+            if len(frames) <= self.temporal_window:
+                return [f_id for f_id, _ in frames]
+            # Get global temporal window
+            return random.sample([f_idx for _, f_idx in frames], self.temporal_window)
 
 
 class YOLOMultiModalDataset(YOLODataset):
