@@ -245,10 +245,9 @@ def non_max_suppression(
 
     bs = prediction.shape[0]  # batch size (BCN, i.e. 1,84,6300)
     nc = nc or (prediction.shape[1] - 4)  # number of classes
-    nm = prediction.shape[1] - nc - 4  # number of masks
+    nm = prediction.shape[1] - nc - 4 - 1  # number of masks -1 for distance est.
     mi = 4 + nc  # mask start index
     xc = prediction[:, 4:mi].amax(1) > conf_thres  # candidates
-    # breakpoint()
 
     # Settings
     # min_wh = 2  # (pixels) minimum box width and height
@@ -263,7 +262,7 @@ def non_max_suppression(
             prediction = torch.cat((xywh2xyxy(prediction[..., :4]), prediction[..., 4:]), dim=-1)  # xywh to xyxy
 
     t = time.time()
-    output = [torch.zeros((0, 6 + nm), device=prediction.device)] * bs
+    output = [torch.zeros((0, 6 + nm + 1), device=prediction.device)] * bs
     for xi, x in enumerate(prediction):  # image index, image inference
         # Apply constraints
         # x[((x[:, 2:4] < min_wh) | (x[:, 2:4] > max_wh)).any(1), 4] = 0  # width-height
@@ -282,14 +281,14 @@ def non_max_suppression(
             continue
 
         # Detections matrix nx6 (xyxy, conf, cls)
-        box, cls, mask = x.split((4, nc, nm), 1)
+        box, cls, mask, dist = x.split((4, nc, nm, 1), 1)
 
         if multi_label:
             i, j = torch.where(cls > conf_thres)
-            x = torch.cat((box[i], x[i, 4 + j, None], j[:, None].float(), mask[i]), 1)
+            x = torch.cat((box[i], x[i, 4 + j, None], j[:, None].float(), mask[i], dist[i]), 1)
         else:  # best class only
             conf, j = cls.max(1, keepdim=True)
-            x = torch.cat((box, conf, j.float(), mask), 1)[conf.view(-1) > conf_thres]
+            x = torch.cat((box, conf, j.float(), mask, dist), 1)[conf.view(-1) > conf_thres]
 
         # Filter by class
         if classes is not None:

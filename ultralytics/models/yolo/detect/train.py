@@ -126,6 +126,7 @@ class DetectionTrainer(BaseTrainer):
             images=batch["img"],
             batch_idx=batch["batch_idx"],
             cls=batch["cls"].squeeze(-1),
+            distances=batch["distances"].squeeze(-1),
             bboxes=batch["bboxes"],
             paths=batch["im_file"],
             fname=self.save_dir / f"train_batch{ni}.jpg",

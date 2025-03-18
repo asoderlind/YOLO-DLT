@@ -261,6 +261,7 @@ class DetectionValidator(BaseValidator):
             batch["img"],
             batch["batch_idx"],
             batch["cls"].squeeze(-1),
+            batch["distances"].squeeze(-1),
             batch["bboxes"],
             paths=batch["im_file"],
             fname=self.save_dir / f"val_batch{ni}_labels.jpg",

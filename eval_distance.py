@@ -3,7 +3,6 @@ from ultralytics import YOLO
 
 # Dist
 
-"""
 model_path = "runs/detect/waymo128-noConfidence.yaml-yolo11n.pt-30e-dist-noFe-aug-auto/weights/best.pt"
 model = YOLO(model_path)
 data_path = "waymo128-noConfidence.yaml"
@@ -54,3 +53,5 @@ for use_dist in use_dists:
             use_fe=use_fe,
             use_dist=use_dist,
         )
+
+"""

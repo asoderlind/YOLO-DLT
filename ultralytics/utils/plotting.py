@@ -1008,9 +1008,9 @@ def plot_images(
     images: Union[torch.Tensor, np.ndarray],
     batch_idx: Union[torch.Tensor, np.ndarray],
     cls: Union[torch.Tensor, np.ndarray],
+    distances: Union[torch.Tensor, np.ndarray],
     bboxes: Union[torch.Tensor, np.ndarray] = np.zeros(0, dtype=np.float32),
     confs: Optional[Union[torch.Tensor, np.ndarray]] = None,
-    # distances: Union[torch.Tensor, np.ndarray],
     masks: Union[torch.Tensor, np.ndarray] = np.zeros(0, dtype=np.uint8),
     kpts: Union[torch.Tensor, np.ndarray] = np.zeros((0, 51), dtype=np.float32),
     paths: Optional[List[str]] = None,
@@ -1031,6 +1031,7 @@ def plot_images(
         cls: Class labels for each detection. Shape: (num_detections,).
         bboxes: Bounding boxes for each detection. Shape: (num_detections, 4) or (num_detections, 5) for rotated boxes.
         confs: Confidence scores for each detection. Shape: (num_detections,).
+        distances: Distance values for each detection. Shape: (num_detections,).
         masks: Instance segmentation masks. Shape: (num_detections, height, width) or (1, height, width).
         kpts: Keypoints for each detection. Shape: (num_detections, 51).
         paths: List of file paths for each image in the batch.
@@ -1061,8 +1062,8 @@ def plot_images(
         kpts = kpts.cpu().numpy()
     if isinstance(batch_idx, torch.Tensor):
         batch_idx = batch_idx.cpu().numpy()
-    # if isinstance(distances, torch.Tensor):
-    #     distances = distances.cpu().numpy()
+    if isinstance(distances, torch.Tensor):
+        distances = distances.cpu().numpy()
 
     bs, _, h, w = images.shape  # batch size, _, height, width
     bs = min(bs, max_subplots)  # limit plot images
@@ -1084,16 +1085,17 @@ def plot_images(
         mosaic = cv2.resize(mosaic, tuple(int(x * ns) for x in (w, h)))
 
     # Annotate
-    fs = int((h + w) * ns * 0.01)  # font size
+    fs = int((h + w) * ns * 0.005)  # font size
     annotator = Annotator(mosaic, line_width=round(fs / 10), font_size=fs, pil=True, example=names)
     for i in range(bs):
         x, y = int(w * (i // ns)), int(h * (i % ns))  # block origin
-        annotator.rectangle([x, y, x + w, y + h], None, (255, 255, 255), width=2)  # borders
+        annotator.rectangle([x, y, x + w, y + h], None, (255, 255, 255), width=1)  # borders
         if paths:
             annotator.text((x + 5, y + 5), text=Path(paths[i]).name[:40], txt_color=(220, 220, 220))  # filenames
         if len(cls) > 0:
             idx = batch_idx == i
             classes = cls[idx].astype("int")
+            dists = distances[idx].astype("float")
             labels = confs is None
 
             if len(bboxes):
@@ -1111,11 +1113,10 @@ def plot_images(
                 boxes = ops.xywhr2xyxyxyxy(boxes) if is_obb else ops.xywh2xyxy(boxes)
                 for j, box in enumerate(boxes.astype(np.int64).tolist()):
                     c = classes[j]
-                    # d = distances[j] if len(distances) else "n/a"
                     color = colors(c)
                     c = names.get(c, c) if names else c
                     if labels or conf[j] > conf_thres:
-                        label = f"{c}" if labels else f"{c} {conf[j]:.1f}"
+                        label = f"{c}/{dists[j]:.2f}" if labels else f"{c}/{conf[j]:.1f}/{dists[j]:.2f}"
                         annotator.box_label(box, label, color=color, rotated=is_obb)
 
             elif len(classes):
@@ -1326,14 +1327,20 @@ def plot_tune_results(csv_file="tune_results.csv"):
 
 
 def output_to_target(output, max_det=300):
-    """Convert model output to target format [batch_id, class_id, x, y, w, h, conf] for plotting."""
+    """Convert model output to target format [batch_id, class_id, x, y, w, h, conf, dist] for plotting."""
     targets = []
     for i, o in enumerate(output):
-        box, conf, cls = o[:max_det, :6].cpu().split((4, 1, 1), 1)
+        box, conf, cls, dist = o[:max_det, :7].cpu().split((4, 1, 1, 1), 1)
         j = torch.full((conf.shape[0], 1), i)
-        targets.append(torch.cat((j, cls, ops.xyxy2xywh(box), conf), 1))
+        targets.append(torch.cat((j, cls, ops.xyxy2xywh(box), conf, dist), 1))
     targets = torch.cat(targets, 0).numpy()
-    return targets[:, 0], targets[:, 1], targets[:, 2:-1], targets[:, -1]
+
+    batch_id = targets[:, 0]
+    class_id = targets[:, 1]
+    xywh = targets[:, 2:6]
+    conf = targets[:, 6]
+    dist = targets[:, 7]
+    return batch_id, class_id, dist, xywh, conf
 
 
 def output_to_rotated_target(output, max_det=300):

@@ -8,7 +8,7 @@ data_path = "waymo128-noConfidence.yaml"
 # data_path = "coco8-dist.yaml"
 device = "mps"
 use_fe = False
-epochs = 1
+epochs = 2
 opt = "auto"
 
 
