@@ -4,21 +4,22 @@ from ultralytics import YOLO
 # Defaults
 model_path = "yolo11n.pt"
 model = YOLO(model_path)
-data_path = "coco8-dist.yaml"
+data_path = "waymo128-noConfidence.yaml"
+# data_path = "coco8-dist.yaml"
 device = "mps"
 use_fe = False
 epochs = 30
 opt = "auto"
 
 
-use_dists = [True, False]
-augs = [True, False]
+use_dists = [True]
+augs = [True]
 
 for use_dist in use_dists:
     for aug in augs:
         model.train(
             data=data_path,
-            batch=1,
+            batch=2,
             epochs=epochs,
             device=device,
             optimizer=opt,
