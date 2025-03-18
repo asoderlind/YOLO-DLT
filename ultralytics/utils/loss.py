@@ -211,11 +211,8 @@ class KeypointLoss(nn.Module):
 
 class DistanceLoss(nn.Module):
     """
-    shape of pred_dist is more or less [bs, 1, h, w]
-    TODO: iterate over all grid cells, and all anchors
-    TODO: decode the batch distances to find the distances for relevant anchor points
-    TODO: filter the predictions to only include the relevant anchor points
-    TODO: calculate the mean squared error between the predicted distances and the ground truth distances
+    Calculate the MSE loss in order to regress the distance from the camera to the object.
+    Ignore distance if it is set as -1
     """
 
     def __init__(self) -> None:
@@ -229,8 +226,17 @@ class DistanceLoss(nn.Module):
         if pred_dist.shape != target_distance.shape:
             print("WARNING: pred_dist and target_distance shapes do not match.")
             return torch.tensor(0.0).to(pred_dist.device)
-        pred_dist = pred_dist[fg_mask]
-        target_distance = target_distance[fg_mask]
+
+        # Create a mask for valid distances (i.e. not equal to 0) and also where fg_mask is True
+        valid_mask = (target_distance != 0.0) & (fg_mask.unsqueeze(-1))
+        valid_mask = valid_mask.squeeze(-1)
+
+        # If no valid distances remain, return 0 loss.
+        if valid_mask.sum() == 0:
+            return torch.tensor(0.0).to(pred_dist.device)
+
+        pred_dist = pred_dist[valid_mask]
+        target_distance = target_distance[valid_mask]
         return F.mse_loss(pred_dist, target_distance)
 
 

@@ -248,6 +248,7 @@ def non_max_suppression(
     nm = prediction.shape[1] - nc - 4  # number of masks
     mi = 4 + nc  # mask start index
     xc = prediction[:, 4:mi].amax(1) > conf_thres  # candidates
+    # breakpoint()
 
     # Settings
     # min_wh = 2  # (pixels) minimum box width and height
