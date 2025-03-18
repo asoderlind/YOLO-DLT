@@ -1010,6 +1010,7 @@ def plot_images(
     cls: Union[torch.Tensor, np.ndarray],
     bboxes: Union[torch.Tensor, np.ndarray] = np.zeros(0, dtype=np.float32),
     confs: Optional[Union[torch.Tensor, np.ndarray]] = None,
+    # distances: Union[torch.Tensor, np.ndarray],
     masks: Union[torch.Tensor, np.ndarray] = np.zeros(0, dtype=np.uint8),
     kpts: Union[torch.Tensor, np.ndarray] = np.zeros((0, 51), dtype=np.float32),
     paths: Optional[List[str]] = None,
@@ -1060,6 +1061,8 @@ def plot_images(
         kpts = kpts.cpu().numpy()
     if isinstance(batch_idx, torch.Tensor):
         batch_idx = batch_idx.cpu().numpy()
+    # if isinstance(distances, torch.Tensor):
+    #     distances = distances.cpu().numpy()
 
     bs, _, h, w = images.shape  # batch size, _, height, width
     bs = min(bs, max_subplots)  # limit plot images
@@ -1108,6 +1111,7 @@ def plot_images(
                 boxes = ops.xywhr2xyxyxyxy(boxes) if is_obb else ops.xywh2xyxy(boxes)
                 for j, box in enumerate(boxes.astype(np.int64).tolist()):
                     c = classes[j]
+                    # d = distances[j] if len(distances) else "n/a"
                     color = colors(c)
                     c = names.get(c, c) if names else c
                     if labels or conf[j] > conf_thres:
