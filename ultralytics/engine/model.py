@@ -605,6 +605,46 @@ class Model(torch.nn.Module):
         kwargs["mode"] = "track"
         return self.predict(source=source, stream=stream, **kwargs)
 
+    def val_track(
+        self,
+        validator=None,
+        **kwargs: Any,
+    ):
+        """
+        Validates the model using a specified dataset and validation configuration.
+
+        This method facilitates the model validation process, allowing for customization through various settings. It
+        supports validation with a custom validator or the default validation approach. The method combines default
+        configurations, method-specific defaults, and user-provided arguments to configure the validation process.
+
+        Args:
+            validator (ultralytics.engine.validator.BaseValidator | None): An instance of a custom validator class for
+                validating the model.
+            **kwargs: Arbitrary keyword arguments for customizing the validation process.
+
+        Returns:
+            (ultralytics.utils.metrics.DetMetrics): Validation metrics obtained from the validation process.
+
+        Raises:
+            AssertionError: If the model is not a PyTorch model.
+
+        Examples:
+            >>> model = YOLO("yolo11n.pt")
+            >>> results = model.val(data="coco8.yaml", imgsz=640)
+            >>> print(results.box.map)  # Print mAP50-95
+        """
+        from ultralytics.trackers import register_tracker_val
+
+        register_tracker_val(self)
+
+        custom = {"rect": True}  # method defaults
+        args = {**self.overrides, **custom, **kwargs, "mode": "val"}  # highest priority args on the right
+
+        validator = (validator or self._smart_load("validator"))(args=args, _callbacks=self.callbacks)
+        validator(model=self.model)
+        self.metrics = validator.metrics
+        return validator.metrics
+
     def val(
         self,
         validator=None,

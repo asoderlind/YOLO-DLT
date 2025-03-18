@@ -44,6 +44,7 @@ def on_predict_start(predictor: object, persist: bool = False) -> None:
         raise AssertionError(f"Only 'bytetrack' and 'botsort' are supported for now, but got '{cfg.tracker_type}'")
 
     trackers = []
+    breakpoint()
     for _ in range(predictor.dataset.bs):
         tracker = TRACKER_MAP[cfg.tracker_type](args=cfg, frame_rate=30)
         trackers.append(tracker)
@@ -66,6 +67,7 @@ def on_predict_postprocess_end(predictor: object, persist: bool = False) -> None
         >>> predictor = YourPredictorClass()
         >>> on_predict_postprocess_end(predictor, persist=True)
     """
+    breakpoint()
     path, im0s = predictor.batch[:2]
 
     is_obb = predictor.args.task == "obb"
@@ -104,4 +106,60 @@ def register_tracker(model: object, persist: bool) -> None:
         >>> register_tracker(model, persist=True)
     """
     model.add_callback("on_predict_start", partial(on_predict_start, persist=persist))
+    model.add_callback("on_predict_postprocess_end", partial(on_predict_postprocess_end, persist=persist))
+
+
+def on_val_start(validator: object, persist: bool = False) -> None:
+    """
+    Initialize trackers for object tracking during prediction.
+
+    Args:
+        validator (object): The validator object to initialize trackers for.
+        persist (bool): Whether to persist the trackers if they already exist.
+
+    Raises:
+        AssertionError: If the tracker_type is not 'bytetrack' or 'botsort'.
+
+    Examples:
+        Initialize trackers for a validator object:
+        >>> validator = SomeValidatorClass()
+        >>> on_val_start(validator, persist=True)
+    """
+    breakpoint()
+    if validator.args.task == "classify":
+        raise ValueError("❌ Classification doesn't support 'mode=track'")
+
+    if hasattr(validator, "trackers") and persist:
+        return
+
+    tracker = check_yaml(validator.args.tracker)
+    cfg = IterableSimpleNamespace(**yaml_load(tracker))
+
+    if cfg.tracker_type not in {"bytetrack", "botsort"}:
+        raise AssertionError(f"Only 'bytetrack' and 'botsort' are supported for now, but got '{cfg.tracker_type}'")
+
+    trackers = []
+    for _ in range(validator.dataset.bs):
+        tracker = TRACKER_MAP[cfg.tracker_type](args=cfg, frame_rate=30)
+        trackers.append(tracker)
+        if validator.dataset.mode != "stream":  # only need one tracker for other modes.
+            break
+    validator.trackers = trackers
+    validator.vid_path = [None] * validator.dataset.bs  # for determining when to reset tracker on new video
+
+
+def register_tracker_val(model: object, persist: bool = False) -> None:
+    """
+    Register tracking callbacks to the model for object tracking during validation.
+
+    Args:
+        model (object): The model object to register tracking callbacks for.
+        persist (bool): Whether to persist the trackers if they already exist.
+
+    Examples:
+        Register tracking callbacks to a YOLO model
+        >>> model = YOLOModel()
+        >>> register_tracker(model, persist=True)
+    """
+    model.add_callback("on_val_start", partial(on_val_start, persist=persist))
     model.add_callback("on_predict_postprocess_end", partial(on_predict_postprocess_end, persist=persist))
