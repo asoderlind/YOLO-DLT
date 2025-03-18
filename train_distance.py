@@ -4,16 +4,16 @@ from ultralytics import YOLO
 # Defaults
 model_path = "yolo11n.pt"
 model = YOLO(model_path)
-data_path = "waymo128-noConfidence.yaml"
-device = "mps"
+data_path = "waymo-noConf.yaml"
+device = "cuda"
 use_fe = False
-epochs = 1
-opt = "auto"
+epochs = 200
+opt = "SGD"
 
 
 use_dists = [True, False]
 augs = [True, False]
-dists = [0.1, 1.0]
+dists = [0.1, 0.5, 1.0, 2.0]
 
 for d in dists:
     for use_dist in use_dists:
