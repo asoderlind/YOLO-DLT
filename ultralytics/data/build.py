@@ -3,13 +3,14 @@
 import os
 import random
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 import torch
 from PIL import Image
 from torch.utils.data import dataloader, distributed
 
-from ultralytics.data.dataset import GroundingDataset, YOLODataset, YOLOMultiModalDataset
+from ultralytics.data.dataset import GroundingDataset, YOLODataset, YOLOMultiModalDataset, TemporaYOLODataset
 from ultralytics.data.loaders import (
     LOADERS,
     LoadImagesAndVideos,
@@ -93,9 +94,24 @@ def seed_worker(worker_id):  # noqa
     random.seed(worker_seed)
 
 
-def build_yolo_dataset(cfg, img_path, batch, data, mode="train", rect=False, stride=32, multi_modal=False):
+DATASET_TYPE = Literal["default", "multi_modal", "temporal"]
+
+
+def build_yolo_dataset(
+    cfg, img_path, batch, data, mode="train", rect=False, stride=32, dataset_type: DATASET_TYPE = "default"
+):
     """Build YOLO Dataset."""
-    dataset = YOLOMultiModalDataset if multi_modal else YOLODataset
+
+    match dataset_type:
+        case "default":
+            dataset = YOLODataset
+        case "multi_modal":
+            dataset = YOLOMultiModalDataset
+        case "temporal":
+            dataset = TemporaYOLODataset
+        case _:
+            raise ValueError(f"Unknown dataset type: {dataset_type}")
+
     return dataset(
         img_path=img_path,
         imgsz=cfg.imgsz,
