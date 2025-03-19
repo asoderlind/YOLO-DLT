@@ -3,13 +3,13 @@ from ultralytics import YOLO
 
 # Defaults
 model_path = "yolo11n.pt"
-data_path = "waymo-noConf.yaml"
+data_path = "kitti.yaml"
 device = "cuda"
 use_fe = False
-epochs = 150
+epochs = 100
 
 use_dists = [True, False]
-dists = [10.0]
+dists = [0.01]
 
 for d in dists:
     for use_dist in use_dists:
