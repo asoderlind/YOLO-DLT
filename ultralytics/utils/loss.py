@@ -210,16 +210,23 @@ class KeypointLoss(nn.Module):
 
 
 class DistanceLoss(nn.Module):
-    """
-    Calculate the MSE loss in order to regress the distance from the camera to the object.
-    Ignore distance if it is set as -1
-    """
-
     def __init__(self) -> None:
         """Initialize the DistanceLoss class."""
         super().__init__()
 
     def forward(self, pred_dist, target_distance, fg_mask):
+        """
+        Calculate the squared difference loss between predicted and target distances.
+        Ignore distance if it is set as 0.0, and also where fg_mask is False.
+
+        Args:
+            pred_dist (torch.Tensor): Predicted distance tensor.
+            target_distance (torch.Tensor): Target distance tensor.
+            fg_mask (torch.Tensor): Foreground mask tensor.
+
+        Returns:
+            torch.Tensor: The calculated distance loss.
+        """
         # MSE loss for distance
         if target_distance is None:
             return torch.tensor(0.0).to(pred_dist.device)
@@ -237,7 +244,7 @@ class DistanceLoss(nn.Module):
 
         pred_dist = pred_dist[valid_mask]
         target_distance = target_distance[valid_mask]
-        return F.mse_loss(pred_dist, target_distance)
+        return ((pred_dist - target_distance) ** 2).sum()
 
 
 class v8DetectionLoss:
