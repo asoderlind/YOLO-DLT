@@ -86,6 +86,7 @@ train_with_distance(
 
 # Defaults
 model_path = "yolo11n.pt"
+<<<<<<< HEAD
 model = YOLO(model_path)
 data_path = "waymo128-noConfidence.yaml"
 # data_path = "coco8-dist.yaml"
@@ -94,6 +95,15 @@ use_fe = False
 epochs = 30
 opt = "auto"
 
+=======
+data_path = "kitti.yaml"
+device = "cuda"
+use_fe = False
+epochs = 100
+
+use_dists = [True, False]
+dists = [0.01]
+>>>>>>> 4497c1dd (add kitti support)
 
 use_dists = [True]
 augs = [True]
