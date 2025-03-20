@@ -7,15 +7,27 @@ import random
 from copy import deepcopy
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TypedDict
 
 import cv2
 import numpy as np
 import psutil
+import torch
 from torch.utils.data import Dataset
 
 from ultralytics.data.utils import FORMATS_HELP_MSG, HELP_URL, IMG_FORMATS
 from ultralytics.utils import DEFAULT_CFG, LOCAL_RANK, LOGGER, NUM_THREADS, TQDM
+
+
+class BaseDatasetItem(TypedDict):
+    im_file: str
+    ori_shape: tuple[int, int]
+    resized_shape: tuple[int, int]
+    img: torch.Tensor
+    img_enhanced: torch.Tensor
+    cls: torch.Tensor
+    bboxes: torch.Tensor
+    batch_idx: torch.Tensor
 
 
 class BaseDataset(Dataset):
@@ -301,7 +313,7 @@ class BaseDataset(Dataset):
         self.batch_shapes = np.ceil(np.array(shapes) * self.imgsz / self.stride + self.pad).astype(int) * self.stride
         self.batch = bi  # batch index of image
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> BaseDatasetItem:
         """Returns transformed label information for given index."""
         return self.transforms(self.get_image_and_label(index))
 
