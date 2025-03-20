@@ -6,6 +6,7 @@ from collections import defaultdict
 from itertools import repeat
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
+from typing import TypedDict
 
 import cv2
 import numpy as np
@@ -27,7 +28,7 @@ from .augment import (
     classify_transforms,
     v8_transforms,
 )
-from .base import BaseDataset
+from .base import BaseDataset, BaseDatasetItem
 from .utils import (
     HELP_URL,
     LOGGER,
@@ -41,6 +42,17 @@ from .utils import (
 
 # Ultralytics dataset *.cache version, >= 1.0.0 for YOLOv8
 DATASET_CACHE_VERSION = "1.0.3"
+
+
+class YOLODatasetitem(TypedDict):
+    im_file: tuple[str, ...]
+    ori_shape: tuple[tuple[int, int], ...]
+    resized_shape: tuple[tuple[int, int], ...]
+    img: torch.Tensor
+    img_enhanced: torch.Tensor
+    cls: torch.Tensor
+    bboxes: torch.Tensor
+    batch_idx: torch.Tensor
 
 
 class YOLODataset(BaseDataset):
@@ -230,7 +242,7 @@ class YOLODataset(BaseDataset):
         return label
 
     @staticmethod
-    def collate_fn(batch):
+    def collate_fn(batch: list[BaseDatasetItem]) -> YOLODatasetitem:
         """Collates data samples into batches."""
         new_batch = {}
         keys = batch[0].keys()
@@ -249,7 +261,7 @@ class YOLODataset(BaseDataset):
         return new_batch
 
 
-class TemporaYOLODataset(YOLODataset):
+class TemporalYOLODataset(YOLODataset):
     """
     Dataset class for loading temporal object detection labels in YOLO format.
 
@@ -266,9 +278,9 @@ class TemporaYOLODataset(YOLODataset):
 
     def __init__(self, *args, data=None, task="detect", **kwargs):
         """Initializes the TemporalYOLODataset with optional temporal window and stride."""
-        hyp = kwargs.pop("hyp", None)
-        self.temporal_window = hyp.get("temporal_window", 3)
-        self.temporal_stride = hyp.get("temporal_stride", 1)
+        self.hyp = kwargs.pop("hyp", None)
+        self.temporal_window: int = self.hyp.get("temporal_window", 3)
+        self.temporal_stride: int = self.hyp.get("temporal_stride", 1)
         super().__init__(*args, data=data, task=task, **kwargs)
         self._build_video_index()  # map frames to videos
 
@@ -280,12 +292,12 @@ class TemporaYOLODataset(YOLODataset):
         # video id to a list of tuples of frame id and index in the dataset
         self.video_to_frames: defaultdict[int, list[tuple[int, int]]] = defaultdict(list[tuple[int, int]])
 
-        self.frame_to_video: dict[int, int] = {}  # Maps frame indicies to video IDs
+        self.dataset_idx_to_video_id: dict[int, int] = {}  # Maps dataset image index to video id
         # Parse filenames to extract video and frame IDs
         for idx, path in enumerate(self.im_files):
             vid_id, frame_id = self._parse_path(path)
             self.video_to_frames[vid_id].append((frame_id, idx))
-            self.frame_to_video[idx] = vid_id
+            self.dataset_idx_to_video_id[idx] = vid_id
 
         # Sort frames in each video by frame ID
         for vid_id in self.video_to_frames:
@@ -315,28 +327,89 @@ class TemporaYOLODataset(YOLODataset):
         frame_id = int(frame_str[5:])
         return vid_id, frame_id
 
-    def get_reference_frames(self, idx: int, global_sampling=False):
+    def get_reference_frames(self, idx: int, global_sampling=False) -> list[tuple[int, int]]:
         """
         Get reference frames indicies for a given frame index.
+
+        Args:
+            idx (int): Index of the main frame in the dataset.
+            global_sampling (bool): Whether to sample globally from the video or locally around the main frame.
+        Returns:
+            reference_frames (list[tuple[int, itn]]): List of tuples of frame ids and dataset indices.,
+                that is which frames have come before the current in the same video and
+                their index in the entire dataset.
         """
-        vid_id = self.frame_to_video[idx]
+        vid_id = self.dataset_idx_to_video_id[idx]
         frames = self.video_to_frames[vid_id]
 
-        if not global_sampling:
-            # Get loca temporal window
-            frame_id = next(f_id for f_id, f_idx in frames if f_idx == idx)
-            reference_frames: list[int] = []
-            for i in range(self.temporal_window):
-                ref_frame_id = frame_id - i * self.temporal_stride
-                if ref_frame_id < 0:
-                    break
-                reference_frames.append(ref_frame_id)
-            return reference_frames
-        else:
+        if global_sampling:
             if len(frames) <= self.temporal_window:
-                return [f_id for f_id, _ in frames]
+                return [(f_id, f_idx) for f_id, f_idx in frames]
             # Get global temporal window
-            return random.sample([f_idx for _, f_idx in frames], self.temporal_window)
+            return random.sample([(f_id, f_idx) for f_id, f_idx in frames], self.temporal_window)
+
+        # Get loca temporal window
+        frame_id, _ = next(((f_id, f_idx) for f_id, f_idx in frames if f_idx == idx))
+        # Create a lookup dictionary
+        frame_id_to_dataset_idx = dict(frames)  # dict[frame_id, dataset_idx]
+        reference_frames: list[tuple[int, int]] = []
+
+        # Then for each reference frame
+        for i in range(1, self.temporal_window + 1):
+            ref_frame_id = frame_id - i * self.temporal_stride
+            if ref_frame_id < 0 or ref_frame_id not in frame_id_to_dataset_idx:
+                break
+            ref_dataset_idx = frame_id_to_dataset_idx[ref_frame_id]
+            reference_frames.append((ref_frame_id, ref_dataset_idx))
+        return reference_frames
+
+    def __getitem__(self, index: int) -> tuple[BaseDatasetItem, list[BaseDatasetItem]]:  # type: ignore[override]
+        """
+        Returns temporal information including main frame and reference frames.
+        """
+        # Get main frame data using parent implementation
+        main_data = super().__getitem__(index)
+
+        # Fetch reference frames
+        ref_indices = self.get_reference_frames(index)  # TODO: maybe experiment with global sampling during training?
+        ref_data: list[BaseDatasetItem] = []
+
+        for _, ref_idx in ref_indices:
+            ref_frame_data = super().__getitem__(ref_idx)
+            ref_data.append(ref_frame_data)
+
+        return main_data, ref_data
+
+    @staticmethod
+    def collate_fn(batch: list[tuple[BaseDatasetItem, list[BaseDatasetItem]]]) -> dict:  # type: ignore[override]
+        """
+        Collates temporal data, returning a batch with key frames and their reference frames.
+        """
+        # Extract key frames and reference frames
+        key_frames = [item[0] for item in batch]
+        ref_frames_lists = [item[1] for item in batch]
+
+        # Collate key frames as usual
+        key_batch = YOLODataset.collate_fn(key_frames)
+
+        # Collate reference frames for each key frame
+        ref_batches: list[YOLODatasetitem | None] = []
+        for i, ref_frames in enumerate(ref_frames_lists):
+            if not ref_frames:
+                ref_batches.append(None)
+                continue
+            # Create batch index for these reference frames
+            for j, ref in enumerate(ref_frames):
+                ref["batch_idx"] = torch.tensor([i])  # Associate with key frame i
+
+            # Collate these reference frames
+            ref_batch = YOLODataset.collate_fn(ref_frames)
+            ref_batches.append(ref_batch)
+
+        # Add reference batches to the key batch
+        key_batch["reference_frames"] = ref_batches
+
+        return key_batch
 
 
 class YOLOMultiModalDataset(YOLODataset):
