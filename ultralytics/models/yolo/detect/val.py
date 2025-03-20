@@ -84,11 +84,21 @@ class DetectionValidator(BaseValidator):
         self.confusion_matrix = ConfusionMatrix(nc=self.nc, conf=self.args.conf)
         self.seen = 0
         self.jdict = []
-        self.stats = dict(tp=[], conf=[], pred_cls=[], target_cls=[], target_img=[])
+        self.stats = dict(tp=[], conf=[], pred_cls=[], target_cls=[], target_img=[], e_A=[], e_R=[])
 
     def get_desc(self):
         """Return a formatted string summarizing class metrics of YOLO model."""
-        return ("%22s" + "%11s" * 6) % ("Class", "Images", "Instances", "Box(P", "R", "mAP50", "mAP50-95)")
+        return ("%22s" + "%11s" * 8) % (
+            "Class",
+            "Images",
+            "Instances",
+            "Box(P",
+            "R",
+            "mAP50",
+            "mAP50-95)",
+            "Dist(e_A",
+            "e_R)",
+        )
 
     def postprocess(self, preds):
         """Apply Non-maximum suppression to prediction outputs."""
@@ -134,6 +144,53 @@ class DetectionValidator(BaseValidator):
         )  # native-space pred
         return predn
 
+    def _get_distance_errors(self, pred_gt_pairs: list[tuple], max_dist=150):
+        """
+        Return the distance errors for each prediction.
+
+        Returns:
+            e_A: mean absolute distance error
+            e_R: mean relative distance error 1/n sum d_i - d_gt_i / max(d_i, 1)
+        """
+        n = len(pred_gt_pairs)
+
+        if n == 0:
+            raise ValueError("No predictions found")
+
+        # de-normalize the distances
+        for i, (pred, gt) in enumerate(pred_gt_pairs):
+            pred_gt_pairs[i] = (pred * max_dist, gt * max_dist)
+
+        abs_errors = []
+        for pred, gt in pred_gt_pairs:
+            abs_errors.append(abs(pred - gt))
+
+        rel_errors = []
+        for pred, gt in pred_gt_pairs:
+            rel_errors.append(abs(pred - gt) / max(gt, 1))
+
+        e_A = sum(abs_errors) / n
+        e_R = sum(rel_errors) / n
+
+        return e_A.unsqueeze(0), e_R.unsqueeze(0)
+
+    def _get_distance_pairs(self, predn, pred_gt_map, distances, iou_level=0) -> list[tuple]:
+        """
+        Return the pairs of distances for each prediction.
+
+        Returns:
+            pairs: list of tuples (pred_dist, gt_dist)
+        """
+        pred_gt_map_iou = pred_gt_map[:, iou_level]
+        pairs = []
+        for _, jdx in enumerate(pred_gt_map_iou):
+            if jdx != -1:
+                gt_dist = distances[jdx]
+                if gt_dist > 0:
+                    pred_dist = predn[jdx, 6]
+                    pairs.append((pred_dist, gt_dist))
+        return pairs
+
     def update_metrics(self, preds, batch):
         """Metrics."""
         for si, pred in enumerate(preds):
@@ -145,10 +202,11 @@ class DetectionValidator(BaseValidator):
                 tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
             )
             pbatch = self._prepare_batch(si, batch)
-            cls, bbox = pbatch.pop("cls"), pbatch.pop("bbox")
-            nl = len(cls)
+            cls, bbox, distances = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("distances")
+            nl = len(cls)  # number of labels
             stat["target_cls"] = cls
             stat["target_img"] = cls.unique()
+            stat["target_dist"] = distances
             if npr == 0:
                 if nl:
                     for k in self.stats.keys():
@@ -163,14 +221,23 @@ class DetectionValidator(BaseValidator):
             predn = self._prepare_pred(pred, pbatch)
             stat["conf"] = predn[:, 4]
             stat["pred_cls"] = predn[:, 5]
+            stat["pred_dist"] = predn[:, 6]
 
             # Evaluate
             if nl:
-                stat["tp"] = self._process_batch(predn, bbox, cls)
+                # prediction_matrix = self._process_batch(predn, bbox, cls)
+                stat["tp"], prediction_gt_mapping = self._process_batch(predn, bbox, cls)
+
+                # Get distance errors and add to stats
+                pred_gt_pairs = self._get_distance_pairs(predn, prediction_gt_mapping, distances, iou_level=0)
+                if len(pred_gt_pairs) > 0:
+                    stat["e_A"], stat["e_R"] = self._get_distance_errors(pred_gt_pairs)
+
             if self.args.plots:
                 self.confusion_matrix.process_batch(predn, bbox, cls)
             for k in self.stats.keys():
-                self.stats[k].append(stat[k])
+                if k in stat:
+                    self.stats[k].append(stat[k])
 
             # Save
             if self.args.save_json:
@@ -200,8 +267,17 @@ class DetectionValidator(BaseValidator):
 
     def print_results(self):
         """Prints training/validation set metrics per class."""
-        pf = "%22s" + "%11i" * 2 + "%11.3g" * len(self.metrics.keys)  # print format
-        LOGGER.info(pf % ("all", self.seen, self.nt_per_class.sum(), *self.metrics.mean_results()))
+        pf = "%22s" + "%11i" * 2 + ("%11.3g" * (len(self.metrics.keys) + 2))  # print format
+        LOGGER.info(
+            pf
+            % (
+                "all",
+                self.seen,
+                self.nt_per_class.sum(),
+                *self.metrics.mean_results(),
+                *self.metrics.distance_results(),
+            )
+        )
         if self.nt_per_class.sum() == 0:
             LOGGER.warning(f"WARNING ⚠️ no labels found in {self.args.task} set, can not compute metrics without labels")
 
@@ -209,7 +285,8 @@ class DetectionValidator(BaseValidator):
         if self.args.verbose and not self.training and self.nc > 1 and len(self.stats):
             for i, c in enumerate(self.metrics.ap_class_index):
                 LOGGER.info(
-                    pf % (self.names[c], self.nt_per_image[c], self.nt_per_class[c], *self.metrics.class_result(i))
+                    pf
+                    % (self.names[c], self.nt_per_image[c], self.nt_per_class[c], *self.metrics.class_result(i), -1, -1)
                 )
 
         if self.args.plots:
@@ -220,7 +297,7 @@ class DetectionValidator(BaseValidator):
 
     def _process_batch(self, detections, gt_bboxes, gt_cls):
         """
-        Return correct prediction matrix.
+        Return correct prediction matrix and mapping of predictions to ground truth indices.
 
         Args:
             detections (torch.Tensor): Tensor of shape (N, 6) representing detections where each detection is
@@ -231,13 +308,12 @@ class DetectionValidator(BaseValidator):
 
         Returns:
             (torch.Tensor): Correct prediction matrix of shape (N, 10) for 10 IoU levels.
-
-        Note:
-            The function does not return any value directly usable for metrics calculation. Instead, it provides an
-            intermediate representation used for evaluating predictions against ground truth.
+            (torch.Tensor): Mapping of predictions to ground truth indices, shape (N, T)
+                            (each element is the matched gt index for that IoU threshold, or -1 if none)
         """
         iou = box_iou(gt_bboxes, detections[:, :4])
-        return self.match_predictions(detections[:, 5], gt_cls, iou)
+        correct_pred_matrix, pred_gt_map = self.match_predictions(detections[:, 5], gt_cls, iou)
+        return correct_pred_matrix, pred_gt_map
 
     def build_dataset(self, img_path, mode="val", batch=None):
         """

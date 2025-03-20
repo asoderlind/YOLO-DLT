@@ -1363,6 +1363,62 @@ class Metric(SimpleClass):
         ]
 
 
+class DistMetrics(SimpleClass):
+    """
+    Utility class for computing distance metrics for YOLO.
+
+    Attributes:
+        e_A (list): Absolute distance error values.
+        e_R (list): Relative distance error values.
+
+    Methods:
+        mean_results(): Returns [mean_absolute_error, mean_relative_error].
+        update(results): Updates the metrics with a new results tuple.
+        fitness(): Returns a fitness score based on the current error values.
+    """
+
+    def __init__(self) -> None:
+        self.e_A = []  # list storing absolute distance errors
+        self.e_R = []  # list storing relative distance errors
+
+    @property
+    def mean_absolute_error(self) -> float:
+        """Mean absolute distance error."""
+        return sum(self.e_A) / len(self.e_A) if len(self.e_A) else 0.0
+
+    @property
+    def mean_relative_error(self) -> float:
+        """Mean relative distance error."""
+        return sum(self.e_R) / len(self.e_R) if len(self.e_R) else 0.0
+
+    def mean_results(self):
+        """Returns [mean_absolute_error, mean_relative_error]."""
+        return [self.mean_absolute_error, self.mean_relative_error]
+
+    def update(self, results):
+        """
+        Updates the distance metrics.
+
+        Args:
+            results (tuple): A tuple containing:
+                - e_A (list): List of absolute distance error values.
+                - e_R (list): List of relative distance error values.
+        """
+        self.e_A, self.e_R = results
+
+    def fitness(self):
+        """
+        Computes a fitness score based on the distance errors.
+        For example, lower errors yield higher fitness. Adjust the combination as needed.
+
+        Returns:
+            float: A fitness score.
+        """
+        # Here we define fitness such that lower errors yield higher fitness.
+        total_error = self.mean_absolute_error + self.mean_relative_error
+        return 1.0 / (1.0 + total_error)
+
+
 class DetMetrics(SimpleClass):
     """
     Utility class for computing detection metrics such as precision, recall, and mean average precision (mAP) of an
@@ -1402,10 +1458,11 @@ class DetMetrics(SimpleClass):
         self.on_plot = on_plot
         self.names = names
         self.box = Metric()
+        self.dist = DistMetrics()
         self.speed = {"preprocess": 0.0, "inference": 0.0, "loss": 0.0, "postprocess": 0.0}
         self.task = "detect"
 
-    def process(self, tp, conf, pred_cls, target_cls):
+    def process(self, tp, conf, pred_cls, target_cls, e_A, e_R):
         """Process predicted results for object detection and update metrics."""
         results = ap_per_class(
             tp,
@@ -1419,6 +1476,7 @@ class DetMetrics(SimpleClass):
         )[2:]
         self.box.nc = len(self.names)
         self.box.update(results)
+        self.dist.update((e_A, e_R))
 
     @property
     def keys(self):
@@ -1432,6 +1490,10 @@ class DetMetrics(SimpleClass):
     def class_result(self, i):
         """Return the result of evaluating the performance of an object detection model on a specific class."""
         return self.box.class_result(i)
+
+    def distance_results(self):
+        """Returns the mean absolute and relative distance errors."""
+        return self.dist.mean_results()
 
     @property
     def maps(self):

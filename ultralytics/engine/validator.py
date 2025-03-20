@@ -232,14 +232,21 @@ class BaseValidator:
             use_scipy (bool): Whether to use scipy for matching (more precise).
 
         Returns:
-            (torch.Tensor): Correct tensor of shape(N,10) for 10 IoU thresholds.
+        (torch.Tensor): Correct tensor of shape (N, T) for T IoU thresholds.
+        (torch.Tensor): Mapping of predictions to ground truth indices, shape (N, T)
+                        (each element is the matched gt index for that IoU threshold, or -1 if none)
         """
         # Dx10 matrix, where D - detections, 10 - IoU thresholds
-        correct = np.zeros((pred_classes.shape[0], self.iouv.shape[0])).astype(bool)
+        N = pred_classes.shape[0]
+        T = self.iouv.shape[0]
+        correct = np.zeros((N, T), dtype=bool)
+        mapping = np.full((N, T), -1, dtype=int)  # initialize mapping with -1
+
         # LxD matrix where L - labels (rows), D - detections (columns)
         correct_class = true_classes[:, None] == pred_classes
         iou = iou * correct_class  # zero out the wrong classes
         iou = iou.cpu().numpy()
+
         for i, threshold in enumerate(self.iouv.cpu().tolist()):
             if use_scipy:
                 # WARNING: known issue that reduces mAP in https://github.com/ultralytics/ultralytics/pull/4708
@@ -250,18 +257,35 @@ class BaseValidator:
                     labels_idx, detections_idx = scipy.optimize.linear_sum_assignment(cost_matrix)
                     valid = cost_matrix[labels_idx, detections_idx] > 0
                     if valid.any():
-                        correct[detections_idx[valid], i] = True
+                        sel_dets = detections_idx[valid]
+                        sel_gts = labels_idx[valid]
+                        correct[sel_dets, i] = True
+                        for det, gt in zip(sel_dets, sel_gts):
+                            if mapping[det, i] == -1:
+                                mapping[det, i] = gt
             else:
                 matches = np.nonzero(iou >= threshold)  # IoU > threshold and classes match
                 matches = np.array(matches).T
                 if matches.shape[0]:
                     if matches.shape[0] > 1:
-                        matches = matches[iou[matches[:, 0], matches[:, 1]].argsort()[::-1]]
-                        matches = matches[np.unique(matches[:, 1], return_index=True)[1]]
-                        # matches = matches[matches[:, 2].argsort()[::-1]]
-                        matches = matches[np.unique(matches[:, 0], return_index=True)[1]]
-                    correct[matches[:, 1].astype(int), i] = True
-        return torch.tensor(correct, dtype=torch.bool, device=pred_classes.device)
+                        # Sort matches by IoU
+                        sorted_idx = iou[matches[:, 0], matches[:, 1]].argsort()[::-1]
+                        matches = matches[sorted_idx]
+                        # Ensure unique detections, keep only the highest IoU match
+                        _, unique_det_matches = np.unique(matches[:, 1], return_index=True)
+                        matches = matches[unique_det_matches]
+                        # Optionally keep only the highest IoU match for each ground truth
+                        _, unique_gt_indices = np.unique(matches[:, 0], return_index=True)
+                        matches = matches[unique_gt_indices]
+                    det_idxs = matches[:, 1].astype(int)
+                    gt_idxs = matches[:, 0].astype(int)
+                    correct[det_idxs, i] = True
+                    for det, gt in zip(det_idxs, gt_idxs):
+                        if mapping[det, i] == -1:
+                            mapping[det, i] = gt
+        return torch.tensor(correct, dtype=torch.bool, device=pred_classes.device), torch.tensor(
+            mapping, device=pred_classes.device
+        )
 
     def add_callback(self, event: str, callback):
         """Appends the given callback."""
