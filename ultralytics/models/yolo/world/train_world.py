@@ -57,7 +57,7 @@ class WorldTrainerFromScratch(WorldTrainer):
         if mode != "train":
             return build_yolo_dataset(self.args, img_path, batch, self.data, mode=mode, rect=mode == "val", stride=gs)
         dataset = [
-            build_yolo_dataset(self.args, im_path, batch, self.data, stride=gs, multi_modal=True)
+            build_yolo_dataset(self.args, im_path, batch, self.data, stride=gs, dataset_type="multi_modal")
             if isinstance(im_path, str)
             else build_grounding(self.args, im_path["img_path"], im_path["json_file"], batch, stride=gs)
             for im_path in img_path
