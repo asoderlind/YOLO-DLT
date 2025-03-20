@@ -96,8 +96,8 @@ class DetectionValidator(BaseValidator):
             "R",
             "mAP50",
             "mAP50-95)",
-            "Dist(r_A",
-            "r_R)",
+            "Dist(e_A",
+            "e_R)",
         )
 
     def postprocess(self, preds):
