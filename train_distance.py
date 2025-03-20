@@ -6,10 +6,10 @@ model_path = "yolo11n.pt"
 data_path = "kitti.yaml"
 device = "cuda"
 use_fe = False
-epochs = 150
+epochs = 10
 
-use_dists = [True, False]
-dists = [10.0]
+use_dists = [True]
+dists = [0.1]
 
 for d in dists:
     for use_dist in use_dists:
