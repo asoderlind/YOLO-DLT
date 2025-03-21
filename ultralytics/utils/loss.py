@@ -390,8 +390,7 @@ class v8DetectionLoss:
 
         # Distance loss
         if self.use_dist:
-            # use mse for distance loss
-            loss[4] = self.distance_loss(pred_distance.detach().sigmoid(), target_distance, fg_mask)
+            loss[4] = self.distance_loss(pred_distance.sigmoid(), target_distance, fg_mask)
 
         # Consistency loss
         if self.hyp.use_fe:
