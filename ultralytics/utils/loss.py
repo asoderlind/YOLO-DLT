@@ -365,7 +365,7 @@ class v8DetectionLoss:
             gt_labels,
             gt_bboxes,
             mask_gt,
-            gt_distances.detach().sigmoid() if self.use_dist else None,
+            gt_distances if self.use_dist else None,
         )
 
         target_scores_sum = max(target_scores.sum(), 1)
@@ -391,7 +391,7 @@ class v8DetectionLoss:
         # Distance loss
         if self.use_dist:
             # use mse for distance loss
-            loss[4] = self.distance_loss(pred_distance, target_distance, fg_mask)
+            loss[4] = self.distance_loss(pred_distance.detach().sigmoid(), target_distance, fg_mask)
 
         # Consistency loss
         if self.hyp.use_fe:
