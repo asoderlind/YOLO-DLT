@@ -42,7 +42,7 @@ class Detect(nn.Module):
         c2, c3 = max((16, ch[0] // 4, self.reg_max * 4)), max(ch[0], min(self.nc, 100))  # channels
         self.cv2 = nn.ModuleList(
             nn.Sequential(Conv(x, c2, 3), Conv(c2, c2, 3), nn.Conv2d(c2, 4 * self.reg_max, 1)) for x in ch
-        )
+        )  # Bounding box prediction task
         self.cv3 = (
             nn.ModuleList(nn.Sequential(Conv(x, c3, 3), Conv(c3, c3, 3), nn.Conv2d(c3, self.nc, 1)) for x in ch)
             if self.legacy
@@ -54,8 +54,16 @@ class Detect(nn.Module):
                 )
                 for x in ch
             )
-        )
-        self.cv4 = nn.ModuleList(nn.Sequential(Conv(x, 1, 3)) for x in ch)
+        )  # Class prediction task
+        self.cv4 = nn.ModuleList(
+            nn.Sequential(
+                nn.Sequential(DWConv(x, x, 3), Conv(x, c3, 1)),
+                nn.Sequential(DWConv(c3, c3, 3), Conv(c3, c3, 1)),
+                nn.Conv2d(c3, 1, 1),
+            )
+            for x in ch
+        )  # Distance estimation task
+
         self.dfl = DFL(self.reg_max) if self.reg_max > 1 else nn.Identity()
 
         if self.end2end:
@@ -104,7 +112,6 @@ class Detect(nn.Module):
     def _inference(self, x):
         """
         Decode predicted bounding boxes and class probabilities based on multiple-level feature maps.
-        TODO: add distance prediction to the output.
         """
         # Inference path
 
