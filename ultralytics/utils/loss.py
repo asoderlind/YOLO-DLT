@@ -365,7 +365,7 @@ class v8DetectionLoss:
             gt_labels,
             gt_bboxes,
             mask_gt,
-            gt_distances if self.use_dist else None,
+            gt_distances.detach().sigmoid() if self.use_dist else None,
         )
 
         target_scores_sum = max(target_scores.sum(), 1)
