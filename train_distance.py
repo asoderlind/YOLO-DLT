@@ -9,7 +9,7 @@ use_fe = False
 epochs = 100
 optimizer = "SGD"
 scales = [0.0, 0.25, 0.5]
-mosaics = [0.0, 0.25, 0.5, 1.0]
+mosaics = [0.0, 0.5, 1.0]
 use_dist = True
 
 # model_path=f"{name}/weights/last.py"
