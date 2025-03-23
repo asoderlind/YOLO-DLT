@@ -213,7 +213,7 @@ class DetectionValidator(BaseValidator):
                         try:
                             self.stats[k].append(stat[k])
                         except KeyError:
-                            print(f"key {k} not found in stat")
+                            print(f"key {k} not found in stat, available keys: {stat.keys()}")
                             continue
                     if self.args.plots:
                         self.confusion_matrix.process_batch(detections=None, gt_bboxes=bbox, gt_cls=cls)
