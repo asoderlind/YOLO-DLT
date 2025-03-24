@@ -61,20 +61,18 @@ class TaskAlignedAssigner(nn.Module):
             target_scores (Tensor): shape(bs, num_total_anchors, num_classes)
             fg_mask (Tensor): shape(bs, num_total_anchors)
             target_gt_idx (Tensor): shape(bs, num_total_anchors)
-            target_distances (Tensor): shape(bs, num_total_anchors, 4) or None
+            target_distances (Tensor): shape(bs, num_total_anchors) or None
         """
         self.bs = pd_scores.shape[0]
         self.n_max_boxes = gt_bboxes.shape[1]
         device = gt_bboxes.device
 
         if self.n_max_boxes == 0:
-            base = torch.zeros_like(pd_scores[..., 0])
             return (
                 torch.full_like(pd_scores[..., 0], self.bg_idx),
                 torch.zeros_like(pd_bboxes),
                 torch.zeros_like(pd_scores),
-                base,
-                base,
+                torch.zeros_like(pd_scores[..., 0]),
                 torch.zeros_like(pd_scores[..., 0]),
             )
 
