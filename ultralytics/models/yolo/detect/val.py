@@ -195,8 +195,11 @@ class DetectionValidator(BaseValidator):
             if jdx != -1:
                 gt_dist = distances[jdx]
                 if gt_dist > 0:
-                    pred_dist = predn[jdx, 6]
-                    pairs.append((pred_dist, gt_dist))
+                    try:
+                        pred_dist = predn[jdx, 6]
+                        pairs.append((pred_dist, gt_dist))
+                    except IndexError:  # this shouldn't happen
+                        pass
         return pairs
 
     def update_metrics(self, preds, batch):
