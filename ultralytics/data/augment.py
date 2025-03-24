@@ -847,11 +847,11 @@ class Mosaic(BaseMixTransform):
         imgsz = self.imgsz * 2  # mosaic imgsz
         for labels in mosaic_labels:
             cls.append(labels["cls"])
-            d = labels["distances"]
+            dist = labels["distances"]
             # If distances is empty and has shape (0, 0), fix its shape to (0, 1)
-            if d.size == 0:
-                d = np.empty((0, 1), dtype=d.dtype)
-            distances.append(d)
+            if dist.size == 0:
+                dist = np.empty((0, 1), dtype=dist.dtype)
+            distances.append(dist)
             instances.append(labels["instances"])
         # Final labels
         final_labels = {

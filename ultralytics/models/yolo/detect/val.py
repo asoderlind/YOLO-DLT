@@ -210,10 +210,9 @@ class DetectionValidator(BaseValidator):
             if npr == 0:
                 if nl:
                     for k in self.stats.keys():
-                        try:
+                        if k in stat:
                             self.stats[k].append(stat[k])
-                        except KeyError:
-                            print(f"key {k} not found in stat, available keys: {stat.keys()}")
+                        else:
                             continue
                     if self.args.plots:
                         self.confusion_matrix.process_batch(detections=None, gt_bboxes=bbox, gt_cls=cls)
