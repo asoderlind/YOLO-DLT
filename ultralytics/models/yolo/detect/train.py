@@ -122,11 +122,13 @@ class DetectionTrainer(BaseTrainer):
 
     def plot_training_samples(self, batch, ni):
         """Plots training samples with their annotations."""
+        cls = batch["cls"].squeeze(-1)
+        distances = batch["distances"].squeeze(-1) if self.use_dist else np.zeros_like(cls)
         plot_images(
             images=batch["img"],
             batch_idx=batch["batch_idx"],
-            cls=batch["cls"].squeeze(-1),
-            distances=batch["distances"].squeeze(-1),
+            cls=cls,
+            distances=distances,
             bboxes=batch["bboxes"],
             paths=batch["im_file"],
             fname=self.save_dir / f"train_batch{ni}.jpg",

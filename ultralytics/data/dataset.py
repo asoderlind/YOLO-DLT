@@ -104,19 +104,19 @@ class YOLODataset(BaseDataset):
                 ne += ne_f
                 nc += nc_f
                 if im_file:
-                    x["labels"].append(
-                        {
-                            "im_file": im_file,
-                            "shape": shape,
-                            "cls": lb[:, 0:1],  # n, 1
-                            "bboxes": lb[:, 1:5] if self.use_dist else lb[:, 1:],  # n, 4
-                            "distances": lb[:, 5:6] if self.use_dist else [],  # n, 1
-                            "segments": segments,
-                            "keypoints": keypoint,
-                            "normalized": True,
-                            "bbox_format": "xywh",
-                        }
-                    )
+                    labels = {
+                        "im_file": im_file,
+                        "shape": shape,
+                        "cls": lb[:, 0:1],  # n, 1
+                        "bboxes": lb[:, 1:5] if self.use_dist else lb[:, 1:],  # n, 4
+                        "segments": segments,
+                        "keypoints": keypoint,
+                        "normalized": True,
+                        "bbox_format": "xywh",
+                    }
+                    if self.use_dist:
+                        labels["distances"] = lb[:, 5:6]
+                    x["labels"].append(labels)
                 if msg:
                     msgs.append(msg)
                 pbar.desc = f"{desc} {nf} images, {nm + ne} backgrounds, {nc} corrupt"
@@ -158,8 +158,8 @@ class YOLODataset(BaseDataset):
             LOGGER.warning(f"WARNING ⚠️ No images found in {cache_path}, training may not work correctly. {HELP_URL}")
         self.im_files = [lb["im_file"] for lb in labels]  # update im_files
 
-        lengths = ((len(lb["cls"]), len(lb["bboxes"]), len(lb["segments"]), len(lb["distances"])) for lb in labels)
-        len_cls, len_boxes, len_segments, _ = (sum(x) for x in zip(*lengths))
+        lengths = ((len(lb["cls"]), len(lb["bboxes"]), len(lb["segments"])) for lb in labels)
+        len_cls, len_boxes, len_segments = (sum(x) for x in zip(*lengths))
         if len_segments and len_boxes != len_segments:
             LOGGER.warning(
                 f"WARNING ⚠️ Box and segment counts should be equal, but got len(segments) = {len_segments}, "
@@ -234,13 +234,15 @@ class YOLODataset(BaseDataset):
         """Collates data samples into batches."""
         new_batch = {}
         keys = batch[0].keys()
-        # convert to tensor if not manually because the torch dataloader handles the other ones automatically
-        if type(batch[0]["distances"]) != torch.Tensor:
-            for b in batch:
-                dist = torch.tensor(b["distances"]).to(batch[0]["bboxes"].device)
-                if dist.numel() == 0 or dist.shape == torch.Size([0, 0]):
-                    dist = torch.empty((0, 1), dtype=dist.dtype, device=dist.device)
-                b["distances"] = dist
+        # Check if we are using distances
+        if "distances" in keys and len(batch[0]["distances"]) > 0:
+            # convert to tensor if not manually because the torch dataloader handles the other ones automatically
+            if type(batch[0]["distances"]) != torch.Tensor:
+                for b in batch:
+                    dist = torch.tensor(b["distances"]).to(batch[0]["bboxes"].device)
+                    if dist.numel() == 0 or dist.shape == torch.Size([0, 0]):
+                        dist = torch.empty((0, 1), dtype=dist.dtype, device=dist.device)
+                    b["distances"] = dist
         values = list(zip(*[list(b.values()) for b in batch]))
         for i, k in enumerate(keys):
             value = values[i]
