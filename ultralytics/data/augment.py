@@ -517,7 +517,7 @@ class Mosaic(BaseMixTransform):
         >>> augmented_labels = mosaic_aug(original_labels)
     """
 
-    def __init__(self, dataset, imgsz=640, p=1.0, n=4):
+    def __init__(self, dataset, imgsz=640, p=1.0, n=4, use_dist=False):
         """
         Initializes the Mosaic augmentation object.
 
@@ -541,6 +541,7 @@ class Mosaic(BaseMixTransform):
         self.imgsz = imgsz
         self.border = (-imgsz // 2, -imgsz // 2)  # width, height
         self.n = n
+        self.use_dist = use_dist
 
     def get_indexes(self, buffer=True):
         """
@@ -847,26 +848,29 @@ class Mosaic(BaseMixTransform):
         imgsz = self.imgsz * 2  # mosaic imgsz
         for labels in mosaic_labels:
             cls.append(labels["cls"])
-            dist = labels["distances"]
-            # If distances is empty and has shape (0, 0), fix its shape to (0, 1)
-            if dist.size == 0:
-                dist = np.empty((0, 1), dtype=dist.dtype)
-            distances.append(dist)
             instances.append(labels["instances"])
+            if self.use_dist:
+                dist = labels["distances"]
+                # If distances is empty and has shape (0, 0), fix its shape to (0, 1)
+                if dist.size == 0:
+                    dist = np.empty((0, 1), dtype=dist.dtype)
+                distances.append(dist)
         # Final labels
         final_labels = {
             "im_file": mosaic_labels[0]["im_file"],
             "ori_shape": mosaic_labels[0]["ori_shape"],
-            "distances": np.concatenate(distances, 0),
             "resized_shape": (imgsz, imgsz),
             "cls": np.concatenate(cls, 0),
             "instances": Instances.concatenate(instances, axis=0),
             "mosaic_border": self.border,
         }
+        if self.use_dist:
+            final_labels["distances"] = np.concatenate(distances, 0)
         final_labels["instances"].clip(imgsz, imgsz)
         good = final_labels["instances"].remove_zero_area_boxes()
         final_labels["cls"] = final_labels["cls"][good]
-        final_labels["distances"] = final_labels["distances"][good]
+        if self.use_dist:
+            final_labels["distances"] = final_labels["distances"][good]
         if "texts" in mosaic_labels[0]:
             final_labels["texts"] = mosaic_labels[0]["texts"]
         return final_labels
@@ -992,7 +996,15 @@ class RandomPerspective:
     """
 
     def __init__(
-        self, degrees=0.0, translate=0.1, scale=0.5, shear=0.0, perspective=0.0, border=(0, 0), pre_transform=None
+        self,
+        degrees=0.0,
+        translate=0.1,
+        scale=0.5,
+        shear=0.0,
+        perspective=0.0,
+        border=(0, 0),
+        pre_transform=None,
+        use_dist=False,
     ):
         """
         Initializes RandomPerspective object with transformation parameters.
@@ -1021,6 +1033,7 @@ class RandomPerspective:
         self.perspective = perspective
         self.border = border  # mosaic border
         self.pre_transform = pre_transform
+        self.use_dist = use_dist
 
     def affine_transform(self, img, border):
         """
@@ -1231,7 +1244,8 @@ class RandomPerspective:
 
         img = labels["img"]
         cls = labels["cls"]
-        distances = labels["distances"]
+        if self.use_dist:
+            distances = labels["distances"]
         instances = labels.pop("instances")
         # Make sure the coord formats are right
         instances.convert_bbox(format="xyxy")
@@ -1265,7 +1279,8 @@ class RandomPerspective:
         )
         labels["instances"] = new_instances[i]
         labels["cls"] = cls[i]
-        labels["distances"] = distances[i]
+        if self.use_dist:
+            labels["distances"] = distances[i]
         labels["img"] = img
         labels["resized_shape"] = img.shape[:2]
         return labels
@@ -2311,7 +2326,7 @@ def v8_transforms(dataset, imgsz, hyp, stretch=False):
         >>> transforms = v8_transforms(dataset, imgsz=640, hyp=hyp)
         >>> augmented_data = transforms(dataset[0])
     """
-    mosaic = Mosaic(dataset, imgsz=imgsz, p=hyp.mosaic)
+    mosaic = Mosaic(dataset, imgsz=imgsz, p=hyp.mosaic, use_dist=hyp.use_dist)
     affine = RandomPerspective(
         degrees=hyp.degrees,
         translate=hyp.translate,
@@ -2319,6 +2334,7 @@ def v8_transforms(dataset, imgsz, hyp, stretch=False):
         shear=hyp.shear,
         perspective=hyp.perspective,
         pre_transform=None if stretch else LetterBox(new_shape=(imgsz, imgsz)),
+        use_dist=hyp.use_dist,
     )
 
     pre_transform = Compose([mosaic, affine])

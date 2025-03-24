@@ -46,13 +46,17 @@ class DetectionValidator(BaseValidator):
                 "WARNING ⚠️ 'save_hybrid=True' will append ground truth to predictions for autolabelling.\n"
                 "WARNING ⚠️ 'save_hybrid=True' will cause incorrect mAP.\n"
             )
+        self.use_dist = self.args.use_dist
 
     def preprocess(self, batch):
         """Preprocesses batch of images for YOLO training."""
         batch["img"] = batch["img"].to(self.device, non_blocking=True)
         batch["img"] = (batch["img"].half() if self.args.half else batch["img"].float()) / 255
-        for k in ["batch_idx", "cls", "bboxes", "distances"]:
+        for k in ["batch_idx", "cls", "bboxes"]:
             batch[k] = batch[k].to(self.device)
+
+        if self.use_dist:
+            batch["distances"] = batch["distances"].to(self.device)
 
         if self.args.save_hybrid:
             height, width = batch["img"].shape[2:]
@@ -119,7 +123,8 @@ class DetectionValidator(BaseValidator):
         """Prepares a batch of images and annotations for validation."""
         idx = batch["batch_idx"] == si
         cls = batch["cls"][idx].squeeze(-1)
-        distances = batch["distances"][idx].squeeze(-1)
+        if self.use_dist:
+            distances = batch["distances"][idx].squeeze(-1)
         bbox = batch["bboxes"][idx]
         ori_shape = batch["ori_shape"][si]
         imgsz = batch["img"].shape[2:]
@@ -127,14 +132,17 @@ class DetectionValidator(BaseValidator):
         if len(cls):
             bbox = ops.xywh2xyxy(bbox) * torch.tensor(imgsz, device=self.device)[[1, 0, 1, 0]]  # target boxes
             ops.scale_boxes(imgsz, bbox, ori_shape, ratio_pad=ratio_pad)  # native-space labels
-        return {
+
+        return_dict = {
             "cls": cls,
             "bbox": bbox,
             "ori_shape": ori_shape,
             "imgsz": imgsz,
             "ratio_pad": ratio_pad,
-            "distances": distances,
         }
+        if self.use_dist:
+            return_dict["distances"] = distances
+        return return_dict
 
     def _prepare_pred(self, pred, pbatch):
         """Prepares a batch of images and annotations for validation."""
@@ -202,7 +210,8 @@ class DetectionValidator(BaseValidator):
                 tp=torch.zeros(npr, self.niou, dtype=torch.bool, device=self.device),
             )
             pbatch = self._prepare_batch(si, batch)
-            cls, bbox, distances = pbatch.pop("cls"), pbatch.pop("bbox"), pbatch.pop("distances")
+            cls, bbox = pbatch.pop("cls"), pbatch.pop("bbox")
+            distances = pbatch.pop("distances") if self.use_dist else torch.zeros_like(cls)
             nl = len(cls)  # number of labels
             stat["target_cls"] = cls
             stat["target_img"] = cls.unique()
@@ -260,7 +269,10 @@ class DetectionValidator(BaseValidator):
 
     def get_stats(self):
         """Returns metrics statistics and results dictionary."""
-        stats = {k: torch.cat(v, 0).cpu().numpy() for k, v in self.stats.items()}  # to numpy
+        stats = {}
+        for k, v in self.stats.items():
+            if len(v):  # e_A or e_R might be empty
+                stats[k] = torch.cat(v, 0).cpu().numpy()
         self.nt_per_class = np.bincount(stats["target_cls"].astype(int), minlength=self.nc)
         self.nt_per_image = np.bincount(stats["target_img"].astype(int), minlength=self.nc)
         stats.pop("target_img", None)
@@ -336,11 +348,13 @@ class DetectionValidator(BaseValidator):
 
     def plot_val_samples(self, batch, ni):
         """Plot validation image samples."""
+        cls = batch["cls"].squeeze(-1)
+        distances = batch["distances"].squeeze(-1) if self.use_dist else torch.zeros_like(cls)
         plot_images(
             batch["img"],
             batch["batch_idx"],
-            batch["cls"].squeeze(-1),
-            batch["distances"].squeeze(-1),
+            cls,
+            distances,
             batch["bboxes"],
             paths=batch["im_file"],
             fname=self.save_dir / f"val_batch{ni}_labels.jpg",

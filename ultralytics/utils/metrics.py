@@ -1462,7 +1462,7 @@ class DetMetrics(SimpleClass):
         self.speed = {"preprocess": 0.0, "inference": 0.0, "loss": 0.0, "postprocess": 0.0}
         self.task = "detect"
 
-    def process(self, tp, conf, pred_cls, target_cls, e_A, e_R):
+    def process(self, tp, conf, pred_cls, target_cls, e_A=[], e_R=[]):
         """Process predicted results for object detection and update metrics."""
         results = ap_per_class(
             tp,
