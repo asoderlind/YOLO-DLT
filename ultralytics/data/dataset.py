@@ -243,17 +243,17 @@ class YOLODataset(BaseDataset):
                     dist = torch.tensor(b["distances"]).to(device)
                     if dist.numel() == 0 or dist.shape == torch.Size([0, 0]):
                         dist = torch.empty((0, 1), dtype=dist.dtype, device=dist.device)
-                    if isinstance(b["distances"], np.ndarray):
-                        b["distances"] = torch.from_numpy(b["distances"]).to(device)
-                    else:
-                        b["distances"] = dist
+                    b["distances"] = dist
         values = list(zip(*[list(b.values()) for b in batch]))
         for i, k in enumerate(keys):
             value = values[i]
             if k == "img" or k == "img_enhanced":
                 value = torch.stack(value, 0)
             if k in {"masks", "keypoints", "bboxes", "cls", "segments", "obb", "distances"}:
-                value = torch.cat(value, 0)
+                try:
+                    value = torch.cat(value, 0)
+                except TypeError:
+                    value = torch.cat([torch.from_numpy(v) for v in value], 0) # This is a hack for when a certain batch doesn't get converted to torch tensor
             new_batch[k] = value
         new_batch["batch_idx"] = list(new_batch["batch_idx"])
         for i in range(len(new_batch["batch_idx"])):
