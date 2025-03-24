@@ -75,8 +75,9 @@ class WorldTrainer(yolo.detect.DetectionTrainer):
             batch (int, optional): Size of batches, this is for `rect`. Defaults to None.
         """
         gs = max(int(de_parallel(self.model).stride.max() if self.model else 0), 32)
+        dataset_type = "multi_modal" if mode == "train" else "default"
         return build_yolo_dataset(
-            self.args, img_path, batch, self.data, mode=mode, rect=mode == "val", stride=gs, multi_modal=mode == "train"
+            self.args, img_path, batch, self.data, mode=mode, rect=mode == "val", stride=gs, dataset_type=dataset_type
         )
 
     def preprocess_batch(self, batch):
