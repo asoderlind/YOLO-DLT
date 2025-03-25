@@ -268,21 +268,12 @@ class BaseValidator:
                 matches = np.array(matches).T
                 if matches.shape[0]:
                     if matches.shape[0] > 1:
-                        # Sort matches by IoU
-                        sorted_idx = iou[matches[:, 0], matches[:, 1]].argsort()[::-1]
-                        matches = matches[sorted_idx]
-                        # Ensure unique detections, keep only the highest IoU match
-                        _, unique_det_matches = np.unique(matches[:, 1], return_index=True)
-                        matches = matches[unique_det_matches]
-                        # Optionally keep only the highest IoU match for each ground truth
-                        _, unique_gt_indices = np.unique(matches[:, 0], return_index=True)
-                        matches = matches[unique_gt_indices]
-                    det_idxs = matches[:, 1].astype(int)
-                    gt_idxs = matches[:, 0].astype(int)
-                    correct[det_idxs, i] = True
-                    for det, gt in zip(det_idxs, gt_idxs):
-                        if mapping[det, i] == -1:
-                            mapping[det, i] = gt
+                        matches = matches[iou[matches[:, 0], matches[:, 1]].argsort()[::-1]]
+                        matches = matches[np.unique(matches[:, 1], return_index=True)[1]]
+                        # matches = matches[matches[:, 2].argsort()[::-1]]
+                        matches = matches[np.unique(matches[:, 0], return_index=True)[1]]
+                    correct[matches[:, 1].astype(int), i] = True
+
         return torch.tensor(correct, dtype=torch.bool, device=pred_classes.device), torch.tensor(
             mapping, device=pred_classes.device
         )
