@@ -1378,8 +1378,8 @@ class DistMetrics(SimpleClass):
     """
 
     def __init__(self) -> None:
-        self.e_A = []  # list storing absolute distance errors
-        self.e_R = []  # list storing relative distance errors
+        self.e_A: list[np.ndarray] = []  # list storing absolute distance errors (nc,)
+        self.e_R: list[np.ndarray] = []  # list storing relative distance errors (nc,)
 
     @property
     def mean_absolute_error(self) -> float:
@@ -1394,6 +1394,10 @@ class DistMetrics(SimpleClass):
     def mean_results(self):
         """Returns [mean_absolute_error, mean_relative_error]."""
         return [self.mean_absolute_error, self.mean_relative_error]
+
+    def class_result(self, i):
+        """Returns [absolute_error, relative_error] for a specific class."""
+        return self.e_A[i], self.e_R[i]
 
     def update(self, results):
         """
@@ -1417,6 +1421,86 @@ class DistMetrics(SimpleClass):
         # Here we define fitness such that lower errors yield higher fitness.
         total_error = self.mean_absolute_error + self.mean_relative_error
         return 1.0 / (1.0 + total_error)
+
+
+def _collect_distance_pairs(
+    pred_distances, pred_gt_map, distances, classes, iou_level=0
+) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    """
+    Return the ground truth distance, predicted distance and ground truth class for each prediction
+    with an iou level of iou_level.
+
+    Args:
+        predn: tensor of shape (N, 7) representing all predictions with bboxes, class, distance
+        preg_gt_map: tensor of shape (N, T) representing the mapping of predictions to ground truth indices
+        distances: tensor of shape (M,) representing the distances of the ground truth labels
+        classes: tensor of shape (M,) representing the classes of the ground truth labels
+
+    Returns:
+        pairs: list of tuples (pred_dist, gt_dist, class)
+    """
+    pred_gt_map_iou = pred_gt_map[:, iou_level]
+    pairs = []
+    for pred_id, gt_id in enumerate(pred_gt_map_iou):
+        if gt_id != -1:
+            gt_dist = distances[gt_id]
+            gt_class = classes[gt_id]
+            pred_dist = pred_distances[pred_id]
+            if gt_dist > 0:
+                pairs.append((pred_dist, gt_dist, gt_class))
+    return pairs
+
+
+def get_distance_errors_per_class(
+    pred_dist: np.ndarray,
+    target_dist: np.ndarray,
+    target_cls: np.ndarray,
+    pred2gt: np.ndarray,
+    nc: int,
+    max_dist: int = 150,
+) -> tuple[list, list]:
+    """
+    Compute the mean absolute and relative distance errors for a set of predictions.
+
+    Args:
+        pred_dist: Predicted distance values.
+        target_dist: Ground truth distance values.
+        target_cls: Ground truth class labels.
+        pred2gt: Mapping of predictions to ground truth indices for a specific IoU level.
+        nc: Number of classes.
+
+    Returns:
+        e_A: Mean absolute distance error for each class. (nc,)
+        e_R: Mean relative distance error for each class. (nc,)
+    """
+    if nc == 0:
+        raise ValueError("Number of classes must be greater than 0.")
+
+    dist_gt_pairs = _collect_distance_pairs(pred_dist, pred2gt, target_dist, target_cls)
+
+    e_A = [np.zeros((1, 1)) for _ in range(nc)]
+    e_R = [np.zeros((1, 1)) for _ in range(nc)]
+    num_classes = [0] * nc
+
+    new_pred_gt_pairs: list[tuple[np.ndarray, np.ndarray, int]] = []
+
+    # de-normalize the distances
+    for pred, gt, cls in dist_gt_pairs:
+        new_pred_gt_pairs.append((pred * max_dist, gt * max_dist, int(cls)))
+
+    # compute the total absolute and relative distance errors per class
+    for pred, gt, cls in new_pred_gt_pairs:
+        e_A[cls] += abs(pred - gt)
+        e_R[cls] += abs(pred - gt) / np.maximum(gt, 1)
+        num_classes[cls] += 1
+
+    # compute the mean absolute and relative distance errors per class
+    for i in range(nc):
+        if num_classes[i] > 0:
+            e_A[i] /= num_classes[i]
+            e_R[i] /= num_classes[i]
+
+    return e_A, e_R
 
 
 class DetMetrics(SimpleClass):
@@ -1462,7 +1546,7 @@ class DetMetrics(SimpleClass):
         self.speed = {"preprocess": 0.0, "inference": 0.0, "loss": 0.0, "postprocess": 0.0}
         self.task = "detect"
 
-    def process(self, tp, conf, pred_cls, target_cls, e_A=[], e_R=[]):
+    def process(self, tp, conf, pred_cls, target_cls, pred_dist, target_dist, pred2gt):
         """Process predicted results for object detection and update metrics."""
         results = ap_per_class(
             tp,
@@ -1474,9 +1558,11 @@ class DetMetrics(SimpleClass):
             names=self.names,
             on_plot=self.on_plot,
         )[2:]
-        self.box.nc = len(self.names)
+        nc = len(self.names)
+        self.box.nc = nc
         self.box.update(results)
-        self.dist.update((e_A, e_R))
+        results = get_distance_errors_per_class(pred_dist, target_dist, target_cls, pred2gt, nc)
+        self.dist.update(results)
 
     @property
     def keys(self):
@@ -1494,6 +1580,10 @@ class DetMetrics(SimpleClass):
     def distance_results(self):
         """Returns the mean absolute and relative distance errors."""
         return self.dist.mean_results()
+
+    def distance_class_result(self, i):
+        """Returns the mean absolute and relative distance errors for a specific class."""
+        return self.dist.class_result(i)
 
     @property
     def maps(self):
