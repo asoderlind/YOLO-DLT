@@ -1,17 +1,18 @@
 from ultralytics import YOLO
+import torch
 
 
 # Defaults
 model_path = "yolo11n.pt"
-data_path = "kitti.yaml"
-device = "cuda"
+data_path = "kitti-mini.yaml"
+device = "cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu"
 use_fe = False
-epochs = 200
+epochs = 1
 optimizer = "SGD"
 scale = 0.0
 mosaic = 1.0
 use_dist = True
-d=0.35
+d = 0.35
 
 # model_path=f"{name}/weights/last.py"
 
