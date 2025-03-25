@@ -88,7 +88,9 @@ class DetectionValidator(BaseValidator):
         self.confusion_matrix = ConfusionMatrix(nc=self.nc, conf=self.args.conf)
         self.seen = 0
         self.jdict = []
-        self.stats = dict(tp=[], conf=[], pred_cls=[], target_cls=[], target_img=[], e_A=[], e_R=[])
+        self.stats = dict(
+            tp=[], conf=[], pred_cls=[], target_cls=[], target_img=[], pred_dist=[], target_dist=[], pred2gt=[]
+        )
 
     def get_desc(self):
         """Return a formatted string summarizing class metrics of YOLO model."""
@@ -152,56 +154,6 @@ class DetectionValidator(BaseValidator):
         )  # native-space pred
         return predn
 
-    def _get_distance_errors(self, pred_gt_pairs: list[tuple], max_dist=150):
-        """
-        Return the distance errors for each prediction.
-
-        Returns:
-            e_A: mean absolute distance error
-            e_R: mean relative distance error 1/n sum d_i - d_gt_i / max(d_i, 1)
-        """
-        n = len(pred_gt_pairs)
-
-        if n == 0:
-            raise ValueError("No predictions found")
-
-        # de-normalize the distances
-        for i, (pred, gt) in enumerate(pred_gt_pairs):
-            pred_gt_pairs[i] = (pred * max_dist, gt * max_dist)
-
-        abs_errors = []
-        for pred, gt in pred_gt_pairs:
-            abs_errors.append(abs(pred - gt))
-
-        rel_errors = []
-        for pred, gt in pred_gt_pairs:
-            rel_errors.append(abs(pred - gt) / max(gt, 1))
-
-        e_A = sum(abs_errors) / n
-        e_R = sum(rel_errors) / n
-
-        return e_A.unsqueeze(0), e_R.unsqueeze(0)
-
-    def _get_distance_pairs(self, predn, pred_gt_map, distances, iou_level=0) -> list[tuple]:
-        """
-        Return the pairs of distances for each prediction.
-
-        Returns:
-            pairs: list of tuples (pred_dist, gt_dist)
-        """
-        pred_gt_map_iou = pred_gt_map[:, iou_level]
-        pairs = []
-        for _, jdx in enumerate(pred_gt_map_iou):
-            if jdx != -1:
-                gt_dist = distances[jdx]
-                if gt_dist > 0:
-                    try:
-                        pred_dist = predn[jdx, 6]
-                        pairs.append((pred_dist, gt_dist))
-                    except IndexError:  # this shouldn't happen
-                        pass
-        return pairs
-
     def update_metrics(self, preds, batch):
         """Metrics."""
         for si, pred in enumerate(preds):
@@ -241,12 +193,7 @@ class DetectionValidator(BaseValidator):
             # Evaluate
             if nl:
                 # prediction_matrix = self._process_batch(predn, bbox, cls)
-                stat["tp"], prediction_gt_mapping = self._process_batch(predn, bbox, cls)
-
-                # Get distance errors and add to stats
-                pred_gt_pairs = self._get_distance_pairs(predn, prediction_gt_mapping, distances, iou_level=0)
-                if len(pred_gt_pairs) > 0:
-                    stat["e_A"], stat["e_R"] = self._get_distance_errors(pred_gt_pairs)
+                stat["tp"], stat["pred2gt"] = self._process_batch(predn, bbox, cls)
 
             if self.args.plots:
                 self.confusion_matrix.process_batch(predn, bbox, cls)
@@ -274,8 +221,7 @@ class DetectionValidator(BaseValidator):
         """Returns metrics statistics and results dictionary."""
         stats = {}
         for k, v in self.stats.items():
-            if len(v):  # e_A or e_R might be empty
-                stats[k] = torch.cat(v, 0).cpu().numpy()
+            stats[k] = torch.cat(v, 0).cpu().numpy()
         self.nt_per_class = np.bincount(stats["target_cls"].astype(int), minlength=self.nc)
         self.nt_per_image = np.bincount(stats["target_img"].astype(int), minlength=self.nc)
         stats.pop("target_img", None)
@@ -304,7 +250,13 @@ class DetectionValidator(BaseValidator):
             for i, c in enumerate(self.metrics.ap_class_index):
                 LOGGER.info(
                     pf
-                    % (self.names[c], self.nt_per_image[c], self.nt_per_class[c], *self.metrics.class_result(i), -1, -1)
+                    % (
+                        self.names[c],
+                        self.nt_per_image[c],
+                        self.nt_per_class[c],
+                        *self.metrics.class_result(i),
+                        *self.metrics.distance_class_result(i),
+                    )
                 )
 
         if self.args.plots:
