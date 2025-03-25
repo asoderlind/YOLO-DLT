@@ -1423,34 +1423,6 @@ class DistMetrics(SimpleClass):
         return 1.0 / (1.0 + total_error)
 
 
-def _collect_distance_pairs(
-    pred_distances, pred_gt_map, distances, classes, iou_level=0
-) -> list[tuple[np.ndarray, np.ndarray, np.ndarray]]:
-    """
-    Return the ground truth distance, predicted distance and ground truth class for each prediction
-    with an iou level of iou_level.
-
-    Args:
-        predn: tensor of shape (N, 7) representing all predictions with bboxes, class, distance
-        preg_gt_map: tensor of shape (N, T) representing the mapping of predictions to ground truth indices
-        distances: tensor of shape (M,) representing the distances of the ground truth labels
-        classes: tensor of shape (M,) representing the classes of the ground truth labels
-
-    Returns:
-        pairs: list of tuples (pred_dist, gt_dist, class)
-    """
-    pred_gt_map_iou = pred_gt_map[:, iou_level]
-    pairs = []
-    for pred_id, gt_id in enumerate(pred_gt_map_iou):
-        if gt_id != -1:
-            gt_dist = distances[gt_id]
-            gt_class = classes[gt_id]
-            pred_dist = pred_distances[pred_id]
-            if gt_dist > 0:
-                pairs.append((pred_dist, gt_dist, gt_class))
-    return pairs
-
-
 def get_distance_errors_per_class(
     pred_dist: np.ndarray,
     target_dist: np.ndarray,
@@ -1458,6 +1430,7 @@ def get_distance_errors_per_class(
     pred2gt: np.ndarray,
     nc: int,
     max_dist: int = 150,
+    iou_level: int = 0,
 ) -> tuple[list, list]:
     """
     Compute the mean absolute and relative distance errors for a set of predictions.
@@ -1476,29 +1449,30 @@ def get_distance_errors_per_class(
     if nc == 0:
         raise ValueError("Number of classes must be greater than 0.")
 
-    dist_gt_pairs = _collect_distance_pairs(pred_dist, pred2gt, target_dist, target_cls)
+    pred_gt_map_iou = pred2gt[:, iou_level]
+    num_preds = len(pred_dist)
+    dist_gt_cls = np.zeros((num_preds, 3))
+    for pred_id, gt_id in enumerate(pred_gt_map_iou):
+        if gt_id != -1:
+            gt_dist = target_dist[gt_id]
+            if gt_dist > 0:
+                dist_gt_cls[pred_id] = (pred_dist[pred_id], gt_dist, target_cls[gt_id])
 
     e_A = [np.zeros((1, 1)) for _ in range(nc)]
     e_R = [np.zeros((1, 1)) for _ in range(nc)]
-    num_classes = [0] * nc
-
-    new_pred_gt_pairs: list[tuple[np.ndarray, np.ndarray, int]] = []
 
     # de-normalize the distances
-    for pred, gt, cls in dist_gt_pairs:
-        new_pred_gt_pairs.append((pred * max_dist, gt * max_dist, int(cls)))
+    dist_gt_cls[:, 0] = dist_gt_cls[:, 0] * max_dist
+    dist_gt_cls[:, 1] = dist_gt_cls[:, 1] * max_dist
 
-    # compute the total absolute and relative distance errors per class
-    for pred, gt, cls in new_pred_gt_pairs:
-        e_A[cls] += abs(pred - gt)
-        e_R[cls] += abs(pred - gt) / np.maximum(gt, 1)
-        num_classes[cls] += 1
-
-    # compute the mean absolute and relative distance errors per class
     for i in range(nc):
-        if num_classes[i] > 0:
-            e_A[i] /= num_classes[i]
-            e_R[i] /= num_classes[i]
+        pred_gt_class_i = dist_gt_cls[dist_gt_cls[:, 2] == i]
+        # print(f"class: {i}, len: {len(pred_gt_class_i)}")
+        if len(pred_gt_class_i) > 0:
+            abs_error = np.abs(pred_gt_class_i[:, 0] - pred_gt_class_i[:, 1])
+            rel_error = abs_error / np.maximum(pred_gt_class_i[:, 1], 1)
+            e_A[i] = np.mean(abs_error)
+            e_R[i] = np.mean(rel_error)
 
     return e_A, e_R
 
