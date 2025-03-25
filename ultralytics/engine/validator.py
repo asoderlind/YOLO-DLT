@@ -221,7 +221,7 @@ class BaseValidator:
                 LOGGER.info(f"Results saved to {colorstr('bold', self.save_dir)}")
             return stats
 
-    def match_predictions(self, pred_classes, true_classes, iou, use_scipy=False):
+    def match_predictions(self, pred_classes, true_classes, true_distances, iou, use_scipy=False):
         """
         Matches predictions to ground truth objects (pred_classes, true_classes) using IoU.
 
@@ -233,14 +233,14 @@ class BaseValidator:
 
         Returns:
         (torch.Tensor): Correct tensor of shape (N, T) for T IoU thresholds.
-        (torch.Tensor): Mapping of predictions to ground truth indices, shape (N, T)
-                        (each element is the matched gt index for that IoU threshold, or -1 if none)
+        (torch.Tensor): Tensor (N, T) with the ground truth distance for each correct prediction for T IoU thresholds.
         """
         # Dx10 matrix, where D - detections, 10 - IoU thresholds
         N = pred_classes.shape[0]
         T = self.iouv.shape[0]
         correct = np.zeros((N, T), dtype=bool)
-        mapping = np.full((N, T), -1, dtype=int)  # initialize mapping with -1
+        pred2gt_dist = np.full((N, T), -1.0, dtype=np.float32)
+        pred2gt_cls = np.full((N, T), -1.0, dtype=np.float32)
 
         # LxD matrix where L - labels (rows), D - detections (columns)
         correct_class = true_classes[:, None] == pred_classes
@@ -261,21 +261,36 @@ class BaseValidator:
                         sel_gts = labels_idx[valid]
                         correct[sel_dets, i] = True
                         for det, gt in zip(sel_dets, sel_gts):
-                            if mapping[det, i] == -1:
-                                mapping[det, i] = gt
+                            if pred2gt_dist[det, i] == -1:
+                                pred2gt_dist[det, i] = true_distances[gt].item()
+                            if pred2gt_cls[det, i] == -1:
+                                pred2gt_cls[det, i] = true_classes[gt].item()
             else:
                 matches = np.nonzero(iou >= threshold)  # IoU > threshold and classes match
                 matches = np.array(matches).T
                 if matches.shape[0]:
                     if matches.shape[0] > 1:
-                        matches = matches[iou[matches[:, 0], matches[:, 1]].argsort()[::-1]]
-                        matches = matches[np.unique(matches[:, 1], return_index=True)[1]]
-                        # matches = matches[matches[:, 2].argsort()[::-1]]
-                        matches = matches[np.unique(matches[:, 0], return_index=True)[1]]
-                    correct[matches[:, 1].astype(int), i] = True
-
-        return torch.tensor(correct, dtype=torch.bool, device=pred_classes.device), torch.tensor(
-            mapping, device=pred_classes.device
+                        # Sort matches by IoU
+                        sorted_idx = iou[matches[:, 0], matches[:, 1]].argsort()[::-1]
+                        matches = matches[sorted_idx]
+                        # Ensure unique detections, keep only the highest IoU match
+                        _, unique_det_matches = np.unique(matches[:, 1], return_index=True)
+                        matches = matches[unique_det_matches]
+                        # Optionally keep only the highest IoU match for each ground truth
+                        _, unique_gt_indices = np.unique(matches[:, 0], return_index=True)
+                        matches = matches[unique_gt_indices]
+                    det_idxs = matches[:, 1].astype(int)
+                    gt_idxs = matches[:, 0].astype(int)
+                    correct[det_idxs, i] = True
+                    for det, gt in zip(det_idxs, gt_idxs):
+                        if pred2gt_dist[det, i] == -1.0:
+                            pred2gt_dist[det, i] = true_distances[gt].item()
+                        if pred2gt_cls[det, i] == -1.0:
+                            pred2gt_cls[det, i] = true_classes[gt].item()
+        return (
+            torch.tensor(correct, dtype=torch.bool, device=pred_classes.device),
+            torch.tensor(pred2gt_dist, device=pred_classes.device),
+            torch.tensor(pred2gt_cls, device=pred_classes.device),
         )
 
     def add_callback(self, event: str, callback):

@@ -1424,7 +1424,8 @@ class DistMetrics(SimpleClass):
 
 
 def get_distance_errors_per_class(
-    pred2gt: np.ndarray,
+    pred2gt_dist: np.ndarray,
+    pred2gt_cls: np.ndarray,
     conf: np.ndarray,
     pred_dist: np.ndarray,
     target_dist: np.ndarray,
@@ -1448,30 +1449,23 @@ def get_distance_errors_per_class(
         e_R: Mean relative distance error for each class. (nc,)
     """
     unique_classes, tn = np.unique(target_cls, return_counts=True)
-    # print(f"tn: {tn}")
 
     # sort by objectness
     i = np.argsort(-conf)
-    pred2gt, conf, pred_dist = pred2gt[i], conf[i], pred_dist[i]
-
-    # map only the best prediction to a given ground truth
-    taken_gt_ids = set()
+    pred2gt_dist, pred2gt_cls, conf, pred_dist = pred2gt_dist[i], pred2gt_cls[i], conf[i], pred_dist[i]
 
     # map predictions to ground truth for a specific IoU level
-    pred_gt_map_iou = pred2gt[:, iou_level]
+    pred2gt_dist_iou = pred2gt_dist[:, iou_level]
+    pred2gt_cls_iou = pred2gt_cls[:, iou_level]
 
     num_preds = len(pred_dist)
     dist_gt_cls = np.full((num_preds, 3), -1, dtype=np.float32)  # holding pred_dist, target_dist, target_cls
-    for pred_id, gt_id in enumerate(pred_gt_map_iou):
-        if gt_id != -1 and gt_id not in taken_gt_ids:
-            taken_gt_ids.add(gt_id)
-            gt_dist = target_dist[gt_id]
+    for pred_id, gt_dist in enumerate(pred2gt_dist_iou):
+        if gt_dist != -1:
+            pred_distance = pred_dist[pred_id]
+            gt_class = pred2gt_cls_iou[pred_id]
             if gt_dist > 0:
-                dist_gt_cls[pred_id] = (pred_dist[pred_id], gt_dist, target_cls[gt_id])
-
-    # print("len taken ids", len(taken_gt_ids))
-    # print("len target dist", len(target_dist))
-    # print("len target cls", len(target_cls))
+                dist_gt_cls[pred_id] = (pred_distance, gt_dist, gt_class)
 
     e_A = [np.zeros((1, 1)) for _ in range(nc)]
     e_R = [np.zeros((1, 1)) for _ in range(nc)]
@@ -1483,7 +1477,6 @@ def get_distance_errors_per_class(
     for i in unique_classes:
         idx = int(i)
         pred_gt_class_i = dist_gt_cls[dist_gt_cls[:, 2] == idx]
-        # print(f"class: {idx}, len: {len(pred_gt_class_i)}")
         if len(pred_gt_class_i) > 0:
             abs_error = np.abs(pred_gt_class_i[:, 0] - pred_gt_class_i[:, 1])
             rel_error = abs_error / np.maximum(pred_gt_class_i[:, 1], 1)
@@ -1536,7 +1529,7 @@ class DetMetrics(SimpleClass):
         self.speed = {"preprocess": 0.0, "inference": 0.0, "loss": 0.0, "postprocess": 0.0}
         self.task = "detect"
 
-    def process(self, tp, conf, pred_cls, target_cls, pred_dist, target_dist, pred2gt):
+    def process(self, tp, conf, pred_cls, target_cls, pred_dist, target_dist, pred2gt_dist, pred2gt_cls):
         """Process predicted results for object detection and update metrics."""
         results = ap_per_class(
             tp,
@@ -1551,7 +1544,7 @@ class DetMetrics(SimpleClass):
         nc = len(self.names)
         self.box.nc = nc
         self.box.update(results)
-        results = get_distance_errors_per_class(pred2gt, conf, pred_dist, target_dist, target_cls, nc)
+        results = get_distance_errors_per_class(pred2gt_dist, pred2gt_cls, conf, pred_dist, target_dist, target_cls, nc)
         self.dist.update(results)
 
     @property
