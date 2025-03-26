@@ -17,7 +17,6 @@ ds = [0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
 model_path = "./weights/kitti-dist.pt"
 # model_path=f"{name}/weights/last.py"
 model = YOLO(model_path)
-name = f"{data_path}-{model_path}-{epochs}e-{optimizer}-scale{scale}-mosaic{mosaic}-d{d}_"
 for d in ds:
     model = YOLO(model_path)
     name = f"{data_path}-{model_path}-{epochs}e-{optimizer}-scale{scale}-mosaic{mosaic}-d{d}_"
