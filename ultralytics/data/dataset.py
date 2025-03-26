@@ -1,5 +1,6 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
+import copy
 import json
 import random
 from collections import defaultdict
@@ -381,35 +382,38 @@ class TemporalYOLODataset(YOLODataset):
         return main_data, ref_data
 
     @staticmethod
-    def collate_fn(batch: list[tuple[BaseDatasetItem, list[BaseDatasetItem]]]) -> dict:  # type: ignore[override]
-        """
-        Collates temporal data, returning a batch with key frames and their reference frames.
-        """
-        # Extract key frames and reference frames
-        key_frames = [item[0] for item in batch]
-        ref_frames_lists = [item[1] for item in batch]
+    def collate_fn(  # type: ignore[override]
+        batch: list[tuple[BaseDatasetItem, list[BaseDatasetItem]]], temporal_window: int = 3
+    ) -> YOLODatasetitem:  # type: ignore[override]
+        all_frames: list[BaseDatasetItem] = []
 
-        # Collate key frames as usual
-        key_batch = YOLODataset.collate_fn(key_frames)
+        for batch_idx, (key_frame, ref_frames) in enumerate(batch):
+            # add key frame
+            key_frame["batch_idx"] = torch.tensor([batch_idx])
+            key_frame_idx = len(all_frames)
+            all_frames.append(key_frame)
 
-        # Collate reference frames for each key frame
-        ref_batches: list[YOLODatasetitem | None] = []
-        for i, ref_frames in enumerate(ref_frames_lists):
-            if not ref_frames:
-                ref_batches.append(None)
+            # add reference frames
+            for ref_frame in ref_frames:
+                all_frames.append(ref_frame)
+
+            # pad with zero tensors if we have less than temporal_window frames
+            padding_needed = temporal_window - len(ref_frames)
+
+            if not padding_needed > 0:
                 continue
-            # Create batch index for these reference frames
-            for j, ref in enumerate(ref_frames):
-                ref["batch_idx"] = torch.tensor([i])  # Associate with key frame i
+            for _ in range(padding_needed):
+                pad_frame = copy.deepcopy(key_frame)
+                pad_frame["img"] = torch.zeros_like(key_frame["img"])  # zero out the image
+                all_frames.append(pad_frame)
 
-            # Collate these reference frames
-            ref_batch = YOLODataset.collate_fn(ref_frames)
-            ref_batches.append(ref_batch)
+        # collate all frames
+        collated_batch = YOLODataset.collate_fn(all_frames)
 
-        # Add reference batches to the key batch
-        key_batch["reference_frames"] = ref_batches
+        return collated_batch  # type: ignore[return-value]
 
-        return key_batch
+    def get_collate_fn(self):
+        return lambda batch: self.collate_fn(batch, self.temporal_window)
 
 
 class YOLOMultiModalDataset(YOLODataset):
