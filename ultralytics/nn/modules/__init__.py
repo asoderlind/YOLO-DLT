@@ -52,6 +52,7 @@ from .block import (
     CBLinear,
     ContrastiveHead,
     EfficientFEM,
+    FeatureAggregationModule,
     GhostBottleneck,
     HGBlock,
     HGStem,
@@ -99,7 +100,7 @@ from .conv import (
     RFAConv,
     SpatialAttention,
 )
-from .head import OBB, Classify, Detect, Pose, RTDETRDecoder, Segment, WorldDetect, v10Detect
+from .head import OBB, Classify, Detect, Pose, RTDETRDecoder, Segment, TemporalDetect, WorldDetect, v10Detect
 from .transformer import (
     AIFI,
     MLP,
@@ -210,4 +211,6 @@ __all__ = (
     "RFABottleneck",
     "RepC3k",
     "RepBottleneck",
+    "TemporalDetect",
+    "FeatureAggregationModule",
 )
