@@ -89,7 +89,15 @@ class DetectionValidator(BaseValidator):
         self.seen = 0
         self.jdict = []
         self.stats = dict(
-            tp=[], conf=[], pred_cls=[], target_cls=[], target_img=[], pred_dist=[], target_dist=[], pred2gt=[]
+            tp=[],
+            conf=[],
+            pred_cls=[],
+            target_cls=[],
+            target_img=[],
+            pred_dist=[],
+            target_dist=[],
+            pred2gt_dist=[],
+            pred2gt_cls=[],
         )
 
     def get_desc(self):
@@ -174,10 +182,7 @@ class DetectionValidator(BaseValidator):
             if npr == 0:
                 if nl:
                     for k in self.stats.keys():
-                        if k in stat:
-                            self.stats[k].append(stat[k])
-                        else:
-                            continue
+                        self.stats[k].append(stat[k])
                     if self.args.plots:
                         self.confusion_matrix.process_batch(detections=None, gt_bboxes=bbox, gt_cls=cls)
                 continue
@@ -193,7 +198,7 @@ class DetectionValidator(BaseValidator):
             # Evaluate
             if nl:
                 # prediction_matrix = self._process_batch(predn, bbox, cls)
-                stat["tp"], stat["pred2gt"] = self._process_batch(predn, bbox, cls)
+                stat["tp"], stat["pred2gt_dist"], stat["pred2gt_cls"] = self._process_batch(predn, bbox, cls, distances)
 
             if self.args.plots:
                 self.confusion_matrix.process_batch(predn, bbox, cls)
@@ -265,7 +270,7 @@ class DetectionValidator(BaseValidator):
                     save_dir=self.save_dir, names=self.names.values(), normalize=normalize, on_plot=self.on_plot
                 )
 
-    def _process_batch(self, detections, gt_bboxes, gt_cls):
+    def _process_batch(self, detections, gt_bboxes, gt_cls, gt_dist):
         """
         Return correct prediction matrix and mapping of predictions to ground truth indices.
 
@@ -278,12 +283,11 @@ class DetectionValidator(BaseValidator):
 
         Returns:
             (torch.Tensor): Correct prediction matrix of shape (N, 10) for 10 IoU levels.
-            (torch.Tensor): Mapping of predictions to ground truth indices, shape (N, T)
-                            (each element is the matched gt index for that IoU threshold, or -1 if none)
+            (torch.Tensor): Tensor (N, T) with the ground truth distance for each correct prediction for T IoU thresholds.
         """
         iou = box_iou(gt_bboxes, detections[:, :4])
-        correct_pred_matrix, pred_gt_map = self.match_predictions(detections[:, 5], gt_cls, iou)
-        return correct_pred_matrix, pred_gt_map
+        correct_pred_matrix, pred2gt_dist, pred2gt_cls = self.match_predictions(detections[:, 5], gt_cls, gt_dist, iou)
+        return correct_pred_matrix, pred2gt_dist, pred2gt_cls
 
     def build_dataset(self, img_path, mode="val", batch=None):
         """
