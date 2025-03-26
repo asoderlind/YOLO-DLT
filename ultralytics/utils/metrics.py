@@ -1459,12 +1459,9 @@ def get_distance_errors_per_class(
 
     num_preds = len(pred_dist)
     dist_gt_cls = np.full((num_preds, 3), -1, dtype=np.float32)  # holding pred_dist, target_dist, target_cls
-    for pred_id, gt_dist in enumerate(pred2gt_dist_iou):
-        if gt_dist != -1:
-            pred_distance = pred_dist[pred_id]
-            gt_class = pred2gt_cls_iou[pred_id]
-            if gt_dist > 0:
-                dist_gt_cls[pred_id] = (pred_distance, gt_dist, gt_class)
+    for pred_id, (gt_dist, gt_cls) in enumerate(zip(pred2gt_dist_iou, pred2gt_cls_iou)):
+        if gt_dist > 0:
+            dist_gt_cls[pred_id] = (pred_dist[pred_id], gt_dist, gt_cls)
 
     e_A = [np.zeros((1, 1)) for _ in range(nc)]
     e_R = [np.zeros((1, 1)) for _ in range(nc)]
@@ -1475,12 +1472,13 @@ def get_distance_errors_per_class(
 
     for i in unique_classes:
         idx = int(i)
-        pred_gt_class_i = dist_gt_cls[dist_gt_cls[:, 2] == idx]
-        if len(pred_gt_class_i) > 0:
-            abs_error = np.abs(pred_gt_class_i[:, 0] - pred_gt_class_i[:, 1])
-            rel_error = abs_error / np.maximum(pred_gt_class_i[:, 1], 1)
-            e_A[idx] = np.mean(abs_error)
-            e_R[idx] = np.mean(rel_error)
+        # Filter out pairs of predictions and ground truth with a certain class
+        pred_gt = dist_gt_cls[dist_gt_cls[:, 2] == idx]
+        if len(pred_gt) > 0:
+            absolute_errors = np.abs(pred_gt[:, 0] - pred_gt[:, 1])
+            relative_errors = absolute_errors / np.maximum(pred_gt[:, 1], 1)
+            e_A[idx] = np.mean(absolute_errors)
+            e_R[idx] = np.mean(relative_errors)
 
     return e_A, e_R
 
