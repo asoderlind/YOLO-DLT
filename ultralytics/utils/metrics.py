@@ -1426,7 +1426,6 @@ class DistMetrics(SimpleClass):
 def get_distance_errors_per_class(
     pred2gt_dist: np.ndarray,
     pred2gt_cls: np.ndarray,
-    conf: np.ndarray,
     pred_dist: np.ndarray,
     target_cls: np.ndarray,
     nc: int,
@@ -1448,10 +1447,6 @@ def get_distance_errors_per_class(
         e_R: Mean relative distance error for each class. (nc,)
     """
     unique_classes, _ = np.unique(target_cls, return_counts=True)
-
-    # sort by objectness
-    i = np.argsort(-conf)
-    pred2gt_dist, pred2gt_cls, conf, pred_dist = pred2gt_dist[i], pred2gt_cls[i], conf[i], pred_dist[i]
 
     # map predictions to ground truth for a specific IoU level
     pred2gt_dist_iou = pred2gt_dist[:, iou_level]
@@ -1541,7 +1536,7 @@ class DetMetrics(SimpleClass):
         nc = len(self.names)
         self.box.nc = nc
         self.box.update(results)
-        results = get_distance_errors_per_class(pred2gt_dist, pred2gt_cls, conf, pred_dist, target_cls, nc)
+        results = get_distance_errors_per_class(pred2gt_dist, pred2gt_cls, pred_dist, target_cls, nc)
         self.dist.update(results)
 
     @property
