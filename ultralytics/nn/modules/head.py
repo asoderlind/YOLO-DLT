@@ -7,10 +7,11 @@ import math
 import torch
 import torch.nn as nn
 from torch.nn.init import constant_, xavier_uniform_
+from torchvision.ops import batched_nms
 
 from ultralytics.utils.tal import TORCH_1_10, dist2bbox, dist2rbox, make_anchors
 
-from .block import DFL, BNContrastiveHead, ContrastiveHead, Proto
+from .block import DFL, BNContrastiveHead, ContrastiveHead, FeatureAggregationModule, Proto
 from .conv import Conv, DWConv
 from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer
 from .utils import bias_init_with_prob, linear_init
@@ -170,6 +171,197 @@ class Detect(nn.Module):
         scores, index = scores.flatten(1).topk(min(max_det, anchors))
         i = torch.arange(batch_size)[..., None]  # batch indices
         return torch.cat([boxes[i, index // nc], scores[..., None], (index % nc)[..., None].float()], dim=-1)
+
+
+class TemporalDetect(Detect):
+    """YOLO Temporal detection head for video models."""
+
+    def __init__(self, nc=80, ch=()):
+        """Initialize the YOLO Temporal detection layer with specified number of classes and channels."""
+        super().__init__(nc, ch)
+
+        # separate reg and cls convs from the final pred layer
+        reg_ch = max(16, ch[0] // 4, self.reg_max * 4)
+        vid_cls_ch = max(ch[0], min(self.nc, 100))
+        # reg branch with modular pred layer
+        self.cv2 = nn.ModuleList(nn.Sequential(Conv(x, reg_ch, k=3), Conv(reg_ch, reg_ch, k=3)) for x in ch)
+        self.cv2_pred = nn.ModuleList(nn.Conv2d(reg_ch, 4 * self.reg_max, 1) for _ in ch)
+
+        # Regular cls branch stays the same
+
+        # New video object classification branch (same structure as cls branch)
+        self.vid_cls = nn.ModuleList(
+            nn.Sequential(
+                nn.Sequential(DWConv(x, x, k=3), Conv(x, vid_cls_ch, k=1)),
+                nn.Sequential(DWConv(vid_cls_ch, vid_cls_ch, k=3), Conv(vid_cls_ch, vid_cls_ch, k=1)),
+            )
+            for x in ch
+        )
+
+        self.fam = FeatureAggregationModule(cls_ch=vid_cls_ch, reg_ch=reg_ch)
+
+    def bias_init(self):
+        """Initialize Detect() biases, WARNING: requires stride availability."""
+        m = self  # self.model[-1]  # Detect() module
+        # cf = torch.bincount(torch.tensor(np.concatenate(dataset.labels, 0)[:, 0]).long(), minlength=nc) + 1
+        # ncf = math.log(0.6 / (m.nc - 0.999999)) if cf is None else torch.log(cf / cf.sum())  # nominal class frequency
+        for a, b, s in zip(m.cv2_pred, m.cv3, m.stride):  # cv2_pred is just a singular conv2d list now
+            a.bias.data[:] = 1.0  # box
+            b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+        if self.end2end:
+            for a, b, s in zip(m.one2one_cv2, m.one2one_cv3, m.stride):  # from
+                a[-1].bias.data[:] = 1.0  # box
+                b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+
+    def FSM(
+        self,
+        raw_preds: torch.Tensor,
+        vid_fetures: torch.Tensor,
+        reg_features: torch.Tensor,
+        nms_thresh: float = 0.75,
+        topk_pre: int = 750,
+        topk_post: int = 30,
+    ):
+        """
+        Feature Selection Module (FSM) implementation following YOLOV paper.
+        Selects high-quality candidate regions from raw predictions for temporal aggregation.
+
+        Args:
+            raw_preds (torch.Tensor): Raw predictions from _inference() with shape [batch_size, 4+nc, sum(h_i*w_i)]
+            vid_features (torch.Tensor): Video classification features from each detection level
+            reg_features (torch.Tensor): Regression features from each detection level
+            nms_thresh (float): NMS threshold for removing redundant detections
+            topk_pre (int): Number of top confident predictions to consider before NMS
+            topk_post (int): Number of predictions to keep after NMS
+
+        Returns:
+            selected_cls_features (torch.Tensor): Selected classification features [batch_size, topk_post, C]
+            selected_reg_features (torch.Tensor): Selected regression features [batch_size, topk_post, C]
+            selected_boxes (torch.Tensor): Selected bounding boxes [batch_size, topk_post, 4]
+            selected_scores (torch.Tensor): Selected confidence scores [batch_size, topk_post]
+            selected_indices list[torch.Tensor]: Indices of selected predictions for each batch
+        """
+
+        # Prepare predictions in the right format
+        predictions = raw_preds.permute(0, 2, 1)  # [batch_size, sum(h_i*w_i), 4+nc]
+
+        batch_size = raw_preds.shape[0]
+        device = raw_preds.device
+
+        # Init containers for results
+        selected_cls_features: list[torch.Tensor] = []
+        selected_reg_features: list[torch.Tensor] = []
+        selected_boxes: list[torch.Tensor] = []
+        selected_scores: list[torch.Tensor] = []
+        selected_indices: list[torch.Tensor] = []
+        breakpoint()
+        # Process for each batch
+        for b in range(batch_size):
+            pred = predictions[b]  # [sum(h_i*w_i), 4+nc]
+
+            # Extract boxes and scores
+            boxes = pred[:, :4]  # [sum(h_i*w_i), 4]
+            scores = pred[:, 4:]  # [sum(h_i*w_i), nc]
+
+            # Get max class scores and class IDs
+            max_scores, cls_ids = scores.max(dim=1)  # [sum(h_i*w_i)], [sum(h_i*w_i)]
+
+            # Get top-k predictions by confidence
+            # topk_values contains indices into the original predictions
+            # Ex: topk_values = [0, 2, 4] means that the 0th, 2nd, and 4th predictions have the highest confidence scores
+            if len(max_scores) > topk_pre:
+                topk_values, topk_indices = torch.topk(max_scores, topk_pre)
+            else:
+                topk_indices = torch.arange(len(max_scores), device=device)
+                topk_values = max_scores[topk_indices]
+
+            # Apply NMS
+            # nms_indices will be the indices of the top-k boxes that cleared the nms threshold
+            # Ex: nms_indices = [0, 2] means that the 0th and 2nd elements of topk_indices cleared the nms threshold
+            nms_indices = batched_nms(
+                boxes[topk_indices],
+                topk_values,
+                cls_ids[topk_indices],
+                nms_thresh,
+            )
+
+            # Limit to topk_post predictions
+            if len(nms_indices) > topk_post:
+                nms_indices = nms_indices[:topk_post]
+
+            # Get final indices
+            final_indices = topk_indices[nms_indices]
+
+            # Extract features directly using final indices
+            batch_cls_features = vid_fetures[b, final_indices]
+            batch_reg_features = reg_features[b, final_indices]
+
+            # Get selected boxes and scores
+            batch_boxes = boxes[final_indices]
+            batch_scores = max_scores[final_indices]
+
+            # Append to results
+            selected_cls_features.append(batch_cls_features)
+            selected_reg_features.append(batch_reg_features)
+            selected_boxes.append(batch_boxes)
+            selected_scores.append(batch_scores)
+            selected_indices.append(final_indices)
+
+        return (
+            torch.stack(selected_cls_features),
+            torch.stack(selected_reg_features),
+            torch.stack(selected_boxes),
+            torch.stack(selected_scores),
+            torch.stack(selected_indices),
+        )
+
+    def forward(self, x: list[torch.Tensor]):
+        """Concatenates and returns predicted bounding boxes and class probabilities."""
+
+        # loop over detection layers (usually 3, 80x80, 40x40, 20x20)
+        before_nms_vid_feats: list[torch.Tensor] = []
+        before_nms_reg_feats: list[torch.Tensor] = []
+
+        for i in range(self.nl):
+            reg_feat = self.cv2[i](x[i])
+            vid_cls_feat = self.vid_cls[i](x[i])
+
+            # store features for FSM
+            before_nms_vid_feats.append(vid_cls_feat)
+            before_nms_reg_feats.append(reg_feat)
+
+            # same as original model:
+            reg_out = self.cv2_pred[i](reg_feat)
+            cls_out = self.cv3[i](x[i])
+            x[i] = torch.cat((reg_out, cls_out), 1)
+
+        # flatten features for FSM
+        flat_vid_features = torch.cat(
+            [feat.flatten(2).permute(0, 2, 1) for feat in before_nms_vid_feats], dim=1
+        )  # [batch_size, sum(h_i*w_i), num_classes]
+        flat_reg_features = torch.cat(
+            [feat.flatten(2).permute(0, 2, 1) for feat in before_nms_reg_feats], dim=1
+        )  # [batch_size, sum(h_i*w_i), 4 * reg_max]
+
+        # model base predictions
+        raw_predictions = self._inference(x)  # [bs, 4 + num_classes, sum_i(w_i * h_i)]
+
+        # Apply FSM (Feature Selection Module)
+        selected_cls_feats, selected_reg_feats, selected_boxes, selected_scores, selected_indices = self.FSM(
+            raw_predictions, flat_vid_features, flat_reg_features
+        )
+
+        self.fam(
+            cls_features=selected_cls_feats,
+            reg_features=selected_reg_feats,
+            cls_scores=selected_scores,
+            boxes=selected_boxes,
+        )
+
+        if self.training:  # Training path
+            return x
+        y = self._inference(x)
+        return y if self.export else (y, x)
 
 
 class Segment(Detect):
