@@ -253,7 +253,7 @@ class YOLODataset(BaseDataset):
                 try:
                     value = torch.cat(value, 0)
                 except TypeError:
-                    value = torch.cat([torch.from_numpy(v) for v in value], 0) # This is a hack for when a certain batch doesn't get converted to torch tensor
+                    value = torch.cat([torch.from_numpy(v) for v in value if len(v) > 0], 0) # This is a hack for when a certain batch doesn't get converted to torch tensor
             new_batch[k] = value
         new_batch["batch_idx"] = list(new_batch["batch_idx"])
         for i in range(len(new_batch["batch_idx"])):
