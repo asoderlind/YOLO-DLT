@@ -234,7 +234,7 @@ class DetectionValidator(BaseValidator):
 
     def print_results(self):
         """Prints training/validation set metrics per class."""
-        pf = "%22s" + "%11i" * 2 + ("%11.3g" * (len(self.metrics.keys) + 2))  # print format
+        pf = "%22s" + "%11i" * 2 + ("%11.3g" * (len(self.metrics.keys)))  # print format
         LOGGER.info(
             pf
             % (
@@ -242,7 +242,6 @@ class DetectionValidator(BaseValidator):
                 self.seen,
                 self.nt_per_class.sum(),
                 *self.metrics.mean_results(),
-                *self.metrics.distance_results(),
             )
         )
         if self.nt_per_class.sum() == 0:
@@ -258,7 +257,6 @@ class DetectionValidator(BaseValidator):
                         self.nt_per_image[c],
                         self.nt_per_class[c],
                         *self.metrics.class_result(i),
-                        *self.metrics.distance_class_result(i),
                     )
                 )
 

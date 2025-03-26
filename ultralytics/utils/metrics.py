@@ -1542,15 +1542,22 @@ class DetMetrics(SimpleClass):
     @property
     def keys(self):
         """Returns a list of keys for accessing specific metrics."""
-        return ["metrics/precision(B)", "metrics/recall(B)", "metrics/mAP50(B)", "metrics/mAP50-95(B)"]
+        return [
+            "metrics/precision(B)",
+            "metrics/recall(B)",
+            "metrics/mAP50(B)",
+            "metrics/mAP50-95(B)",
+            "metrics/e_A(D)",
+            "metrics/e_R(D)",
+        ]
 
     def mean_results(self):
-        """Calculate mean of detected objects & return precision, recall, mAP50, and mAP50-95."""
-        return self.box.mean_results()
+        """Calculate mean of detected objects & return precision, recall, mAP50, and mAP50-95, mean absolute and relative distance errors."""
+        return self.box.mean_results() + self.dist.mean_results()
 
     def class_result(self, i):
         """Return the result of evaluating the performance of an object detection model on a specific class."""
-        return self.box.class_result(i)
+        return self.box.class_result(i) + self.dist.class_result(i)
 
     def distance_results(self):
         """Returns the mean absolute and relative distance errors."""
