@@ -8,6 +8,7 @@ import torch
 
 # Defaults
 <<<<<<< HEAD
+<<<<<<< HEAD
 DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu"
 KITTI_CLASSES = [0, 1, 2, 3, 4, 5, 6, 7]
 EPOCHS = 100
@@ -132,17 +133,30 @@ for use_dist in use_dists:
 =======
 model_path = "yolo11n.pt"
 data_path = "kitti.yaml"
+=======
+>>>>>>> 6a83822a (mod8)
 device = "cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu"
 use_fe = False
 epochs = 1
 optimizer = "SGD"
 scale = 0.0
 mosaic = 1.0
-use_dist = True
-ds = [0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
+confs = [
+    {
+        'd': 0.025, 'useDist': True, 
+        'dataPath': 'waymo-noConf.yaml', 
+        'model_path': "runs/detect/waymo-noConf.yaml-yolo11n.pt-100e-SGD-dist-scale0.0-mosaic1.0-noDontCare-d0.025_/weights/last.pt"
+    },
+    {
+        'd': 0, 
+        'useDist': False, 
+        'dataPath': 'waymo-noConf.yaml',
+        'model_path': "yolo11n.pt"
+    }
+    ]
 
-model_path = "./weights/kitti-dist.pt"
 # model_path=f"{name}/weights/last.py"
+<<<<<<< HEAD
 model = YOLO(model_path)
 name = f"{data_path}-{model_path}-{epochs}e-{optimizer}-scale{scale}-mosaic{mosaic}-d{d}_"
 <<<<<<< HEAD
@@ -165,8 +179,20 @@ model.train(
 >>>>>>> e6e8fb69 (remove ndo attribute)
 =======
 for d in ds:
+=======
+for conf in confs:
+    d = conf['d']
+    use_dist = conf['useDist']
+    data_path = conf['dataPath']
+    model_path = conf['model_path']
+    
+    resume = model_path != "yolo11n.pt"
+
+>>>>>>> 6a83822a (mod8)
     model = YOLO(model_path)
-    name = f"{data_path}-{model_path}-{epochs}e-{optimizer}-scale{scale}-mosaic{mosaic}-d{d}_"
+
+    name = f"{data_path}-{model_path}-{epochs}e-{optimizer}-{'dist' if use_dist else 'noDist'}-scale{scale}-mosaic{mosaic}-noDontCare-d{d}_"
+
     model.train(
         data=data_path,
         epochs=epochs,
@@ -182,6 +208,7 @@ for d in ds:
         scale=scale,
         use_dist=use_dist,
         dist=d,
-        resume=False,
+        resume=resume,
+        classes=[0,1,2,3,4,5,6,7]
     )
 >>>>>>> 5969bc06 (merge)
