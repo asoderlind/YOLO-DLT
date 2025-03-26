@@ -161,6 +161,13 @@ def build_dataloader(dataset, batch, workers, shuffle=True, rank=-1):
     sampler = None if rank == -1 else distributed.DistributedSampler(dataset, shuffle=shuffle)
     generator = torch.Generator()
     generator.manual_seed(6148914691236517205 + RANK)
+
+    # Get the appropriate collate function
+    if isinstance(dataset, TemporalYOLODataset):
+        collate_fn = dataset.get_collate_fn()
+    else:
+        collate_fn = getattr(dataset, "collate_fn", None)
+
     return InfiniteDataLoader(
         dataset=dataset,
         batch_size=batch,
@@ -168,7 +175,7 @@ def build_dataloader(dataset, batch, workers, shuffle=True, rank=-1):
         num_workers=nw,
         sampler=sampler,
         pin_memory=PIN_MEMORY,
-        collate_fn=getattr(dataset, "collate_fn", None),
+        collate_fn=collate_fn,
         worker_init_fn=seed_worker,
         generator=generator,
     )
