@@ -96,7 +96,7 @@ def verify_image(args):
 
 def verify_image_label(args):
     """Verify one image-label pair."""
-    im_file, lb_file, prefix, keypoint, num_cls, nkpt, ndim = args
+    im_file, lb_file, prefix, keypoint, num_cls, nkpt, ndim, use_dist = args
     # Number (missing, found, empty, corrupt), message, segments, keypoints
     nm, nf, ne, nc, msg, segments, keypoints = 0, 0, 0, 0, "", [], None
     try:
@@ -126,13 +126,23 @@ def verify_image_label(args):
                 lb = np.array(lb, dtype=np.float32)
             if nl := len(lb):
                 if keypoint:
-                    assert lb.shape[1] == (5 + nkpt * ndim), f"labels require {(5 + nkpt * ndim)} columns each"
+                    if use_dist:
+                        raise NotImplementedError("Keypoint distance not supported for segmentation")
+                    else:
+                        assert lb.shape[1] == (5 + nkpt * ndim), f"labels require {(5 + nkpt * ndim)} columns each"
                     points = lb[:, 5:].reshape(-1, ndim)[:, :2]
                 else:
-                    assert lb.shape[1] == 5, f"labels require 5 columns, {lb.shape[1]} columns detected"
-                    points = lb[:, 1:]
+                    if use_dist:
+                        assert lb.shape[1] == 6, f"labels require 6 columns, {lb.shape[1]} columns detected"
+                        points = lb[:, 1:]
+                        distances = lb[:, 5]
+                    else:
+                        assert lb.shape[1] == 5, f"labels require 5 columns, {lb.shape[1]} columns detected"
+                        points = lb[:, 1:5]
                 assert points.max() <= 1, f"non-normalized or out of bounds coordinates {points[points > 1]}"
                 assert lb.min() >= 0, f"negative label values {lb[lb < 0]}"
+                if use_dist:
+                    assert distances.max() <= 1, f"distance values >1 {distances[distances > 1]}"
 
                 # All labels
                 max_cls = lb[:, 0].max()  # max label count
@@ -157,7 +167,7 @@ def verify_image_label(args):
             if ndim == 2:
                 kpt_mask = np.where((keypoints[..., 0] < 0) | (keypoints[..., 1] < 0), 0.0, 1.0).astype(np.float32)
                 keypoints = np.concatenate([keypoints, kpt_mask[..., None]], axis=-1)  # (nl, nkpt, 3)
-        lb = lb[:, :5]
+        lb = lb[:, :6]
         return im_file, lb, shape, segments, keypoints, nm, nf, ne, nc, msg
     except Exception as e:
         nc = 1
@@ -528,9 +538,9 @@ class HUBDatasetStats:
         if not str(path).endswith(".zip"):  # path is data.yaml
             return False, None, path
         unzip_dir = unzip_file(path, path=path.parent)
-        assert unzip_dir.is_dir(), (
-            f"Error unzipping {path}, {unzip_dir} not found. path/to/abc.zip MUST unzip to path/to/abc/"
-        )
+        assert (
+            unzip_dir.is_dir()
+        ), f"Error unzipping {path}, {unzip_dir} not found. path/to/abc.zip MUST unzip to path/to/abc/"
         return True, str(unzip_dir), find_dataset_yaml(unzip_dir)  # zipped, data_dir, yaml_path
 
     def _hub_ops(self, f):

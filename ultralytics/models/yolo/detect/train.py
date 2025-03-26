@@ -92,7 +92,7 @@ class DetectionTrainer(BaseTrainer):
 
     def get_validator(self):
         """Returns a DetectionValidator for YOLO model validation."""
-        self.loss_names = "box_loss", "cls_loss", "dfl_loss", "con_loss"
+        self.loss_names = "box_loss", "cls_loss", "dfl_loss", "con_loss", "dist_loss"
         return yolo.detect.DetectionValidator(
             self.test_loader, save_dir=self.save_dir, args=copy(self.args), _callbacks=self.callbacks
         )
@@ -122,10 +122,13 @@ class DetectionTrainer(BaseTrainer):
 
     def plot_training_samples(self, batch, ni):
         """Plots training samples with their annotations."""
+        cls = batch["cls"].squeeze(-1)
+        distances = batch["distances"].squeeze(-1) if self.use_dist else np.zeros_like(cls)
         plot_images(
             images=batch["img"],
             batch_idx=batch["batch_idx"],
-            cls=batch["cls"].squeeze(-1),
+            cls=cls,
+            distances=distances,
             bboxes=batch["bboxes"],
             paths=batch["im_file"],
             fname=self.save_dir / f"train_batch{ni}.jpg",

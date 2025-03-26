@@ -1363,6 +1363,121 @@ class Metric(SimpleClass):
         ]
 
 
+class DistMetrics(SimpleClass):
+    """
+    Utility class for computing distance metrics for YOLO.
+
+    Attributes:
+        e_A (list): Absolute distance error values.
+        e_R (list): Relative distance error values.
+
+    Methods:
+        mean_results(): Returns [mean_absolute_error, mean_relative_error].
+        update(results): Updates the metrics with a new results tuple.
+        fitness(): Returns a fitness score based on the current error values.
+    """
+
+    def __init__(self) -> None:
+        self.e_A: list[np.ndarray] = []  # list storing absolute distance errors (nc,)
+        self.e_R: list[np.ndarray] = []  # list storing relative distance errors (nc,)
+
+    @property
+    def mean_absolute_error(self) -> float:
+        """Mean absolute distance error."""
+        return sum(self.e_A) / len(self.e_A) if len(self.e_A) else 0.0
+
+    @property
+    def mean_relative_error(self) -> float:
+        """Mean relative distance error."""
+        return sum(self.e_R) / len(self.e_R) if len(self.e_R) else 0.0
+
+    def mean_results(self):
+        """Returns [mean_absolute_error, mean_relative_error]."""
+        return [self.mean_absolute_error, self.mean_relative_error]
+
+    def class_result(self, i):
+        """Returns [absolute_error, relative_error] for a specific class."""
+        return self.e_A[i], self.e_R[i]
+
+    def update(self, results):
+        """
+        Updates the distance metrics.
+
+        Args:
+            results (tuple): A tuple containing:
+                - e_A (list): List of absolute distance error values.
+                - e_R (list): List of relative distance error values.
+        """
+        self.e_A, self.e_R = results
+
+    def fitness(self):
+        """
+        Computes a fitness score based on the distance errors.
+        For example, lower errors yield higher fitness. Adjust the combination as needed.
+
+        Returns:
+            float: A fitness score.
+        """
+        # Here we define fitness such that lower errors yield higher fitness.
+        total_error = self.mean_absolute_error + self.mean_relative_error
+        return 1.0 / (1.0 + total_error)
+
+
+def get_distance_errors_per_class(
+    pred2gt_dist: np.ndarray,
+    pred2gt_cls: np.ndarray,
+    pred_dist: np.ndarray,
+    target_cls: np.ndarray,
+    nc: int,
+    max_dist: int = 150,
+    iou_level: int = 0,
+) -> tuple[list, list]:
+    """
+    Compute the mean absolute and relative distance errors for a set of predictions.
+
+    Args:
+        pred_dist: Predicted distance values.
+        target_dist: Ground truth distance values.
+        target_cls: Ground truth class labels.
+        pred2gt: Mapping of predictions to ground truth indices for a specific IoU level.
+        nc: Number of classes.
+
+    Returns:
+        e_A: Mean absolute distance error for each class. (nc,)
+        e_R: Mean relative distance error for each class. (nc,)
+    """
+    unique_classes, _ = np.unique(target_cls, return_counts=True)
+
+    # map predictions to ground truth for a specific IoU level
+    pred2gt_dist_iou = pred2gt_dist[:, iou_level]
+    pred2gt_cls_iou = pred2gt_cls[:, iou_level]
+
+    num_preds = len(pred_dist)
+    dist_gt_cls = np.full((num_preds, 3), -1, dtype=np.float32)  # holding pred_dist, target_dist, target_cls
+    for pred_id, (gt_dist, gt_cls) in enumerate(zip(pred2gt_dist_iou, pred2gt_cls_iou)):
+        if gt_dist > 0:
+            dist_gt_cls[pred_id] = (pred_dist[pred_id], gt_dist, gt_cls)
+
+    e_A = [np.zeros((1, 1)) for _ in range(nc)]
+    e_R = [np.zeros((1, 1)) for _ in range(nc)]
+
+    # de-normalize the distances
+    dist_gt_cls[:, 0] = dist_gt_cls[:, 0] * max_dist
+    dist_gt_cls[:, 1] = dist_gt_cls[:, 1] * max_dist
+
+    for i in unique_classes:
+        idx = int(i)
+        # Filter out pairs of predictions and ground truth with a certain class
+        pred_gt = dist_gt_cls[dist_gt_cls[:, 2] == idx]
+        if len(pred_gt) > 0:
+            absolute_errors = np.abs(pred_gt[:, 0] - pred_gt[:, 1])
+            relative_errors = absolute_errors / np.maximum(pred_gt[:, 1], 1)
+            e_A[idx] = np.mean(absolute_errors)
+            e_R[idx] = np.mean(relative_errors)
+
+    return e_A, e_R
+
+
 class DetMetrics(SimpleClass):
     """
     Utility class for computing detection metrics such as precision, recall, and mean average precision (mAP) of an
@@ -1402,10 +1517,11 @@ class DetMetrics(SimpleClass):
         self.on_plot = on_plot
         self.names = names
         self.box = Metric()
+        self.dist = DistMetrics()
         self.speed = {"preprocess": 0.0, "inference": 0.0, "loss": 0.0, "postprocess": 0.0}
         self.task = "detect"
 
-    def process(self, tp, conf, pred_cls, target_cls):
+    def process(self, tp, conf, pred_cls, target_cls, pred_dist, pred2gt_dist, pred2gt_cls):
         """Process predicted results for object detection and update metrics."""
         results = ap_per_class(
             tp,
@@ -1417,21 +1533,39 @@ class DetMetrics(SimpleClass):
             names=self.names,
             on_plot=self.on_plot,
         )[2:]
-        self.box.nc = len(self.names)
+        nc = len(self.names)
+        self.box.nc = nc
         self.box.update(results)
+        results = get_distance_errors_per_class(pred2gt_dist, pred2gt_cls, pred_dist, target_cls, nc)
+        self.dist.update(results)
 
     @property
     def keys(self):
         """Returns a list of keys for accessing specific metrics."""
-        return ["metrics/precision(B)", "metrics/recall(B)", "metrics/mAP50(B)", "metrics/mAP50-95(B)"]
+        return [
+            "metrics/precision(B)",
+            "metrics/recall(B)",
+            "metrics/mAP50(B)",
+            "metrics/mAP50-95(B)",
+            "metrics/e_A(D)",
+            "metrics/e_R(D)",
+        ]
 
     def mean_results(self):
-        """Calculate mean of detected objects & return precision, recall, mAP50, and mAP50-95."""
-        return self.box.mean_results()
+        """Calculate mean of detected objects & return precision, recall, mAP50, and mAP50-95, mean absolute and relative distance errors."""
+        return self.box.mean_results() + self.dist.mean_results()
 
     def class_result(self, i):
         """Return the result of evaluating the performance of an object detection model on a specific class."""
-        return self.box.class_result(i)
+        return self.box.class_result(i) + self.dist.class_result(i)
+
+    def distance_results(self):
+        """Returns the mean absolute and relative distance errors."""
+        return self.dist.mean_results()
+
+    def distance_class_result(self, i):
+        """Returns the mean absolute and relative distance errors for a specific class."""
+        return self.dist.class_result(i)
 
     @property
     def maps(self):
