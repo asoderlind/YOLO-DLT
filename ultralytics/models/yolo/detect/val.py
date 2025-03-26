@@ -95,7 +95,6 @@ class DetectionValidator(BaseValidator):
             target_cls=[],
             target_img=[],
             pred_dist=[],
-            target_dist=[],
             pred2gt_dist=[],
             pred2gt_cls=[],
         )
@@ -178,7 +177,6 @@ class DetectionValidator(BaseValidator):
             nl = len(cls)  # number of labels
             stat["target_cls"] = cls
             stat["target_img"] = cls.unique()
-            stat["target_dist"] = distances
             if npr == 0:
                 if nl:
                     for k in self.stats.keys():

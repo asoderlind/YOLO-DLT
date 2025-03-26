@@ -1428,7 +1428,6 @@ def get_distance_errors_per_class(
     pred2gt_cls: np.ndarray,
     conf: np.ndarray,
     pred_dist: np.ndarray,
-    target_dist: np.ndarray,
     target_cls: np.ndarray,
     nc: int,
     max_dist: int = 150,
@@ -1448,7 +1447,7 @@ def get_distance_errors_per_class(
         e_A: Mean absolute distance error for each class. (nc,)
         e_R: Mean relative distance error for each class. (nc,)
     """
-    unique_classes, tn = np.unique(target_cls, return_counts=True)
+    unique_classes, _ = np.unique(target_cls, return_counts=True)
 
     # sort by objectness
     i = np.argsort(-conf)
@@ -1529,7 +1528,7 @@ class DetMetrics(SimpleClass):
         self.speed = {"preprocess": 0.0, "inference": 0.0, "loss": 0.0, "postprocess": 0.0}
         self.task = "detect"
 
-    def process(self, tp, conf, pred_cls, target_cls, pred_dist, target_dist, pred2gt_dist, pred2gt_cls):
+    def process(self, tp, conf, pred_cls, target_cls, pred_dist, pred2gt_dist, pred2gt_cls):
         """Process predicted results for object detection and update metrics."""
         results = ap_per_class(
             tp,
@@ -1544,7 +1543,7 @@ class DetMetrics(SimpleClass):
         nc = len(self.names)
         self.box.nc = nc
         self.box.update(results)
-        results = get_distance_errors_per_class(pred2gt_dist, pred2gt_cls, conf, pred_dist, target_dist, target_cls, nc)
+        results = get_distance_errors_per_class(pred2gt_dist, pred2gt_cls, conf, pred_dist, target_cls, nc)
         self.dist.update(results)
 
     @property
