@@ -372,7 +372,7 @@ class TemporalYOLODataset(YOLODataset):
         main_data = super().__getitem__(index)
 
         # Fetch reference frames
-        ref_indices = self.get_reference_frames(index)  # TODO: maybe experiment with global sampling during training?
+        ref_indices = self.get_reference_frames(index)
         ref_data: list[BaseDatasetItem] = []
 
         for _, ref_idx in ref_indices:
@@ -386,15 +386,18 @@ class TemporalYOLODataset(YOLODataset):
         batch: list[tuple[BaseDatasetItem, list[BaseDatasetItem]]], temporal_window: int = 3
     ) -> YOLODatasetitem:  # type: ignore[override]
         all_frames: list[BaseDatasetItem] = []
-
         for batch_idx, (key_frame, ref_frames) in enumerate(batch):
             # add key frame
-            key_frame["batch_idx"] = torch.tensor([batch_idx])
-            key_frame_idx = len(all_frames)
+            # key_frame["batch_idx"] = torch.tensor([batch_idx])
+            key_frame["batch_idx"] = torch.full_like(key_frame["batch_idx"], batch_idx)
+
             all_frames.append(key_frame)
 
             # add reference frames
             for ref_frame in ref_frames:
+                # set to -9999 to indicate that these are reference frames
+                # for easy filtering in the loss function
+                ref_frame["batch_idx"] = torch.full_like(ref_frame["batch_idx"], -9999)
                 all_frames.append(ref_frame)
 
             # pad with zero tensors if we have less than temporal_window frames
@@ -405,6 +408,12 @@ class TemporalYOLODataset(YOLODataset):
             for _ in range(padding_needed):
                 pad_frame = copy.deepcopy(key_frame)
                 pad_frame["img"] = torch.zeros_like(key_frame["img"])  # zero out the image
+
+                # IMPORTANT: Clear all object-related data to avoid mismatch
+                num_instances = 0  # No instances in padding frames
+                pad_frame["cls"] = torch.zeros((num_instances,), dtype=key_frame["cls"].dtype)
+                pad_frame["bboxes"] = torch.zeros((num_instances, 4), dtype=key_frame["bboxes"].dtype)
+                pad_frame["batch_idx"] = torch.zeros((num_instances,), dtype=key_frame["batch_idx"].dtype)
                 all_frames.append(pad_frame)
 
         # collate all frames
