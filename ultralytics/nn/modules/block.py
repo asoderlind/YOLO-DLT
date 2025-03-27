@@ -1748,11 +1748,15 @@ class TemporalAttention(nn.Module):
 
         # PART 1: PREPARATION - Create Q, K, V matrices
         # Transform features to query, key, value representations
-        qkv_cls = self.qkv_cls(x_cls).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        qkv_reg = self.qkv_reg(x_reg).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        qkv_cls = (
+            self.qkv_cls(x_cls).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        )  # [3, B, num_heads, N, C // num_heads]
+        qkv_reg = (
+            self.qkv_reg(x_reg).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        )  # [3, B, num_heads, N, C // num_heads]
 
         # Unpack Q, K, V from qkv tensors
-        q_cls, k_cls, v_cls = qkv_cls[0], qkv_cls[1], qkv_cls[2]
+        q_cls, k_cls, v_cls = qkv_cls[0], qkv_cls[1], qkv_cls[2]  # [B, num_heads, N, C // num_heads]
         q_reg, k_reg, v_reg = qkv_reg[0], qkv_reg[1], qkv_reg[2]  # Use v_cls for both branches
 
         # Normalize features for numerical stability (implementation detail)
@@ -1763,7 +1767,10 @@ class TemporalAttention(nn.Module):
         v_cls_normed: torch.Tensor = v_cls / torch.norm(v_cls, dim=-1, keepdim=True)
 
         # Prepare confidence scores matrix for attention weighting
-        cls_score = torch.reshape(cls_score, [1, 1, 1, -1]).repeat(1, self.num_heads, N, 1)
+        # cls_score = torch.reshape(cls_score, [1, 1, 1, -1]).repeat(1, self.num_heads, N, 1)  # [1, num_heads, N, N]
+        # Assuming cls_score has shape [B, N]
+        cls_score = cls_score.unsqueeze(1).unsqueeze(2)  # [B, 1, 1, N]
+        cls_score = cls_score.repeat(1, self.num_heads, N, 1)  # [B, num_heads, N, N]
 
         # PART 2: AFFINITY MANNER (A.M.) - Section with confidence-weighted attention
         # Compute attention scores for classification branch
@@ -1916,10 +1923,20 @@ class FeatureAggregationModule(nn.Module):
         reg_features: torch.Tensor,
         cls_scores: torch.Tensor,
         boxes: torch.Tensor,
-        simN=30,
-        other_result={},
         use_local_agg: bool = False,
     ):
+        """
+        Forward pass of the Feature Aggregation Module.
+
+        Args:
+            cls_features (torch.tensor):  Classification branch features [B, N, C_cls]
+            reg_features (torch.tensor):  Regression branch features [B, N, C_reg]
+            cls_scores (torch.tensor): Confidence scores for classification [B, N]
+            boxes (torch.tensor): Bounding boxes for the current frame [B, N, 4]
+
+
+
+        """
         B, N, C_cls = cls_features.shape
         _, _, C_reg = reg_features.shape
         # Reshape for 1x1 convolutions (treating the N dimension as height * width)
@@ -1945,17 +1962,16 @@ class FeatureAggregationModule(nn.Module):
         )  # [B, N, 4*common_ch]
 
         # Second feature transformation
-        final_features: torch.Tensor = self.linear2(pooled_cls_features)
+        final_features: torch.Tensor = self.linear2(pooled_cls_features)  # [B, N, 4*common_ch]
 
         # Optional local aggregation for enhanced temporal consistency
-        if not (use_local_agg and other_result != {} and other_result.get("local_results")):
+        if not use_local_agg:
             return final_features, final_features
 
         locally_enhanced_features = self.local_agg(
-            final_features[:simN],
-            other_result["local_results"],
-            boxes[:simN],
-            cls_scores[:simN],
+            final_features,
+            boxes,
+            cls_scores,
         )
         return locally_enhanced_features, final_features
 
@@ -1965,8 +1981,6 @@ class FeatureAggregationModule(nn.Module):
         reg_features: torch.Tensor,
         cls_scores: torch.Tensor,
         boxes: torch.Tensor,
-        simN=30,
-        other_result={},
         use_local_agg: bool = False,
     ):
-        return self.forward(cls_features, reg_features, cls_scores, boxes, simN, other_result, use_local_agg)
+        return self.forward(cls_features, reg_features, cls_scores, boxes, use_local_agg)
