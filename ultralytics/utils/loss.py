@@ -270,10 +270,18 @@ class v8DetectionLoss:
 
     def __call__(self, preds, batch, **kwargs):
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
-        loss = torch.zeros(4, device=self.device)  # box, cls, dfl, con
-        feats = preds[1] if isinstance(preds, tuple) else preds
+        eps = 1e-7
 
-        if self.hyp.temporal:
+        if not self.hyp.temporal:
+            feats = preds[1] if isinstance(preds, tuple) else preds
+            loss = torch.zeros(4, device=self.device)  # box, cls, dfl, con
+        else:
+            loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal_cls
+            start_index = 0 if len(preds) == 3 else 1
+            feats = preds[start_index]
+            refined_cls_preds = preds[start_index + 1]  # which indices out of sum(h_i * w_i) should be used
+            refined_cls_indices = preds[start_index + 2]
+
             # Reference frames batch_idx are set < 0 in the temporal collate function
             key_frame_mask = batch["batch_idx"] >= 0
             # Filter out the reference frames from the batch
@@ -283,10 +291,10 @@ class v8DetectionLoss:
 
         pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
             (self.reg_max * 4, self.nc), 1
-        )
+        )  # [batch_size, 4 * reg_max, sum(h_i * w_i)], [batch_size, nc, sum(h_i * w_i)]
 
-        pred_scores = pred_scores.permute(0, 2, 1).contiguous()
-        pred_distri = pred_distri.permute(0, 2, 1).contiguous()
+        pred_scores = pred_scores.permute(0, 2, 1).contiguous()  # [batch_size, sum(h_i * w_i), nc]
+        pred_distri = pred_distri.permute(0, 2, 1).contiguous()  # [batch_size, sum(h_i * w_i), 4 * reg_max]
 
         dtype = pred_scores.dtype
         batch_size = pred_scores.shape[0]
@@ -312,13 +320,33 @@ class v8DetectionLoss:
             gt_labels,
             gt_bboxes,
             mask_gt,
-        )
+        )  # [batch_size, sum(h_i * w_i), 4], [batch_size, sum(h_i * w_i), nc]
 
         target_scores_sum = max(target_scores.sum(), 1)
 
         # Cls loss
         # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
-        loss[1] = self.bce(pred_scores, target_scores.to(dtype)).sum() / target_scores_sum  # BCE
+        loss[1] = self.bce(pred_scores, target_scores.to(dtype)).sum() / (target_scores_sum + eps)  # BCE
+
+        # Temporal cls loss
+        if self.hyp.temporal:
+            # NOTE: temporal cls loss does not make sense for validation
+            # But I can't be bothered to handle more conditionals
+            # Create batch indices tensor [batch_size, top_k]
+            # Values are the batch index repeated top_k times over the columns
+            batch_indices = (
+                torch.arange(batch_size, device=target_scores.device)
+                .view(-1, 1)
+                .expand(-1, refined_cls_indices.size(1))
+            )
+            # Crazy PyTorch indexing to get the target scores for the key frames
+            # Filter target_scores[batch_indices[i,j], refined_cls_indices[i,j]] for each i, j
+            # Keep other dim the same
+            refined_target_scores = target_scores[batch_indices, refined_cls_indices]
+            refined_target_scores_sum = max(refined_target_scores.sum(), 1)
+            loss[4] = self.bce(refined_cls_preds, refined_target_scores.to(dtype)).sum() / (
+                refined_target_scores_sum + eps
+            )
 
         # Bbox loss
         if fg_mask.sum():
@@ -374,6 +402,8 @@ class v8DetectionLoss:
         loss[1] *= self.hyp.cls  # cls gain
         loss[2] *= self.hyp.dfl  # dfl gain
         loss[3] *= self.hyp.lambda_c  # consistency gain
+        if self.hyp.temporal:
+            loss[4] *= self.hyp.temporal_cls  # temporal cls gain
 
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
 
