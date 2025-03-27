@@ -180,6 +180,8 @@ class TemporalDetect(Detect):
         """Initialize the YOLO Temporal detection layer with specified number of classes and channels."""
         super().__init__(nc, ch)
 
+        self.temporal_window = 2  # TODO: figure out how to set this value as a hyperparameter
+
         # separate reg and cls convs from the final pred layer
         reg_ch = max(16, ch[0] // 4, self.reg_max * 4)
         vid_cls_ch = max(ch[0], min(self.nc, 100))
@@ -200,6 +202,9 @@ class TemporalDetect(Detect):
 
         self.fam = FeatureAggregationModule(cls_ch=vid_cls_ch, reg_ch=reg_ch)
 
+        common_ch = max(reg_ch, vid_cls_ch)
+        self.linear_pred = nn.Linear(4 * common_ch, self.nc)
+
     def bias_init(self):
         """Initialize Detect() biases, WARNING: requires stride availability."""
         m = self  # self.model[-1]  # Detect() module
@@ -212,6 +217,94 @@ class TemporalDetect(Detect):
             for a, b, s in zip(m.one2one_cv2, m.one2one_cv3, m.stride):  # from
                 a[-1].bias.data[:] = 1.0  # box
                 b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+
+    def forward(self, x: list[torch.Tensor]):
+        """Concatenates and returns predicted bounding boxes and class probabilities."""
+
+        # loop over detection layers (usually 3, 80x80, 40x40, 20x20)
+        before_nms_vid_feats: list[torch.Tensor] = []
+        before_nms_reg_feats: list[torch.Tensor] = []
+
+        for i in range(self.nl):
+            reg_feat = self.cv2[i](x[i])
+            vid_cls_feat = self.vid_cls[i](x[i])
+
+            # store features for FSM
+            before_nms_vid_feats.append(vid_cls_feat)
+            before_nms_reg_feats.append(reg_feat)
+
+            # same as original model:
+            reg_out = self.cv2_pred[i](reg_feat)
+            cls_out = self.cv3[i](x[i])
+            x[i] = torch.cat((reg_out, cls_out), 1)
+
+        # flatten features for FSM
+        flat_vid_features = torch.cat(
+            [feat.flatten(2).permute(0, 2, 1) for feat in before_nms_vid_feats], dim=1
+        )  # [batch_size, sum(h_i*w_i), num_classes]
+        flat_reg_features = torch.cat(
+            [feat.flatten(2).permute(0, 2, 1) for feat in before_nms_reg_feats], dim=1
+        )  # [batch_size, sum(h_i*w_i), 4 * reg_max]
+
+        # model base predictions
+        raw_predictions = self._inference(x)  # [bs, 4 + num_classes, sum_i(w_i * h_i)]
+
+        # Apply FSM (Feature Selection Module)
+        # selected_cls_feats: [batch_size, topk_post, cls_ch]
+        # selected_reg_feats: [batch_size, topk_post, reg_ch]
+        # selected_boxes: [batch_size, topk_post, 4]
+        # selected_scores: [batch_size, topk_post]
+        # selected_indices: [batch_size, topk_post]
+        selected_cls_feats, selected_reg_feats, selected_boxes, selected_scores, selected_indices = self.FSM(
+            raw_predictions, flat_vid_features, flat_reg_features
+        )
+
+        # split up the batch into individual key_frame-reference pairs
+        # for each pair, apply temporal aggregation
+
+        batch_size = selected_cls_feats.shape[0]
+
+        # Iterate with temporal_window+1 sized steps to process each key frame with its reference frames
+
+        enhanced_batch_cls_feats: list[torch.Tensor] = []
+        key_frame_indices_list: list[torch.Tensor] = []
+        for b in range(0, batch_size, self.temporal_window + 1):
+            single_cls_feats = selected_cls_feats[b : b + 1 + self.temporal_window]
+            single_reg_feats = selected_reg_feats[b : b + 1 + self.temporal_window]
+            single_boxes = selected_boxes[b : b + 1 + self.temporal_window]
+            single_scores = selected_scores[b : b + 1 + self.temporal_window]
+            single_indices = selected_indices[b : b + 1 + self.temporal_window]
+
+            # Apply temporal aggregation
+            # [B, N, 4*common_ch], [B, N, 4*common_ch]
+            single_aggr_cls_features, _ = self.fam(
+                cls_features=single_cls_feats,
+                reg_features=single_reg_feats,
+                cls_scores=single_scores,
+                boxes=single_boxes,
+            )
+
+            # Append to results, only keep key frame results
+            enhanced_batch_cls_feats.append(single_aggr_cls_features[0:1])  # range keeps the batch dimension
+            key_frame_indices_list.append(single_indices[0:1])
+
+        # Concatenate all the results
+        enhanced_cls_feats = torch.cat(enhanced_batch_cls_feats, dim=0)  # [batch_size, topk_post, common_ch]
+        key_frame_indices = torch.cat(key_frame_indices_list, dim=0)  # [batch_size, topk_post]
+        # Apply final linear layer
+        final_cls_preds = self.linear_pred(enhanced_cls_feats)  # [batch_size, topk_post, num_classes]
+
+        # Filter out ref frames from x
+        key_frame_indices = torch.arange(0, batch_size, self.temporal_window + 1, device=x[0].device)
+        x = [x[i][key_frame_indices] for i in range(len(x))]
+
+        # WORK IN PROGRESS
+        if self.training:  # Training path
+            return final_cls_preds, x  # this way x will still be index 1 in the return tuple
+
+        # INFERENCE IS DEFINITELY NOT WORKING YET
+        y = self._inference(x)  # [bs, 4 + num_classes, sum_i(w_i * h_i)]
+        return y if self.export else (y, x)
 
     def FSM(
         self,
@@ -254,7 +347,6 @@ class TemporalDetect(Detect):
         selected_boxes: list[torch.Tensor] = []
         selected_scores: list[torch.Tensor] = []
         selected_indices: list[torch.Tensor] = []
-        breakpoint()
         # Process for each batch
         for b in range(batch_size):
             pred = predictions[b]  # [sum(h_i*w_i), 4+nc]
@@ -314,54 +406,6 @@ class TemporalDetect(Detect):
             torch.stack(selected_scores),
             torch.stack(selected_indices),
         )
-
-    def forward(self, x: list[torch.Tensor]):
-        """Concatenates and returns predicted bounding boxes and class probabilities."""
-
-        # loop over detection layers (usually 3, 80x80, 40x40, 20x20)
-        before_nms_vid_feats: list[torch.Tensor] = []
-        before_nms_reg_feats: list[torch.Tensor] = []
-
-        for i in range(self.nl):
-            reg_feat = self.cv2[i](x[i])
-            vid_cls_feat = self.vid_cls[i](x[i])
-
-            # store features for FSM
-            before_nms_vid_feats.append(vid_cls_feat)
-            before_nms_reg_feats.append(reg_feat)
-
-            # same as original model:
-            reg_out = self.cv2_pred[i](reg_feat)
-            cls_out = self.cv3[i](x[i])
-            x[i] = torch.cat((reg_out, cls_out), 1)
-
-        # flatten features for FSM
-        flat_vid_features = torch.cat(
-            [feat.flatten(2).permute(0, 2, 1) for feat in before_nms_vid_feats], dim=1
-        )  # [batch_size, sum(h_i*w_i), num_classes]
-        flat_reg_features = torch.cat(
-            [feat.flatten(2).permute(0, 2, 1) for feat in before_nms_reg_feats], dim=1
-        )  # [batch_size, sum(h_i*w_i), 4 * reg_max]
-
-        # model base predictions
-        raw_predictions = self._inference(x)  # [bs, 4 + num_classes, sum_i(w_i * h_i)]
-
-        # Apply FSM (Feature Selection Module)
-        selected_cls_feats, selected_reg_feats, selected_boxes, selected_scores, selected_indices = self.FSM(
-            raw_predictions, flat_vid_features, flat_reg_features
-        )
-
-        self.fam(
-            cls_features=selected_cls_feats,
-            reg_features=selected_reg_feats,
-            cls_scores=selected_scores,
-            boxes=selected_boxes,
-        )
-
-        if self.training:  # Training path
-            return x
-        y = self._inference(x)
-        return y if self.export else (y, x)
 
 
 class Segment(Detect):
