@@ -176,11 +176,11 @@ class Detect(nn.Module):
 class TemporalDetect(Detect):
     """YOLO Temporal detection head for video models."""
 
+    temporal_window = 2  # default temporal window
+
     def __init__(self, nc=80, ch=()):
         """Initialize the YOLO Temporal detection layer with specified number of classes and channels."""
         super().__init__(nc, ch)
-
-        self.temporal_window = 2  # TODO: figure out how to set this value as a hyperparameter
 
         # separate reg and cls convs from the final pred layer
         reg_ch = max(16, ch[0] // 4, self.reg_max * 4)
@@ -220,6 +220,7 @@ class TemporalDetect(Detect):
 
     def forward(self, x: list[torch.Tensor]):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
+        print("TEMPORAL WINDOW", self.temporal_window)
 
         # loop over detection layers (usually 3, 80x80, 40x40, 20x20)
         before_nms_vid_feats: list[torch.Tensor] = []
