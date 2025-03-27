@@ -272,6 +272,15 @@ class v8DetectionLoss:
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
         loss = torch.zeros(4, device=self.device)  # box, cls, dfl, con
         feats = preds[1] if isinstance(preds, tuple) else preds
+
+        if self.hyp.temporal:
+            # Reference frames batch_idx are set < 0 in the temporal collate function
+            key_frame_mask = batch["batch_idx"] >= 0
+            # Filter out the reference frames from the batch
+            batch["batch_idx"] = batch["batch_idx"][key_frame_mask]
+            batch["cls"] = batch["cls"][key_frame_mask]
+            batch["bboxes"] = batch["bboxes"][key_frame_mask]
+
         pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
             (self.reg_max * 4, self.nc), 1
         )
