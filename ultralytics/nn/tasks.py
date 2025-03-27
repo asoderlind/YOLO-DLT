@@ -350,7 +350,7 @@ class DetectionModel(BaseModel):
 
             # The temporal model returns a tuple even during training
             if isinstance(_forward(torch.zeros(1, ch, s, s)), tuple):
-                m.stride = torch.tensor([s / x.shape[-2] for x in _forward(torch.zeros(1, ch, s, s))[1]])
+                m.stride = torch.tensor([s / x.shape[-2] for x in _forward(torch.zeros(1, ch, s, s))[0]])
             else:
                 m.stride = torch.tensor([s / x.shape[-2] for x in _forward(torch.zeros(1, ch, s, s))])  # forward
             self.stride = m.stride
