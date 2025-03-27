@@ -143,17 +143,13 @@ scale = 0.0
 mosaic = 1.0
 confs = [
     {
-        'd': 0.025, 'useDist': True, 
-        'dataPath': 'waymo-noConf.yaml', 
-        'model_path': "runs/detect/waymo-noConf.yaml-yolo11n.pt-100e-SGD-dist-scale0.0-mosaic1.0-noDontCare-d0.025_/weights/last.pt"
+        "d": 0.025,
+        "useDist": True,
+        "dataPath": "waymo-noConf.yaml",
+        "model_path": "runs/detect/waymo-noConf.yaml-yolo11n.pt-100e-SGD-dist-scale0.0-mosaic1.0-noDontCare-d0.025_/weights/last.pt",
     },
-    {
-        'd': 0, 
-        'useDist': False, 
-        'dataPath': 'waymo-noConf.yaml',
-        'model_path': "yolo11n.pt"
-    }
-    ]
+    {"d": 0, "useDist": False, "dataPath": "waymo-noConf.yaml", "model_path": "yolo11n.pt"},
+]
 
 # model_path=f"{name}/weights/last.py"
 <<<<<<< HEAD
@@ -181,11 +177,11 @@ model.train(
 for d in ds:
 =======
 for conf in confs:
-    d = conf['d']
-    use_dist = conf['useDist']
-    data_path = conf['dataPath']
-    model_path = conf['model_path']
-    
+    d = conf["d"]
+    use_dist = conf["useDist"]
+    data_path = conf["dataPath"]
+    model_path = conf["model_path"]
+
     resume = model_path != "yolo11n.pt"
 
 >>>>>>> 6a83822a (mod8)
@@ -209,6 +205,6 @@ for conf in confs:
         use_dist=use_dist,
         dist=d,
         resume=resume,
-        classes=[0,1,2,3,4,5,6,7]
+        classes=[0, 1, 2, 3, 4, 5, 6, 7],
     )
 >>>>>>> 5969bc06 (merge)
