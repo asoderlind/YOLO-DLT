@@ -803,7 +803,12 @@ class Model(torch.nn.Module):
         self.trainer = (trainer or self._smart_load("trainer"))(overrides=args, _callbacks=self.callbacks)
         if not args.get("resume"):  # manually set model only if not resuming
             self.trainer.model = self.trainer.get_model(weights=self.model if self.ckpt else None, cfg=self.model.yaml)
-            self.model = self.trainer.model
+            # Hack to set the temporal window if temporal is enabled
+            # This is ugly, but at least for the user it will work as expected
+            # Please, please, please don't forget that this is not implemented for the val() method
+            if args.get("temporal") and args.get("temporal_window"):
+                self.trainer.model.model[-1].temporal_window = args["temporal_window"]
+                self.model = self.trainer.model
 
         self.trainer.hub_session = self.session  # attach optional HUB session
         self.trainer.train()
