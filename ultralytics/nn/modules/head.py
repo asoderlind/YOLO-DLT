@@ -295,16 +295,20 @@ class TemporalDetect(Detect):
         final_cls_preds = self.linear_pred(enhanced_cls_feats)  # [batch_size, topk_post, num_classes]
 
         # Filter out ref frames from x
-        key_frame_indices = torch.arange(0, batch_size, self.temporal_window + 1, device=x[0].device)
-        x = [x[i][key_frame_indices] for i in range(len(x))]
+        key_frame_batch_indices = torch.arange(0, batch_size, self.temporal_window + 1, device=x[0].device)
+        x = [x[i][key_frame_batch_indices] for i in range(len(x))]
 
         # WORK IN PROGRESS
         if self.training:  # Training path
-            return final_cls_preds, x  # this way x will still be index 1 in the return tuple
+            return (
+                x,
+                final_cls_preds,
+                key_frame_indices,
+            )  # this way x will still be index 1 in the return tuple
 
         # INFERENCE IS DEFINITELY NOT WORKING YET
-        y = self._inference(x)  # [bs, 4 + num_classes, sum_i(w_i * h_i)]
-        return y if self.export else (y, x)
+        y = self._temporal_inference(x, final_cls_preds, key_frame_indices)  # [bs, 4 + num_classes, sum_i(w_i * h_i)]
+        return y if self.export else (y, x, final_cls_preds, key_frame_indices)
 
     def FSM(
         self,
@@ -347,6 +351,7 @@ class TemporalDetect(Detect):
         selected_boxes: list[torch.Tensor] = []
         selected_scores: list[torch.Tensor] = []
         selected_indices: list[torch.Tensor] = []
+
         # Process for each batch
         for b in range(batch_size):
             pred = predictions[b]  # [sum(h_i*w_i), 4+nc]
@@ -359,8 +364,6 @@ class TemporalDetect(Detect):
             max_scores, cls_ids = scores.max(dim=1)  # [sum(h_i*w_i)], [sum(h_i*w_i)]
 
             # Get top-k predictions by confidence
-            # topk_values contains indices into the original predictions
-            # Ex: topk_values = [0, 2, 4] means that the 0th, 2nd, and 4th predictions have the highest confidence scores
             if len(max_scores) > topk_pre:
                 topk_values, topk_indices = torch.topk(max_scores, topk_pre)
             else:
@@ -368,8 +371,6 @@ class TemporalDetect(Detect):
                 topk_values = max_scores[topk_indices]
 
             # Apply NMS
-            # nms_indices will be the indices of the top-k boxes that cleared the nms threshold
-            # Ex: nms_indices = [0, 2] means that the 0th and 2nd elements of topk_indices cleared the nms threshold
             nms_indices = batched_nms(
                 boxes[topk_indices],
                 topk_values,
@@ -377,12 +378,44 @@ class TemporalDetect(Detect):
                 nms_thresh,
             )
 
-            # Limit to topk_post predictions
-            if len(nms_indices) > topk_post:
-                nms_indices = nms_indices[:topk_post]
+            # Handle case where NMS returns fewer indices than topk_post
+            # TODO: put this in a _get_final_indices() function
+            if len(nms_indices) < topk_post:
+                # If we have no boxes passing NMS threshold, use top confident boxes without NMS
+                if len(nms_indices) == 0:
+                    final_indices = topk_indices[:topk_post]  # Just use top confident boxes
+                else:
+                    # We have some boxes passing NMS but not enough
+                    # First take all boxes that passed NMS
+                    final_indices = topk_indices[nms_indices]
 
-            # Get final indices
-            final_indices = topk_indices[nms_indices]
+                    # Then add additional boxes from topk to reach topk_post
+                    # Create mask to exclude already selected indices
+                    mask = torch.ones(len(topk_indices), dtype=torch.bool, device=device)
+                    mask[nms_indices] = False
+
+                    # Get remaining indices that weren't selected by NMS
+                    remaining = topk_indices[mask]
+
+                    # Select additional boxes needed
+                    additional_needed = topk_post - len(final_indices)
+                    if len(remaining) > 0:
+                        # Add more boxes to reach topk_post
+                        additional_indices = remaining[:additional_needed]
+                        final_indices = torch.cat([final_indices, additional_indices])
+                    else:
+                        # If somehow we don't have enough remaining boxes, repeat the last one
+                        last_idx = final_indices[-1] if len(final_indices) > 0 else topk_indices[0]
+                        padding = last_idx.repeat(additional_needed)
+                        final_indices = torch.cat([final_indices, padding])
+            else:
+                # Limit to topk_post predictions (original code path)
+                if len(nms_indices) > topk_post:
+                    nms_indices = nms_indices[:topk_post]
+                final_indices = topk_indices[nms_indices]
+
+            # Ensure we have exactly topk_post indices
+            assert len(final_indices) == topk_post, f"Expected {topk_post} indices, got {len(final_indices)}"
 
             # Extract features directly using final indices
             batch_cls_features = vid_fetures[b, final_indices]
@@ -406,6 +439,58 @@ class TemporalDetect(Detect):
             torch.stack(selected_scores),
             torch.stack(selected_indices),
         )
+
+    def _temporal_inference(self, x: list[torch.Tensor], refined_cls: torch.Tensor, refined_cls_indices: torch.Tensor):
+        """Decode predicted bounding boxes and class probabilities based on multiple-level feature maps.
+
+        Args:
+            x (list[torch.Tensor]): List of feature maps from the model [batch_size, 4 * reg_max + nc, h_i, w_i]
+            refined_cls (torch.Tensor): Refined classification features [batch_size, topk_post, C]
+            refined_cls_indices (torch.Tensor): Indices of refined classification features [batch_size, topk_post]
+
+        """
+        # Inference path
+        shape = x[0].shape  # BCHW
+        x_cat = torch.cat([xi.view(shape[0], self.no, -1) for xi in x], 2)  # [batch_size, 4*reg_max + nc, sum(h_i*w_i)]
+        if self.format != "imx" and (self.dynamic or self.shape != shape):
+            self.anchors, self.strides = (x.transpose(0, 1) for x in make_anchors(x, self.stride, 0.5))
+            self.shape = shape
+
+        if self.export and self.format in {"saved_model", "pb", "tflite", "edgetpu", "tfjs"}:  # avoid TF FlexSplitV ops
+            box = x_cat[:, : self.reg_max * 4]
+            cls = x_cat[:, self.reg_max * 4 :]
+        else:
+            box, cls = x_cat.split(
+                (self.reg_max * 4, self.nc), 1
+            )  # [batch_size, 4*reg_max, sum(h_i*w_i)], [batch_size, nc, sum(h_i*w_i)]
+
+            # insert the refined classification features at the right indices
+            cls = cls.transpose(1, 2)  # [batch_size, sum(h_i*w_i), nc]
+            batch_idx = (
+                torch.arange(cls.shape[0], device=cls.device).unsqueeze(-1).expand(-1, refined_cls_indices.shape[1])
+            )  # [batch_size, topk_post] where each row is the batch index
+            cls[batch_idx, refined_cls_indices] = (
+                refined_cls  # [batch_size, sum(h_i*w_i), nc] but with refined cls at the right indices
+            )
+            cls = cls.transpose(1, 2)  # [batch_size, nc, sum(h_i*w_i)]
+
+        if self.export and self.format in {"tflite", "edgetpu"}:
+            # Precompute normalization factor to increase numerical stability
+            # See https://github.com/ultralytics/ultralytics/issues/7371
+            grid_h = shape[2]
+            grid_w = shape[3]
+            grid_size = torch.tensor([grid_w, grid_h, grid_w, grid_h], device=box.device).reshape(1, 4, 1)
+            norm = self.strides / (self.stride[0] * grid_size)
+            dbox = self.decode_bboxes(self.dfl(box) * norm, self.anchors.unsqueeze(0) * norm[:, :2])
+        elif self.export and self.format == "imx":
+            dbox = self.decode_bboxes(
+                self.dfl(box) * self.strides, self.anchors.unsqueeze(0) * self.strides, xywh=False
+            )
+            return dbox.transpose(1, 2), cls.sigmoid().permute(0, 2, 1)
+        else:
+            dbox = self.decode_bboxes(self.dfl(box), self.anchors.unsqueeze(0)) * self.strides
+
+        return torch.cat((dbox, cls.sigmoid()), 1)
 
 
 class Segment(Detect):
