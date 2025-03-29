@@ -51,6 +51,7 @@ from .block import (
     CBFuse,
     CBLinear,
     ContrastiveHead,
+    EfficientFEM,
     GhostBottleneck,
     HGBlock,
     HGStem,
@@ -188,4 +189,5 @@ __all__ = (
     "LDConv",
     "HybridConv",
     "FA",
+    "EfficientFEM",
 )

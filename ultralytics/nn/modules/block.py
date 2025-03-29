@@ -1247,6 +1247,65 @@ class FEM(nn.Module):
         return self.forward(x)
 
 
+class EfficientFEM(nn.Module):
+    """
+    Efficient Feature Enhancement Module (FEM) block.
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int = 3,
+        padding: int | None = None,
+        stride: int = 1,
+        dilation_1: int = 1,
+        dilation_2: int = 3,
+        dilation_3: int = 5,
+    ):
+        super().__init__()
+        self.conv1 = DWConv(
+            c1=in_channels,
+            c2=out_channels,
+            k=kernel_size,
+            s=stride,
+            d=dilation_1,
+            act=nn.ReLU(),
+        )
+        self.conv2 = DWConv(
+            c1=in_channels,
+            c2=out_channels,
+            k=kernel_size,
+            s=stride,
+            d=dilation_2,
+            act=nn.ReLU(),
+        )
+        self.conv3 = DWConv(
+            c1=in_channels,
+            c2=out_channels,
+            k=kernel_size,
+            s=stride,
+            d=dilation_3,
+            act=nn.ReLU(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of the FEM block.
+
+        Args:
+            x (torch.Tensor): Input tensor with shape [b, in_c, h, w]
+        Returns:
+            out (torch.Tensor): Output tensor with shape [b, out_c, h, w]
+        """
+
+        # branch pooled features through 3 convolutions
+        return (self.conv1(x) + self.conv2(x) + self.conv3(x)) / 3
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        return self.forward(x)
+
+
 class SE(nn.Module):
     """
     Squeeze and Excitation (SE) block.
