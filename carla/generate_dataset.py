@@ -155,18 +155,18 @@ def main(client, selected_map="Town01"):
                                 y_min = p[1]
 
                         # Add the object to the frame and clamp the values to the image size
-                        x_min = max(0, x_min)
-                        x_max = min(image_w, x_max)
-                        y_min = max(0, y_min)
-                        y_max = min(image_h, y_max)
-                        # if x_min > 0 and x_max < image_w and y_min > 0 and y_max < image_h:
-                        x_center = ((x_min + x_max) / 2) / image_w
-                        y_center = ((y_min + y_max) / 2) / image_h
-                        box_width = (x_max - x_min) / image_w
-                        box_height = (y_max - y_min) / image_h
-                        output_lines.append(
-                            f"0 {x_center:6f} {y_center:.6f} {box_width:.6f} {box_height:.6f} {dist:.6f}"
-                        )
+                        # x_min = max(0, x_min)
+                        # x_max = min(image_w, x_max)
+                        # y_min = max(0, y_min)
+                        # y_max = min(image_h, y_max)
+                        if x_min > 0 and x_max < image_w and y_min > 0 and y_max < image_h:
+                            x_center = ((x_min + x_max) / 2) / image_w
+                            y_center = ((y_min + y_max) / 2) / image_h
+                            box_width = (x_max - x_min) / image_w
+                            box_height = (y_max - y_min) / image_h
+                            output_lines.append(
+                                f"0 {x_center:6f} {y_center:.6f} {box_width:.6f} {box_height:.6f} {dist:.6f}"
+                            )
 
         # Save the bounding boxes in the scene
         with open(frame_path_label, "w") as f:
