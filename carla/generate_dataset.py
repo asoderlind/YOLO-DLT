@@ -8,7 +8,7 @@ import random
 import numpy as np
 import carla
 
-FRAME_COUNT = 500
+FRAME_COUNT = 2000
 
 cls2id = {
     'car': 0,
@@ -51,7 +51,7 @@ def get_image_point(loc, K, w2c):
     return point_img[0:2]
 
 
-def main(client, selected_map="Town01"):
+def main(client, selected_map="Town01", train_set='train'):
     # get unique id for each video
     video_id = str(int(time.time()))
     current_frame = 0
@@ -115,8 +115,8 @@ def main(client, selected_map="Town01"):
         world.tick()
         image = image_queue.get()
         output_folder = "/home/phoawb/repos/yolo-testing/datasets/carla-yolo"
-        images_folder = os.path.join(output_folder, "images")
-        labels_folder = os.path.join(output_folder, "labels")
+        images_folder = os.path.join(output_folder, "images", train_set)
+        labels_folder = os.path.join(output_folder, "labels", train_set)
 
         if not os.path.exists(images_folder):
             os.makedirs(images_folder)
@@ -197,7 +197,8 @@ def main(client, selected_map="Town01"):
 if __name__ == "__main__":
     client = carla.Client("localhost", 2000)
     available_maps = client.get_available_maps()
+    train_set = "train"
     for map_name in available_maps:
         print("Available map:", map_name)
     selected_map = random.choice(available_maps)
-    main(client, selected_map)
+    main(client, selected_map, train_set)
