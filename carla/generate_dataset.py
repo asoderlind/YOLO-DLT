@@ -10,6 +10,15 @@ import carla
 
 FRAME_COUNT = 500
 
+cls2id = {
+    'car': 0,
+    'truck': 1,
+    'van': 2,
+    'bus': 3,
+    'motorcycle': 4,
+    'bicycle': 5,
+}
+
 
 def build_projection_matrix(w, h, fov):
     focal = w / (2.0 * np.tan(fov * np.pi / 360.0))
@@ -137,7 +146,7 @@ def main(client, selected_map="Town01"):
                     forward_vec = vehicle.get_transform().get_forward_vector()
                     ray = npc.get_transform().location - vehicle.get_transform().location
                     if forward_vec.dot(ray) > 1:
-                        p1 = get_image_point(bb.location, K, world_2_camera)
+                        # p1 = get_image_point(bb.location, K, world_2_camera)
                         verts = [v for v in bb.get_world_vertices(npc.get_transform())]
                         x_max = -10000
                         x_min = 10000
@@ -164,8 +173,10 @@ def main(client, selected_map="Town01"):
                             y_center = ((y_min + y_max) / 2) / image_h
                             box_width = (x_max - x_min) / image_w
                             box_height = (y_max - y_min) / image_h
+                            vehicle_type = bp_lib.find(npc.type_id).get_attribute('base_type').as_str()
+                            vehicle_id = cls2id.get(vehicle_type)
                             output_lines.append(
-                                f"0 {x_center:6f} {y_center:.6f} {box_width:.6f} {box_height:.6f} {dist:.6f}"
+                                f"{vehicle_id} {x_center:6f} {y_center:.6f} {box_width:.6f} {box_height:.6f} {dist:.6f}"
                             )
 
         # Save the bounding boxes in the scene
