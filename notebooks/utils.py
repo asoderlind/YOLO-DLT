@@ -17,27 +17,32 @@ def draw_yolo_bboxes(image_path, label_path, w=1280, h=720, id2cls={0: "person"}
         data_lines = f.readlines()
 
     bboxes = []
+    distances = []
 
     for item in range(len(data_lines)):
-        cl = int(data_lines[item].split(" ")[0])
-        a = float(data_lines[item].split(" ")[1])
-        b = float(data_lines[item].split(" ")[2])
-        c = float(data_lines[item].split(" ")[3])
-        d = float(data_lines[item].split(" ")[4][:-1])
+        if len(data_lines[item].split(" ")) == 5:
+            cl, a, b, c, d = data_lines[item].split(" ")
+            cl = int(cl)
+            e = None
+        if len(data_lines[item].split(" ")) == 6:
+            cl, a, b, c, d, e = data_lines[item].split(" ")
+            cl = int(cl)
+            e = float(e)
 
-        x1 = int((a - c / 2) * w)
-        y1 = int((b - d / 2) * h)
-        x2 = int((a + c / 2) * w)
-        y2 = int((b + d / 2) * h)
+        x1 = int((float(a) - float(c) / 2) * float(w))
+        y1 = int((float(b) - float(d) / 2) * float(h))
+        x2 = int((float(a) + float(c) / 2) * float(w))
+        y2 = int((float(b) + float(d) / 2) * float(h))
 
         bboxes.append([x1, y1, x2, y2, cl])
+        distances.append(e)
 
-    for c in bboxes:
+    for c, d in zip(bboxes, distances):
         cv2.rectangle(img, (c[0], c[1]), (c[2], c[3]), (0, 255, 0), 2)
         _class = id2cls[c[4]] if c[4] in id2cls else str(c[4])
         cv2.putText(
             img,
-            str(_class),
+            f"{_class},{d if d is not None else ''}",
             (int((c[0] + c[2]) / 2), int((c[1] + c[3]) / 2)),
             0,
             text_size,
