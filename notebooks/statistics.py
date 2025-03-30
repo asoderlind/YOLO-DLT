@@ -1,4 +1,5 @@
 import glob
+import argparse
 
 
 def get_statistics(dataset_path, image_formats=["jpg"]) -> dict:
@@ -87,8 +88,15 @@ def get_statistics(dataset_path, image_formats=["jpg"]) -> dict:
 # stats = get_statistics('../../yolo-testing/datasets/night_Australia')
 # stats = get_statistics('../../yolo-testing/datasets/night_only_Canada')
 # stats = get_statistics('../../yolo-testing/datasets/night_only_China')
+parser = argparse.ArgumentParser(description="Run statistics on dataset")
+
+parser.add_argument("--name", type=str, default="bdd100k_night")
+
+args = parser.parse_args()
+
 stats = get_statistics(
-    "../../yolo-testing/datasets/carla-yolo", image_formats=["png"]
+    f"../../yolo-testing/datasets/{args.name}", image_formats=["jpg", "jpeg", "png"]
 )
+
 for key, value in stats.items():
     print(f"{key}: {value}")
