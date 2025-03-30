@@ -11,13 +11,13 @@ scale = 0.0
 mosaic = 1.0
 confs = [
     {
-        'd': 0.025, 'useDist': True, 
-        'dataPath': 'waymo-noConf.yaml', 
-        'model_path': "runs/detect/waymo-noConf.yaml-yolo11n.pt-100e-SGD-dist-scale0.0-mosaic1.0-noDontCare-d0.025_/weights/last.pt"
+        'd': 0.05, 'useDist': True,
+        'dataPath': 'waymo-noConf.yaml',
+        'model_path': "yolo11n.pt"
     },
     {
-        'd': 0, 
-        'useDist': False, 
+        'd': 0,
+        'useDist': False,
         'dataPath': 'waymo-noConf.yaml',
         'model_path': "yolo11n.pt"
     }
@@ -29,7 +29,6 @@ for conf in confs:
     use_dist = conf['useDist']
     data_path = conf['dataPath']
     model_path = conf['model_path']
-    
     resume = model_path != "yolo11n.pt"
 
     model = YOLO(model_path)
