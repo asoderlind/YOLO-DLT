@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import argparse
 import queue
 import os
 import glob
@@ -7,8 +8,6 @@ import time
 import random
 import numpy as np
 import carla
-
-FRAME_COUNT = 2000
 
 cls2id = {
     'car': 0,
@@ -51,12 +50,12 @@ def get_image_point(loc, K, w2c):
     return point_img[0:2]
 
 
-def main(client, selected_map="Town01", train_set='train'):
+def main(client, frame_count, selected_map, train_set):
+    print(f"Running with:\n- Map: {selected_map}\n- Frames: {frame_count}\n- Train set: {train_set}")
     # get unique id for each video
     video_id = str(int(time.time()))
     current_frame = 0
     world = client.load_world(selected_map)
-    print("Selected map:", selected_map)
 
     weather = world.get_weather()
     weather.sun_altitude_angle = -90
@@ -174,7 +173,12 @@ def main(client, selected_map="Town01", train_set='train'):
                             box_width = (x_max - x_min) / image_w
                             box_height = (y_max - y_min) / image_h
                             vehicle_type = bp_lib.find(npc.type_id).get_attribute('base_type').as_str()
-                            vehicle_id = cls2id.get(vehicle_type)
+                            if vehicle_type not in cls2id:
+                                breakpoint()
+                            if npc.type_id == 'vehicle.bmw.grandtourer':
+                                vehicle_id = 0
+                            else:
+                                vehicle_id = cls2id.get(vehicle_type.lower())
                             output_lines.append(
                                 f"{vehicle_id} {x_center:6f} {y_center:.6f} {box_width:.6f} {box_height:.6f} {dist:.6f}"
                             )
@@ -190,15 +194,23 @@ def main(client, selected_map="Town01", train_set='train'):
             len(glob.glob(labels_folder + "/*.txt")),
         )
 
-        if current_frame > FRAME_COUNT:
+        if current_frame > frame_count:
             break
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run CARLA simulation with configurable settings.")
+    parser.add_argument("--frames", type=int, default=500, help="Number of frames to run")
+    parser.add_argument("--map", type=str, help="Specify a CARLA map (random if not provided)")
+    parser.add_argument("--train_set", type=str, default="train", help="Specify the training set")
+
+    args = parser.parse_args()
+
     client = carla.Client("localhost", 2000)
     available_maps = client.get_available_maps()
-    train_set = "train"
+
     for map_name in available_maps:
         print("Available map:", map_name)
-    selected_map = random.choice(available_maps)
-    main(client, selected_map, train_set)
+
+    selected_map = args.map if args.map else random.choice(available_maps)  # Use user-specified or random map
+    main(client, args.frames, selected_map, args.train_set)
