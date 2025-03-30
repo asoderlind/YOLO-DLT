@@ -194,7 +194,7 @@ def main(client, frame_count, selected_map, train_set):
             len(glob.glob(labels_folder + "/*.txt")),
         )
 
-        if current_frame > frame_count:
+        if current_frame >= frame_count:
             break
 
 
@@ -203,6 +203,7 @@ if __name__ == "__main__":
     parser.add_argument("--frames", type=int, default=500, help="Number of frames to run")
     parser.add_argument("--map", type=str, help="Specify a CARLA map (random if not provided)")
     parser.add_argument("--train_set", type=str, default="train", help="Specify the training set")
+    parser.add_argument("--iterations", type=int, default=1, help="re-run number of times")
 
     args = parser.parse_args()
 
@@ -212,5 +213,7 @@ if __name__ == "__main__":
     for map_name in available_maps:
         print("Available map:", map_name)
 
-    selected_map = args.map if args.map else random.choice(available_maps)  # Use user-specified or random map
-    main(client, args.frames, selected_map, args.train_set)
+    for i in range(args.iterations):
+        print(f"Iteration {i+1} out of {args.iterations}")
+        selected_map = args.map if args.map else random.choice(available_maps)
+        main(client, args.frames, selected_map, args.train_set)

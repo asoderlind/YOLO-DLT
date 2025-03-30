@@ -82,13 +82,13 @@ def get_statistics(dataset_path, image_formats=["jpg"]) -> dict:
     return statistics
 
 
-# stats = get_statistics('../../yolo-testing/datasets/bdd100k_night')
+#stats = get_statistics('../../yolo-testing/datasets/bdd100k_night')
 # stats = get_statistics('../../yolo-testing/datasets/waymo_open_dataset', image_format="jpeg")
 # stats = get_statistics('../../yolo-testing/datasets/night_Australia')
 # stats = get_statistics('../../yolo-testing/datasets/night_only_Canada')
 # stats = get_statistics('../../yolo-testing/datasets/night_only_China')
 stats = get_statistics(
-    "../../yolo-testing/datasets/exDark-yolo", image_formats=["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"]
+    "../../yolo-testing/datasets/carla-yolo", image_formats=["png"]
 )
 for key, value in stats.items():
     print(f"{key}: {value}")
