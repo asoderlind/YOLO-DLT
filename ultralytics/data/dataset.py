@@ -234,31 +234,15 @@ class YOLODataset(BaseDataset):
         """Collates data samples into batches."""
         new_batch = {}
         keys = batch[0].keys()
-        # Check if we are using distances
-        if "distances" in keys and len(batch[0]["distances"]) > 0:
-            # convert to tensor if not manually because the torch dataloader handles the other ones automatically
-            if type(batch[0]["distances"]) != torch.Tensor:
-                for b in batch:
-                    device = b["bboxes"].device
-                    dist = torch.tensor(b["distances"]).to(device)
-                    if dist.numel() == 0 or dist.shape == torch.Size([0, 0]):
-                        dist = torch.empty((0, 1), dtype=dist.dtype, device=dist.device)
-                    b["distances"] = dist
         values = list(zip(*[list(b.values()) for b in batch]))
         for i, k in enumerate(keys):
             value = values[i]
             if k == "img" or k == "img_enhanced":
                 value = torch.stack(value, 0)
-            if k in {"masks", "keypoints", "bboxes", "cls", "segments", "obb", "distances"}:
-                try:
-                    value = torch.cat(value, 0)
-                except TypeError:
-                    # hack that is needed for the case where the list is empty
-                    mylist = [torch.from_numpy(v) for v in value if len(v) > 0]
-                    if len(mylist) > 0:
-                        value = torch.cat(mylist, 0)
-                    else:
-                        value = torch.empty((0, 0), dtype=torch.float32)
+            if k in {"masks", "keypoints", "bboxes", "cls", "segments", "obb"}:
+                value = torch.cat(value, 0)
+            if k in {"distances"}:
+                value = torch.cat([torch.tensor(v) if len(v) != 0 else torch.empty(0, 1) for v in value], 0)
             new_batch[k] = value
         new_batch["batch_idx"] = list(new_batch["batch_idx"])
         for i in range(len(new_batch["batch_idx"])):
