@@ -90,7 +90,7 @@ def get_statistics(dataset_path, image_formats=["jpg"]) -> dict:
 # stats = get_statistics('../../yolo-testing/datasets/night_only_China')
 parser = argparse.ArgumentParser(description="Run statistics on dataset")
 
-parser.add_argument("--name", type=str, default="bdd100k_night")
+parser.add_argument("name", type=str, default="bdd100k_night")
 
 args = parser.parse_args()
 

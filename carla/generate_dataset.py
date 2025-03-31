@@ -174,7 +174,7 @@ def main(client, frame_count, selected_map, train_set):
                             box_height = (y_max - y_min) / image_h
                             vehicle_type = bp_lib.find(npc.type_id).get_attribute('base_type').as_str()
                             vehicle_id = None
-                            if npc.type_id == 'vehicle.bmw.grandtourer':
+                            if npc.type_id == 'vehicle.bmw.grandtourer' or npc.type_id == 'vehicle.mini.cooper_s':
                                 vehicle_id = 0
                             else:
                                 vehicle_id = cls2id.get(vehicle_type.lower())
