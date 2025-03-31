@@ -1,23 +1,9 @@
-'''
-{
-    'd': 0.05, 'useDist': True,
-    'dataPath': 'carla.yaml',
-    'model_path': "yolo11n.pt",
-    'classes': [0, 1, 2, 3, 4, 5]
-},
-{
-    'd': 0,
-    'useDist': False,
-    'dataPath': 'carla.yaml',
-    'model_path': "yolo11n.pt",
-    'classes': [0, 1, 2, 3, 4, 5]
-},
-'''
 from ultralytics import YOLO
 import torch
 
 
 # Defaults
+<<<<<<< HEAD
 device = "cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu"
 use_fe = False
 epochs = 100
@@ -33,29 +19,38 @@ confs = [
         'classes': [1, 2, 3, 4]
     },
 ]
+=======
+DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu"
+KITTI_CLASSES = [0, 1, 2, 3, 4, 5, 6, 7]
+EPOCHS = 100
+OPTIMIZER = "SGD"
+>>>>>>> b59a904967bdcac4c2a2444715962bc03e916184
 
-# model_path=f"{name}/weights/last.py"
-for conf in confs:
-    d = conf['d']
-    use_dist = conf['useDist']
-    data_path = conf['dataPath']
-    model_path = conf['model_path']
-    classes = conf['classes']
+
+def train_with_distance(
+    model_path: str = "yolo11n.pt",
+    data_path: str = "kitti.yaml",
+    d: float = 0.05,
+    use_dist: bool = True,
+    classes=KITTI_CLASSES,
+    scale: float = 0.0,
+    mosaic: float = 1.0,
+    device: str = DEVICE,
+    **kwargs,
+):
     resume = model_path != "yolo11n.pt"
-
     model = YOLO(model_path)
-
-    name = f"{data_path}-{model_path}-{epochs}e-{optimizer}-{'dist' if use_dist else 'noDist'}-scale{scale}-mosaic{mosaic}-noDontCare-d{d}_"
+    name = f"{data_path}-{model_path}-{EPOCHS}e-{OPTIMIZER}-{'dist' if use_dist else 'noDist'}-scale{scale}-mosaic{mosaic}-noDontCare-d{d}_"
 
     model.train(
         data=data_path,
-        epochs=epochs,
+        epochs=EPOCHS,
         device=device,
-        optimizer=optimizer,
+        optimizer=OPTIMIZER,
+        batch_size=16,
         momentum=0.9,
         lr0=0.01,
         warmup_bias_lr=0.0,
-        use_fe=use_fe,
         name=name,
         iou_type="ciou",
         mosaic=mosaic,
@@ -63,6 +58,13 @@ for conf in confs:
         use_dist=use_dist,
         dist=d,
         resume=resume,
-        classes=classes
-        # classes=[0,1,2,3,4,5,6,7] KITTI classes
+        classes=classes,
+        **kwargs,
     )
+
+
+# Augmentation ablations
+train_with_distance(scale=0.0, mosaic=0.0)
+train_with_distance(scale=0.0, mosaic=1.0)
+train_with_distance(scale=0.5, mosaic=0.0)
+train_with_distance(scale=0.5, mosaic=1.0)
