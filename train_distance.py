@@ -26,16 +26,10 @@ scale = 0.0
 mosaic = 1.0
 confs = [
     {
-        'd': 0.05, 'useDist': True,
-        'dataPath': 'waymo-noConf.yaml',
-        'model_path': "yolo11n.pt",
-        'classes': [1, 2, 3, 4]
-    },
-    {
         'd': 0,
         'useDist': False,
         'dataPath': 'waymo-noConf.yaml',
-        'model_path': "yolo11n.pt",
+        'model_path': "runs/detect/waymo-noConf.yaml-yolo11n.pt-100e-SGD-noDist-scale0.0-mosaic1.0-noDontCare-d0_2/weights/last.pt",
         'classes': [1, 2, 3, 4]
     },
 ]
