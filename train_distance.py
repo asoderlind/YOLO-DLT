@@ -143,7 +143,6 @@ scale = 0.0
 mosaic = 1.0
 confs = [
     {
-<<<<<<< HEAD
         "d": 0.025,
         "useDist": True,
         "dataPath": "waymo-noConf.yaml",
@@ -183,6 +182,7 @@ for conf in confs:
     data_path = conf["dataPath"]
     model_path = conf["model_path"]
 
+<<<<<<< HEAD
 =======
         'd': 0.05, 'useDist': True,
         'dataPath': 'waymo-noConf.yaml',
@@ -206,6 +206,8 @@ for conf in confs:
     model_path = conf['model_path']
     classes = conf['classes']
 >>>>>>> 1ea6a77a (updates)
+=======
+>>>>>>> ecd10376 (train dist)
     resume = model_path != "yolo11n.pt"
 
 >>>>>>> 6a83822a (mod8)
@@ -229,11 +231,6 @@ for conf in confs:
         use_dist=use_dist,
         dist=d,
         resume=resume,
-<<<<<<< HEAD
         classes=[0, 1, 2, 3, 4, 5, 6, 7],
-=======
-        classes=classes
-        # classes=[0,1,2,3,4,5,6,7] KITTI classes
->>>>>>> 1ea6a77a (updates)
     )
 >>>>>>> 5969bc06 (merge)
