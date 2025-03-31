@@ -1257,35 +1257,31 @@ class EfficientFEM(nn.Module):
         in_channels: int,
         out_channels: int,
         kernel_size: int = 3,
-        padding: int | None = None,
         stride: int = 1,
-        dilation_1: int = 1,
-        dilation_2: int = 3,
-        dilation_3: int = 5,
+        kernel_size_1=3,
+        kernel_size_2=5,
+        kernel_size_3=7,
     ):
         super().__init__()
         self.conv1 = DWConv(
             c1=in_channels,
             c2=out_channels,
-            k=kernel_size,
+            k=kernel_size_1,
             s=stride,
-            d=dilation_1,
             act=nn.ReLU(),
         )
         self.conv2 = DWConv(
             c1=in_channels,
             c2=out_channels,
-            k=kernel_size,
+            k=kernel_size_2,
             s=stride,
-            d=dilation_2,
             act=nn.ReLU(),
         )
         self.conv3 = DWConv(
             c1=in_channels,
             c2=out_channels,
-            k=kernel_size,
+            k=kernel_size_3,
             s=stride,
-            d=dilation_3,
             act=nn.ReLU(),
         )
 
