@@ -77,6 +77,7 @@ from .conv import (
     ConvTranspose,
     DWConv,
     DWConvTranspose2d,
+    EfficientFocus,
     Focus,
     GhostConv,
     HybridConv,
@@ -190,4 +191,5 @@ __all__ = (
     "HybridConv",
     "FA",
     "EfficientFEM",
+    "EfficientFocus",
 )
