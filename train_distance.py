@@ -13,13 +13,15 @@ confs = [
     {
         'd': 0.05, 'useDist': True,
         'dataPath': 'waymo-noConf.yaml',
-        'model_path': "yolo11n.pt"
+        'model_path': "yolo11n.pt",
+        'classes': [1,2,3,4]
     },
     {
         'd': 0,
         'useDist': False,
         'dataPath': 'waymo-noConf.yaml',
-        'model_path': "yolo11n.pt"
+        'model_path': "yolo11n.pt",
+        'classes': [1,2,3,4]
     }
     ]
 
@@ -29,6 +31,7 @@ for conf in confs:
     use_dist = conf['useDist']
     data_path = conf['dataPath']
     model_path = conf['model_path']
+    classes = conf['classes']
     resume = model_path != "yolo11n.pt"
 
     model = YOLO(model_path)
@@ -51,5 +54,6 @@ for conf in confs:
         use_dist=use_dist,
         dist=d,
         resume=resume,
-        classes=[0,1,2,3,4,5,6,7]
+        classes=classes
+        # classes=[0,1,2,3,4,5,6,7] KITTI classes
     )
