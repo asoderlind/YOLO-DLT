@@ -2,8 +2,13 @@ import os
 import glob
 import argparse
 
-def clean_yolo_dataset(labels_dir, images_dir, dry_run=False):
+BASE_PATH = "/home/phoawb/repos/yolo-testing/datasets"
+
+def clean_yolo_dataset(dataset_name: str, train_set: str, dry_run=False):
     """Removes unmatched labels or images in a YOLO dataset."""
+
+    labels_dir = f"{BASE_PATH}/{dataset_name}/labels/{train_set}"
+    images_dir = f"{BASE_PATH}/{dataset_name}/images/{train_set}"
     
     # Get lists of filenames (without extensions)
     print("labels_dir: ", labels_dir)
@@ -47,9 +52,9 @@ def clean_yolo_dataset(labels_dir, images_dir, dry_run=False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Clean YOLO dataset by removing unmatched labels or images.")
-    parser.add_argument("labels_dir", type=str, help="Path to the directory containing label (.txt) files")
-    parser.add_argument("images_dir", type=str, help="Path to the directory containing image (.jpg, .png) files")
+    parser.add_argument("name", type=str, help="Name of dataset")
+    parser.add_argument("train_set", type=str, help="The train set train/val/test")
     parser.add_argument("--dry-run", action="store_true", help="Only show what would be deleted without actually deleting files")
 
     args = parser.parse_args()
-    clean_yolo_dataset(args.labels_dir, args.images_dir, dry_run=args.dry_run)
+    clean_yolo_dataset(args.name, args.train_set, dry_run=args.dry_run)
