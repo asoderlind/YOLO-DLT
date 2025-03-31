@@ -74,6 +74,7 @@ class TaskAlignedAssigner(nn.Module):
                 torch.zeros_like(pd_scores),
                 torch.zeros_like(pd_scores[..., 0]),
                 torch.zeros_like(pd_scores[..., 0]),
+                torch.zeros_like(pd_scores[..., 0]),
             )
 
         try:
