@@ -143,6 +143,7 @@ scale = 0.0
 mosaic = 1.0
 confs = [
     {
+<<<<<<< HEAD
         "d": 0.025,
         "useDist": True,
         "dataPath": "waymo-noConf.yaml",
@@ -182,6 +183,29 @@ for conf in confs:
     data_path = conf["dataPath"]
     model_path = conf["model_path"]
 
+=======
+        'd': 0.05, 'useDist': True,
+        'dataPath': 'waymo-noConf.yaml',
+        'model_path': "yolo11n.pt",
+        'classes': [1,2,3,4]
+    },
+    {
+        'd': 0,
+        'useDist': False,
+        'dataPath': 'waymo-noConf.yaml',
+        'model_path': "yolo11n.pt",
+        'classes': [1,2,3,4]
+    }
+    ]
+
+# model_path=f"{name}/weights/last.py"
+for conf in confs:
+    d = conf['d']
+    use_dist = conf['useDist']
+    data_path = conf['dataPath']
+    model_path = conf['model_path']
+    classes = conf['classes']
+>>>>>>> 1ea6a77a (updates)
     resume = model_path != "yolo11n.pt"
 
 >>>>>>> 6a83822a (mod8)
@@ -205,6 +229,11 @@ for conf in confs:
         use_dist=use_dist,
         dist=d,
         resume=resume,
+<<<<<<< HEAD
         classes=[0, 1, 2, 3, 4, 5, 6, 7],
+=======
+        classes=classes
+        # classes=[0,1,2,3,4,5,6,7] KITTI classes
+>>>>>>> 1ea6a77a (updates)
     )
 >>>>>>> 5969bc06 (merge)
