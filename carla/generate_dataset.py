@@ -173,12 +173,13 @@ def main(client, frame_count, selected_map, train_set):
                             box_width = (x_max - x_min) / image_w
                             box_height = (y_max - y_min) / image_h
                             vehicle_type = bp_lib.find(npc.type_id).get_attribute('base_type').as_str()
-                            if vehicle_type not in cls2id:
-                                breakpoint()
+                            vehicle_id = None
                             if npc.type_id == 'vehicle.bmw.grandtourer':
                                 vehicle_id = 0
                             else:
                                 vehicle_id = cls2id.get(vehicle_type.lower())
+                            if vehicle_id is None:
+                                raise ValueError(f"{npc.type_id} has no base_type")
                             output_lines.append(
                                 f"{vehicle_id} {x_center:6f} {y_center:.6f} {box_width:.6f} {box_height:.6f} {dist:.6f}"
                             )
