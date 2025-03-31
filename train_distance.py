@@ -239,7 +239,7 @@ def train_with_distance(
         epochs=EPOCHS,
         device=device,
         optimizer=OPTIMIZER,
-        batch_size=16,
+        batch=16,
         momentum=0.9,
         lr0=0.01,
         warmup_bias_lr=0.0,
@@ -250,12 +250,8 @@ def train_with_distance(
         use_dist=use_dist,
         dist=d,
         resume=resume,
-<<<<<<< HEAD
-        classes=[0, 1, 2, 3, 4, 5, 6, 7],
-=======
         classes=classes,
         **kwargs,
->>>>>>> b59a9049 (prepare for ablations for augs)
     )
 <<<<<<< HEAD
 >>>>>>> 5969bc06 (merge)
