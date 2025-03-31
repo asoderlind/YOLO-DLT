@@ -1,3 +1,18 @@
+'''
+{
+    'd': 0.05, 'useDist': True,
+    'dataPath': 'carla.yaml',
+    'model_path': "yolo11n.pt",
+    'classes': [0, 1, 2, 3, 4, 5]
+},
+{
+    'd': 0,
+    'useDist': False,
+    'dataPath': 'carla.yaml',
+    'model_path': "yolo11n.pt",
+    'classes': [0, 1, 2, 3, 4, 5]
+},
+'''
 from ultralytics import YOLO
 import torch
 
@@ -14,16 +29,16 @@ confs = [
         'd': 0.05, 'useDist': True,
         'dataPath': 'waymo-noConf.yaml',
         'model_path': "yolo11n.pt",
-        'classes': [1,2,3,4]
+        'classes': [1, 2, 3, 4]
     },
     {
         'd': 0,
         'useDist': False,
         'dataPath': 'waymo-noConf.yaml',
         'model_path': "yolo11n.pt",
-        'classes': [1,2,3,4]
-    }
-    ]
+        'classes': [1, 2, 3, 4]
+    },
+]
 
 # model_path=f"{name}/weights/last.py"
 for conf in confs:

@@ -18,6 +18,10 @@ cls2id = {
     'bicycle': 5,
 }
 
+MAX_DIST = 150
+
+def clamp(value, min_value, max_value):
+    return max(min_value, min(value, max_value))
 
 def build_projection_matrix(w, h, fov):
     focal = w / (2.0 * np.tan(fov * np.pi / 360.0))
@@ -141,7 +145,7 @@ def main(client, frame_count, selected_map, train_set):
             if npc.id != vehicle.id:
                 bb = npc.bounding_box
                 dist = npc.get_transform().location.distance(vehicle.get_transform().location)
-                if dist < 50:
+                if dist < MAX_DIST:
                     forward_vec = vehicle.get_transform().get_forward_vector()
                     ray = npc.get_transform().location - vehicle.get_transform().location
                     if forward_vec.dot(ray) > 1:
@@ -172,6 +176,8 @@ def main(client, frame_count, selected_map, train_set):
                             y_center = ((y_min + y_max) / 2) / image_h
                             box_width = (x_max - x_min) / image_w
                             box_height = (y_max - y_min) / image_h
+                            if x_center > 1 or y_center > 1 or box_width > 1 or box_height > 1:
+                                raise ValueError(f"One of x_c {x_center} y_c {y_center} bw {box_width} bh {box_height} are not normalized")
                             vehicle_type = bp_lib.find(npc.type_id).get_attribute('base_type').as_str()
                             vehicle_id = None
                             if npc.type_id == 'vehicle.bmw.grandtourer' or npc.type_id == 'vehicle.mini.cooper_s':
@@ -180,6 +186,9 @@ def main(client, frame_count, selected_map, train_set):
                                 vehicle_id = cls2id.get(vehicle_type.lower())
                             if vehicle_id is None:
                                 raise ValueError(f"{npc.type_id} has no base_type")
+                            dist = clamp(dist, 0, MAX_DIST) / MAX_DIST
+                            if dist < 0 or dist > 1.0:
+                                raise ValueError(f"Distance is not normalized: {dist}")
                             output_lines.append(
                                 f"{vehicle_id} {x_center:6f} {y_center:.6f} {box_width:.6f} {box_height:.6f} {dist:.6f}"
                             )
