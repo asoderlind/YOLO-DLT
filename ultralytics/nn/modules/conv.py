@@ -503,7 +503,6 @@ class RFAConv(nn.Module):  # RFAConv implemented based on Group Conv
             out_channel,
             k=kernel_size,
             s=kernel_size,
-            p=kernel_size // 2,
             act=nn.ReLU(),
         )
 

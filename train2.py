@@ -1,9 +1,10 @@
 import os
 import time
 from datetime import datetime
-from ultralytics import YOLO
-from ultralytics.nn.modules import Conv
+
 import torch.nn as nn
+
+from ultralytics import YOLO
 
 activations: dict[str, nn.Module] = {
     "hardswish": nn.Hardswish(),
@@ -11,7 +12,6 @@ activations: dict[str, nn.Module] = {
     "gelu": nn.GELU(),
     "gelu-tanh": nn.GELU(approximate="tanh"),
 }
-
 
 
 def train_model(
@@ -30,11 +30,11 @@ def train_model(
     optimizer="SGD",
     momentum=0.9,
     classes=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Train a YOLO model with timing measurement
-    
+
     Args:
         name (str): Template for the run name
         model (str): Path to the model YAML
@@ -49,7 +49,7 @@ def train_model(
         warmup_bias_lr (float): Warmup bias learning rate
         classes (list): List of class indices to train on
         **kwargs: Additional arguments passed to YOLO train
-        
+
     Returns:
         The results from model training
     """
@@ -88,7 +88,7 @@ def train_model(
         iou_type=iou_type,
         warmup_bias_lr=warmup_bias_lr,
         classes=classes,
-        **kwargs  # Pass any additional kwargs to train
+        **kwargs,  # Pass any additional kwargs to train
     )
 
     # Calculate elapsed time
@@ -123,17 +123,17 @@ def train_model(
 
 # Example usage
 if __name__ == "__main__":
-    #train_model(name="bdd100k_night-yolo11n-cl", model="runs/detect/bdd100k_night-yolo11n-cl/weights/last.pt", resume=True)
-    #train_model(name="bdd100k_night-yolo11n-simsppf", model="dlt-models/yolo11n-SimSPPF.yaml")
-    #train_model(name="bdd100k_night-yolo11n-se", model="runs/detect/bdd100k_night-yolo11n-se/weights/last.pt", resume=True)
+    # train_model(name="bdd100k_night-yolo11n-cl", model="runs/detect/bdd100k_night-yolo11n-cl/weights/last.pt", resume=True)
+    # train_model(name="bdd100k_night-yolo11n-simsppf", model="dlt-models/yolo11n-SimSPPF.yaml")
+    # train_model(name="bdd100k_night-yolo11n-se", model="runs/detect/bdd100k_night-yolo11n-se/weights/last.pt", resume=True)
     # train_model(name="bdd100k_night-yolo11n-eca", model="runs/detect/bdd100k_night-yolo11n-eca/weights/last.pt", resume=True)
     # train_model(name="bdd100k_night-yolo11n-simam", model="dlt-models/yolo11n-SimAM.yaml")
     # train_model(name="bdd100k_night-yolo11n-se-skip", model="runs/detect/bdd100k_night-yolo11n-se-skip/weights/last.pt", resume=True)
     # train_model(name="bdd100k_night-yolo11n-eca-skip", model="dlt-models/yolo11n-ECA-skip.yaml")
     # train_model(name="bdd100k_night-yolo11n-simam-skip", model="dlt-models/yolo11n-SimAM-skip.yaml")
     # train_model(name="bdd100k_night-yolo11n-efficient-fem", model="dlt-models/yolo11n-EfficientFEM.yaml") # TODO: Figure out why this is so slow
-    #train_model(name="bdd100k_night-yolo11n-fem-2", model="dlt-models/yolo11n-FEM2.yaml")
-    
+    # train_model(name="bdd100k_night-yolo11n-fem-2", model="dlt-models/yolo11n-FEM2.yaml")
+
     # test some IOU types
     # iou_type: ciou # (str) iou loss type, i.e. "iou", "giou", "diou", "ciou", "nwd", "wiou", "wiou1", "wiou2", "wiou3", "siou", "ciou+nwd (80/20)", "eiou", "focal-eiou", "isiou", "thiou"
     # train_model(name="bdd100k_night-yolo11n-ciou", model="dlt-models/yolo11n.yaml", iou_type="ciou")
@@ -149,12 +149,11 @@ if __name__ == "__main__":
     train_model(name="bdd100k_night-yolo11n-hconv", model="dlt-models/yolo11n-HConv.yaml")
     train_model(name="bdd100k_night-yolo11n-thiou", model="yolo11n.yaml", iou_type="thiou")
     train_model(name="bdd100k_night-yolo11n-eiou", model="yolo11n.yaml", iou_type="eiou")
-    train_model(name="bdd100k_night-yolo11n-EfficientSPDConv2", model="dlt-models/yolo11n-EfficientSPDConv2.yaml")
+    train_model(name="bdd100k_night-yolo11n-dwspdconv", model="dlt-models/yolo11n-DWSPDConv.yaml")
+    train_model(name="bdd100k_night-yolo11n-SPDConv2", model="dlt-models/yolo11n-SPDConv-2.yaml")
+    train_model(name="bdd100k_night-yolo11n-SPDConv3", model="dlt-models/yolo11n-SPDConv-3.yaml")
+    train_model(name="bdd100k_night-yolo11n-ghostspdconv", model="dlt-models/yolo11n-GhostSPDConv.yaml")
     train_model(name="bdd100k_night-yolo11n-focal-eiou", model="yolo11n.yaml", iou_type="focal-eiou")
     train_model(name="bdd100k_night-yolo11n-siou", model="yolo11n.yaml", iou_type="siou")
     train_model(name="bdd100k_night-yolo11n-ciou+nwd", model="yolo11n.yaml", iou_type="ciou+nwd")
     train_model(name="bdd100k_night-yolo11n-isiou", model="yolo11n.yaml", iou_type="isiou")
-    
-    
-    
-    
