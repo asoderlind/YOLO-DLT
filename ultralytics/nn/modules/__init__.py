@@ -81,6 +81,7 @@ from .conv import (
     EfficientFocus,
     Focus,
     GhostConv,
+    GhostFocus,
     HybridConv,
     Index,
     LDConv,
@@ -194,4 +195,5 @@ __all__ = (
     "EfficientFEM",
     "EfficientFocus",
     "DWFocus",
+    "GhostFocus",
 )

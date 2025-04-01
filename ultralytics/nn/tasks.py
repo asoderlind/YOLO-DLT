@@ -57,6 +57,7 @@ from ultralytics.nn.modules import (
     Focus,
     GhostBottleneck,
     GhostConv,
+    GhostFocus,
     HGBlock,
     HGStem,
     HybridConv,
@@ -1008,6 +1009,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             HybridConv,
             EfficientFEM,
             DWFocus,
+            GhostFocus,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments

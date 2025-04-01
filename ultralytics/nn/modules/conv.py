@@ -179,23 +179,22 @@ class EfficientFocus(nn.Module):
         # return self.conv(self.contract(x))
 
 
-class DWFocus(nn.Module):
+class DWFocus(Focus):
     """Focus wh information into c-space."""
 
     def __init__(self, c1, c2, k=1, s=1, act=True):
         """Initializes Focus object with user defined channel, convolution, padding, group and activation values."""
-        super().__init__()
+        super().__init__(c1=c1, c2=c2, k=k, s=s, act=act)
         self.conv = DWConv(c1 * 4, c2, k=k, s=s, act=act)
-        # self.contract = Contract(gain=2)
 
-    def forward(self, x):
-        """
-        Applies convolution to concatenated tensor and returns the output.
 
-        Input shape is (b,c,w,h) and output shape is (b,4c,w/2,h/2).
-        """
-        return self.conv(torch.cat((x[..., ::2, ::2], x[..., 1::2, ::2], x[..., ::2, 1::2], x[..., 1::2, 1::2]), 1))
-        # return self.conv(self.contract(x))
+class GhostFocus(Focus):
+    """Focus wh information into c-space."""
+
+    def __init__(self, c1, c2, k=1, s=1, act=True):
+        """Initializes Focus object with user defined channel, convolution, padding, group and activation values."""
+        super().__init__(c1=c1, c2=c2, k=k, s=s, act=act)
+        self.conv = GhostConv(c1 * 4, c2, k=k, s=s, act=act)
 
 
 class GhostConv(nn.Module):
