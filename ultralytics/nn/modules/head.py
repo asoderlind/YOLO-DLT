@@ -220,7 +220,6 @@ class TemporalDetect(Detect):
 
     def forward(self, x: list[torch.Tensor]):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
-        print("TEMPORAL WINDOW", self.temporal_window)
 
         # loop over detection layers (usually 3, 80x80, 40x40, 20x20)
         before_nms_vid_feats: list[torch.Tensor] = []
