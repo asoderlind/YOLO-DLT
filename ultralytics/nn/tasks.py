@@ -66,6 +66,7 @@ from ultralytics.nn.modules import (
     LDConv,
     NewConv,
     Pose,
+    ProgressiveFocus,
     RepC3,
     RepConv,
     RepNCSPELAN4,
@@ -1010,6 +1011,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             EfficientFEM,
             DWFocus,
             GhostFocus,
+            ProgressiveFocus,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments

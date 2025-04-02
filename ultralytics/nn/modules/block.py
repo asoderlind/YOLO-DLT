@@ -1475,12 +1475,9 @@ class SimAM(torch.nn.Module):
         higher attention weights. This is inspired by spatial suppression in neuroscience, where
         distinctive neurons have higher importance.
 
-        The implementation uses a simplified version of the paper's energy function:
-        Original: e*_t = 4(σ² + λ)/((t - μ)² + 2σ² + 2λ)
-        Simplified: importance ≈ (t - μ)²/(4(σ² + λ)) + 0.5
-
-        This simplification preserves the key property (distinctive values get higher weights)
-        while being more efficient to compute.
+        e*_t = 4(σ² + λ)/((t - μ)² + 2σ² + 2λ)
+        importance = 1 / e*_t = (t - μ)²/(4(σ² + λ)) + 0.5
+        (importance has done some reshuffling, but is still equal to 1 / e*_t)
 
         Args:
             x (torch.Tensor): Input tensor of shape [batch_size, channels, height, width]
