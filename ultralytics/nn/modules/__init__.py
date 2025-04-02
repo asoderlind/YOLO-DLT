@@ -88,6 +88,7 @@ from .conv import (
     LightConv,
     NewConv,
     NewConv2,
+    ProgressiveFocus,
     RepConv,
     RFAConv,
     SpatialAttention,
@@ -196,4 +197,5 @@ __all__ = (
     "EfficientFocus",
     "DWFocus",
     "GhostFocus",
+    "ProgressiveFocus",
 )

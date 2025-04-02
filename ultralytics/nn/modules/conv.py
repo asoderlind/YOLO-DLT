@@ -213,6 +213,25 @@ class GhostConv(nn.Module):
         return torch.cat((y, self.cv2(y)), 1)
 
 
+class ProgressiveFocus(nn.Module):
+    """Focus wh information into c-space."""
+
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, act=True):
+        """Initializes Focus object with user defined channel, convolution, padding, group and activation values."""
+        super().__init__()
+        self.dwconv = DWConv(c1 * 4, c1 * 4, k=1, act=act)  # DWConv for spatial processing
+        self.conv = Conv(c1 * 4, c2, k=1, s=1, act=act)  # Regular conv for channel
+
+    def forward(self, x):
+        """
+        Applies convolution to concatenated tensor and returns the output.
+
+        Input shape is (b,c,w,h) and output shape is (b,4c,w/2,h/2).
+        """
+        x = torch.cat([x[..., ::2, ::2], x[..., 1::2, ::2], x[..., ::2, 1::2], x[..., 1::2, 1::2]], 1)
+        return self.conv(self.dwconv(x))
+
+
 class RepConv(nn.Module):
     """
     RepConv is a basic rep-style block, including training and deploy status.
@@ -493,7 +512,6 @@ class RFAConv(nn.Module):  # RFAConv implemented based on Group Conv
             in_channel * (kernel_size**2),
             k=kernel_size,
             s=stride,
-            p=kernel_size // 2,
             g=in_channel,
             act=nn.ReLU(),
         )
@@ -533,7 +551,7 @@ class RFAConv(nn.Module):  # RFAConv implemented based on Group Conv
         weighted = weight.view(b, c, self.kernel_size**2, h, w).softmax(
             2
         )  # [b, c*kernel**2,h,w] ->  [b, c, k**2, h, w]
-        feature: torch.Tensor = self.generate_feature(x)
+        feature: torch.Tensor = self.generate_feature(x)  # [b, c*kernel**2,h,w]
         feature = feature.view(
             b, c, self.kernel_size**2, h, w
         )  # [b, c*kernel**2,h,w] ->  [b, c, k**2, h, w]   obtain receptive field spatial features

@@ -31,6 +31,7 @@ model_spdconv3 = YOLO("dlt-models/yolo11n-SPDConv-3.yaml")
 model_dwspdconv = YOLO("dlt-models/yolo11n-DWSPDConv.yaml")
 model_hconv = YOLO("dlt-models/yolo11n-HConv.yaml")
 model_ghostspdconv = YOLO("dlt-models/yolo11n-GhostSPDConv.yaml")
+model_progressive_spdconv = YOLO("dlt-models/yolo11n-ProgSPDConv.yaml")
 
 
 model_ghostconv.info()
@@ -64,3 +65,4 @@ model_spdconv3.info()
 model_dwspdconv.info()
 model_hconv.info()
 model_ghostspdconv.info()
+model_progressive_spdconv.info()
