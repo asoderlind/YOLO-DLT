@@ -7,7 +7,6 @@ import math
 import torch
 import torch.nn as nn
 from torch.nn.init import constant_, xavier_uniform_
-from torchvision.ops import batched_nms
 
 from ultralytics.utils.tal import TORCH_1_10, dist2bbox, dist2rbox, make_anchors
 
@@ -314,11 +313,11 @@ class TemporalDetect(Detect):
         vid_features: torch.Tensor,
         reg_features: torch.Tensor,
         nms_thresh: float = 0.75,
-        topk_pre: int = 750,
-        topk_post: int = 30,
+        target_count: int = 85,  # target proposal count based on paper + margin
+        conf_thresh: float = 0.001,  # Base threshold
     ):
         """
-        Feature Selection Module (FSM) implementation following YOLOV paper.
+        Feature Selection Module (FSM) implementation following YOLOV++ paper.
         Selects high-quality candidate regions from raw predictions for temporal aggregation.
 
         Args:
@@ -326,116 +325,90 @@ class TemporalDetect(Detect):
             vid_features (torch.Tensor): Video classification features from each detection level
             reg_features (torch.Tensor): Regression features from each detection level
             nms_thresh (float): NMS threshold for removing redundant detections
-            topk_pre (int): Number of top confident predictions to consider before NMS
-            topk_post (int): Number of predictions to keep after NMS
+            target_count (int): Target number of proposals to select
+            conf_thresh (float): Confidence threshold for filtering predictions
 
         Returns:
-            selected_cls_features (torch.Tensor): Selected classification features [batch_size, topk_post, C]
-            selected_reg_features (torch.Tensor): Selected regression features [batch_size, topk_post, C]
-            selected_boxes (torch.Tensor): Selected bounding boxes [batch_size, topk_post, 4]
-            selected_scores (torch.Tensor): Selected confidence scores [batch_size, topk_post]
-            selected_indices list[torch.Tensor]: Indices of selected predictions for each batch
+            selected_cls_features (torch.Tensor): Selected classification features [batch_size, target_count, cls_ch]
+            selected_reg_features (torch.Tensor): Selected regression features [batch_size, target_count, reg_ch]
+            selected_boxes (torch.Tensor): Selected bounding boxes [batch_size, target_count, 4]
+            selected_scores (torch.Tensor): Selected confidence scores [batch_size, target_count]
+            selected_indices (torch.Tensor): Selected indices [batch_size, target_count]
         """
 
         # Prepare predictions in the right format
         predictions = raw_preds.permute(0, 2, 1)  # [batch_size, sum(h_i*w_i), 4+nc]
-
         batch_size = raw_preds.shape[0]
         device = raw_preds.device
 
-        # Init containers for results
-        selected_cls_features: list[torch.Tensor] = []
-        selected_reg_features: list[torch.Tensor] = []
-        selected_boxes: list[torch.Tensor] = []
-        selected_scores: list[torch.Tensor] = []
-        selected_indices: list[torch.Tensor] = []
+        # Initialize tensors with correct dimensions
+        selected_cls_features = torch.zeros(batch_size, target_count, vid_features.shape[-1], device=device)
+        selected_reg_features = torch.zeros(batch_size, target_count, reg_features.shape[-1], device=device)
+        selected_boxes = torch.zeros(batch_size, target_count, 4, device=device)
+        selected_scores = torch.zeros(batch_size, target_count, device=device)
+        selected_indices = torch.zeros(batch_size, target_count, dtype=torch.long, device=device)
 
         # Process for each batch
         for b in range(batch_size):
-            pred = predictions[b]  # [sum(h_i*w_i), 4+nc]
-
             # Extract boxes and scores
-            boxes = pred[:, :4]  # [sum(h_i*w_i), 4]
-            scores = pred[:, 4:]  # [sum(h_i*w_i), nc]
+            boxes = predictions[b, :, :4]  # [sum(h_i*w_i), 4]
+            scores = predictions[b, :, 4:]  # [sum(h_i*w_i), nc]
 
             # Get max class scores and class IDs
             max_scores, cls_ids = scores.max(dim=1)  # [sum(h_i*w_i)], [sum(h_i*w_i)]
 
-            # Get top-k predictions by confidence
-            if len(max_scores) > topk_pre:
-                topk_values, topk_indices = torch.topk(max_scores, topk_pre)
-            else:
-                topk_indices = torch.arange(len(max_scores), device=device)
-                topk_values = max_scores[topk_indices]
+            # Apply confidence threshold
+            thresh_mask = max_scores > conf_thresh  # [sum(h_i*w_i)]
+            # Thresh indices are the indices of the boxes that pass the confidence threshold
+            thresh_indices = torch.where(thresh_mask)[0]  # [sum(h_i*w_i)]
 
-            # Apply NMS
-            nms_indices = batched_nms(
-                boxes[topk_indices],
-                topk_values,
-                cls_ids[topk_indices],
-                nms_thresh,
-            )
+            # Modulate to target count
 
-            # Handle case where NMS returns fewer indices than topk_post
-            # TODO: put this in a _get_final_indices() function
-            if len(nms_indices) < topk_post:
-                # If we have no boxes passing NMS threshold, use top confident boxes without NMS
-                if len(nms_indices) == 0:
-                    final_indices = topk_indices[:topk_post]  # Just use top confident boxes
-                else:
-                    # We have some boxes passing NMS but not enough
-                    # First take all boxes that passed NMS
-                    final_indices = topk_indices[nms_indices]
+            if len(thresh_indices) < target_count:
+                # Not enough proposals - get top proposals not yet included
+                remaining_indices = torch.where(~thresh_mask)[0]  # [sum(h_i*w_i)]
+                if not len(remaining_indices) > 0:
+                    raise ValueError(
+                        "No remaining indices to select from. You must have set the target count too high."
+                    )
 
-                    # Then add additional boxes from topk to reach topk_post
-                    # Create mask to exclude already selected indices
-                    mask = torch.ones(len(topk_indices), dtype=torch.bool, device=device)
-                    mask[nms_indices] = False
+                # Get top needed scores
+                remaining_scores = max_scores[remaining_indices]
+                needed = target_count - len(thresh_indices)
 
-                    # Get remaining indices that weren't selected by NMS
-                    remaining = topk_indices[mask]
+                if len(remaining_scores) < needed:
+                    # If not enough remaining scores, explode I guess
+                    raise ValueError(
+                        "Not enough remaining scores to select from. You must have set the target count too high."
+                    )
 
-                    # Select additional boxes needed
-                    additional_needed = topk_post - len(final_indices)
-                    if len(remaining) > 0:
-                        # Add more boxes to reach topk_post
-                        additional_indices = remaining[:additional_needed]
-                        final_indices = torch.cat([final_indices, additional_indices])
-                    else:
-                        # If somehow we don't have enough remaining boxes, repeat the last one
-                        last_idx = final_indices[-1] if len(final_indices) > 0 else topk_indices[0]
-                        padding = last_idx.repeat(additional_needed)
-                        final_indices = torch.cat([final_indices, padding])
-            else:
-                # Limit to topk_post predictions (original code path)
-                if len(nms_indices) > topk_post:
-                    nms_indices = nms_indices[:topk_post]
-                final_indices = topk_indices[nms_indices]
+                _, topk_indices = torch.topk(remaining_scores, needed)
+                additional_indices = remaining_indices[topk_indices]
 
-            # Ensure we have exactly topk_post indices
-            assert len(final_indices) == topk_post, f"Expected {topk_post} indices, got {len(final_indices)}"
+                # Combine indices
+                thresh_indices = torch.cat([thresh_indices, additional_indices])
 
-            # Extract features directly using final indices
-            batch_cls_features = vid_features[b, final_indices]
-            batch_reg_features = reg_features[b, final_indices]
+            elif len(thresh_indices) > target_count:
+                # Too many proposals - keep only top ones
+                thresh_scores = max_scores[thresh_indices]
+                _, topk_indices = torch.topk(thresh_scores, target_count)
+                thresh_indices = thresh_indices[topk_indices]
 
-            # Get selected boxes and scores
-            batch_boxes = boxes[final_indices]
-            batch_scores = max_scores[final_indices]
+            assert len(thresh_indices) == target_count, f"Expected {target_count} indices, got {len(thresh_indices)}"
 
-            # Append to results
-            selected_cls_features.append(batch_cls_features)
-            selected_reg_features.append(batch_reg_features)
-            selected_boxes.append(batch_boxes)
-            selected_scores.append(batch_scores)
-            selected_indices.append(final_indices)
+            # Fill tensors with selected indices
+            selected_indices[b, : len(thresh_indices)] = thresh_indices
+            selected_cls_features[b, : len(thresh_indices)] = vid_features[b, thresh_indices]
+            selected_reg_features[b, : len(thresh_indices)] = reg_features[b, thresh_indices]
+            selected_boxes[b, : len(thresh_indices)] = boxes[thresh_indices]
+            selected_scores[b, : len(thresh_indices)] = max_scores[thresh_indices]
 
         return (
-            torch.stack(selected_cls_features),
-            torch.stack(selected_reg_features),
-            torch.stack(selected_boxes),
-            torch.stack(selected_scores),
-            torch.stack(selected_indices),
+            selected_cls_features,  # [batch_size, target_count, cls_ch]
+            selected_reg_features,  # [batch_size, target_count, reg_ch]
+            selected_boxes,  # [batch_size, target_count, 4]
+            selected_scores,  # [batch_size, target_count]
+            selected_indices,  # [batch_size, target_count]
         )
 
     def _temporal_inference(self, x: list[torch.Tensor], refined_cls: torch.Tensor, refined_cls_indices: torch.Tensor):
