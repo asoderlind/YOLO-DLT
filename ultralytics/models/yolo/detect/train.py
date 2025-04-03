@@ -41,7 +41,6 @@ class DetectionTrainer(BaseTrainer):
             batch (int, optional): Size of batches, this is for `rect`. Defaults to None.
         """
         gs = max(int(de_parallel(self.model).stride.max() if self.model else 0), 32)
-        breakpoint()
         dataset_type = "temporal" if isinstance(self.model.model[-1], TemporalDetect) else "default"
         return build_yolo_dataset(
             self.args, img_path, batch, self.data, mode=mode, rect=mode == "val", stride=gs, dataset_type=dataset_type
