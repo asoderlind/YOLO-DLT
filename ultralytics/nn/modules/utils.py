@@ -3,6 +3,7 @@
 
 import copy
 import math
+from typing import Literal
 
 import numpy as np
 import torch
@@ -10,7 +11,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.init import uniform_
 
-__all__ = "multi_scale_deformable_attn_pytorch", "inverse_sigmoid"
+__all__ = (
+    "multi_scale_deformable_attn_pytorch",
+    "inverse_sigmoid",
+    "FAM_MODE",
+    "FSM_TYPE",
+)
 
 
 def _get_clones(module, n):
@@ -82,3 +88,8 @@ def multi_scale_deformable_attn_pytorch(
         .view(bs, num_heads * embed_dims, num_queries)
     )
     return output.transpose(1, 2).contiguous()
+
+
+FAM_MODE = Literal["both", "cls", "reg"]
+FSM_TYPE = Literal["nms", "thresh"]
+DETECT_FAM_MODE = Literal["both_combined", "both_separate", "cls", "reg"]
