@@ -1,10 +1,13 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
+import copy
 import json
+import random
 from collections import defaultdict
 from itertools import repeat
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
+from typing import TypedDict
 
 import cv2
 import numpy as np
@@ -26,7 +29,7 @@ from .augment import (
     classify_transforms,
     v8_transforms,
 )
-from .base import BaseDataset
+from .base import BaseDataset, BaseDatasetItem
 from .utils import (
     HELP_URL,
     LOGGER,
@@ -40,6 +43,17 @@ from .utils import (
 
 # Ultralytics dataset *.cache version, >= 1.0.0 for YOLOv8
 DATASET_CACHE_VERSION = "1.0.3"
+
+
+class YOLODatasetitem(TypedDict):
+    im_file: tuple[str, ...]
+    ori_shape: tuple[tuple[int, int], ...]
+    resized_shape: tuple[tuple[int, int], ...]
+    img: torch.Tensor
+    img_enhanced: torch.Tensor
+    cls: torch.Tensor
+    bboxes: torch.Tensor
+    batch_idx: torch.Tensor
 
 
 class YOLODataset(BaseDataset):
@@ -229,7 +243,7 @@ class YOLODataset(BaseDataset):
         return label
 
     @staticmethod
-    def collate_fn(batch):
+    def collate_fn(batch: list[BaseDatasetItem]) -> YOLODatasetitem:
         """Collates data samples into batches."""
         new_batch = {}
         keys = batch[0].keys()
@@ -246,6 +260,169 @@ class YOLODataset(BaseDataset):
             new_batch["batch_idx"][i] += i  # add target image index for build_targets()
         new_batch["batch_idx"] = torch.cat(new_batch["batch_idx"], 0)
         return new_batch
+
+
+class TemporalYOLODataset(YOLODataset):
+    """
+    Dataset class for loading temporal object detection labels in YOLO format.
+
+    It assumes that the images in the dataset are on named according to the format:
+        `vidx_framey_image_z`
+
+    Args:
+        data (dict, optional): A dataset YAML dictionary. Defaults to None.
+        task (str): An explicit arg to point current task, Defaults to 'detect'.
+        temporal_window (int): Number of frames in the temporal window. Defaults to 3.
+        temporal_stride (int): Temporal stride for sampling frames. Defaults to 1.
+
+    """
+
+    def __init__(self, *args, data=None, task="detect", **kwargs):
+        """Initializes the TemporalYOLODataset with optional temporal window and stride."""
+        self.hyp = kwargs.pop("hyp", None)
+        self.temporal_window: int = self.hyp.get("temporal_window", 3)
+        self.temporal_stride: int = self.hyp.get("temporal_stride", 1)
+        super().__init__(*args, data=data, task=task, **kwargs)
+        self._build_video_index()  # map frames to videos
+
+    def _build_video_index(self) -> None:
+        """
+        Create mapping of videos to frames and vice versa.
+        """
+
+        # video id to a list of tuples of frame id and index in the dataset
+        self.video_to_frames: defaultdict[int, list[tuple[int, int]]] = defaultdict(list[tuple[int, int]])
+
+        self.dataset_idx_to_video_id: dict[int, int] = {}  # Maps dataset image index to video id
+        # Parse filenames to extract video and frame IDs
+        for idx, path in enumerate(self.im_files):
+            vid_id, frame_id = self._parse_path(path)
+            self.video_to_frames[vid_id].append((frame_id, idx))
+            self.dataset_idx_to_video_id[idx] = vid_id
+
+        # Sort frames in each video by frame ID
+        for vid_id in self.video_to_frames:
+            self.video_to_frames[vid_id].sort()
+
+    def _parse_path(self, path: str) -> tuple[int, int]:
+        """
+        Parse the image path to extract video and frame IDs.
+        Assumes image filenames are in the format `vidx_framey_image_z`.
+
+        Args:
+            path (str): Path to the image file.
+
+        Returns:
+            tuple[str,str]: Video ID and frame ID.
+        """
+
+        # Split over '/' to get the filename, then split over '_' to get the video and frame IDs
+        parts = path.split("/")[-1].split("_")
+        if len(parts) < 3:
+            raise ValueError(f"Invalid image filename: {path}, expected format: `vidx_framey_image_z`")
+        vid_str = parts[0]  # vidx
+        frame_str = parts[1]  # framey
+
+        # Extract video and frame IDs
+        vid_id = int(vid_str[3:])  # remove 'vid' prefix
+        frame_id = int(frame_str[5:])
+        return vid_id, frame_id
+
+    def get_reference_frames(self, idx: int, global_sampling=False) -> list[tuple[int, int]]:
+        """
+        Get reference frames indicies for a given frame index.
+
+        Args:
+            idx (int): Index of the main frame in the dataset.
+            global_sampling (bool): Whether to sample globally from the video or locally around the main frame.
+        Returns:
+            reference_frames (list[tuple[int, itn]]): List of tuples of frame ids and dataset indices.,
+                that is which frames have come before the current in the same video and
+                their index in the entire dataset.
+        """
+        vid_id = self.dataset_idx_to_video_id[idx]
+        frames = self.video_to_frames[vid_id]
+
+        if global_sampling:
+            if len(frames) <= self.temporal_window:
+                return [(f_id, f_idx) for f_id, f_idx in frames]
+            # Get global temporal window
+            return random.sample([(f_id, f_idx) for f_id, f_idx in frames], self.temporal_window)
+
+        # Get loca temporal window
+        frame_id, _ = next(((f_id, f_idx) for f_id, f_idx in frames if f_idx == idx))
+        # Create a lookup dictionary
+        frame_id_to_dataset_idx = dict(frames)  # dict[frame_id, dataset_idx]
+        reference_frames: list[tuple[int, int]] = []
+
+        # Then for each reference frame
+        for i in range(1, self.temporal_window + 1):
+            ref_frame_id = frame_id - i * self.temporal_stride
+            if ref_frame_id < 0 or ref_frame_id not in frame_id_to_dataset_idx:
+                break
+            ref_dataset_idx = frame_id_to_dataset_idx[ref_frame_id]
+            reference_frames.append((ref_frame_id, ref_dataset_idx))
+        return reference_frames
+
+    def __getitem__(self, index: int) -> tuple[BaseDatasetItem, list[BaseDatasetItem]]:  # type: ignore[override]
+        """
+        Returns temporal information including main frame and reference frames.
+        """
+        # Get main frame data using parent implementation
+        main_data = super().__getitem__(index)
+
+        # Fetch reference frames
+        ref_indices = self.get_reference_frames(index)
+        ref_data: list[BaseDatasetItem] = []
+
+        for _, ref_idx in ref_indices:
+            ref_frame_data = super().__getitem__(ref_idx)
+            ref_data.append(ref_frame_data)
+
+        return main_data, ref_data
+
+    @staticmethod
+    def collate_fn(  # type: ignore[override]
+        batch: list[tuple[BaseDatasetItem, list[BaseDatasetItem]]], temporal_window: int = 3
+    ) -> YOLODatasetitem:  # type: ignore[override]
+        all_frames: list[BaseDatasetItem] = []
+        for batch_idx, (key_frame, ref_frames) in enumerate(batch):
+            # add key frame
+            # key_frame["batch_idx"] = torch.tensor([batch_idx])
+            key_frame["batch_idx"] = torch.full_like(key_frame["batch_idx"], batch_idx)
+
+            all_frames.append(key_frame)
+
+            # add reference frames
+            for ref_frame in ref_frames:
+                # set to -9999 to indicate that these are reference frames
+                # for easy filtering in the loss function
+                ref_frame["batch_idx"] = torch.full_like(ref_frame["batch_idx"], -9999)
+                all_frames.append(ref_frame)
+
+            # pad with zero tensors if we have less than temporal_window frames
+            padding_needed = temporal_window - len(ref_frames)
+
+            if not padding_needed > 0:
+                continue
+            for _ in range(padding_needed):
+                pad_frame = copy.deepcopy(key_frame)
+                pad_frame["img"] = torch.zeros_like(key_frame["img"])  # zero out the image
+
+                # IMPORTANT: Clear all object-related data to avoid mismatch
+                num_instances = 0  # No instances in padding frames
+                pad_frame["cls"] = torch.zeros((num_instances,), dtype=key_frame["cls"].dtype)
+                pad_frame["bboxes"] = torch.zeros((num_instances, 4), dtype=key_frame["bboxes"].dtype)
+                pad_frame["batch_idx"] = torch.zeros((num_instances,), dtype=key_frame["batch_idx"].dtype)
+                all_frames.append(pad_frame)
+
+        # collate all frames
+        collated_batch = YOLODataset.collate_fn(all_frames)
+
+        return collated_batch  # type: ignore[return-value]
+
+    def get_collate_fn(self):
+        return lambda batch: self.collate_fn(batch, self.temporal_window)
 
 
 class YOLOMultiModalDataset(YOLODataset):

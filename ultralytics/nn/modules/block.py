@@ -6,6 +6,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision.ops.boxes import box_area
 
 from ultralytics.utils.torch_utils import fuse_conv_and_bn
 
@@ -1661,3 +1662,325 @@ class FA(nn.Module):
         F2: torch.Tensor = F1 * self.attention(F1)  # [b, c_hidden, h, w]
         F3: torch.Tensor = self.CBR2(F2) * F2  # [b, c_hidden, h, w]
         return self.upconv(F3) + x  # [b, c, h, w]
+
+
+def box_iou(boxes1, boxes2):
+    area1 = box_area(boxes1)
+    area2 = box_area(boxes2)
+
+    lt = torch.max(boxes1[:, None, :2], boxes2[:, :2])  # [N,M,2]
+    rb = torch.min(boxes1[:, None, 2:], boxes2[:, 2:])  # [N,M,2]
+
+    wh = (rb - lt).clamp(min=0)  # [N,M,2]
+    inter = wh[:, :, 0] * wh[:, :, 1]  # [N,M]
+
+    union = area1[:, None] + area2 - inter
+
+    iou = inter / union
+    return iou, union
+
+
+def generalized_box_iou(boxes1, boxes2):
+    """
+    Generalized IoU from https://giou.stanford.edu/
+
+    The boxes should be in [x0, y0, x1, y1] format
+
+    Returns a [N, M] pairwise matrix, where N = len(boxes1)
+    and M = len(boxes2)
+    """
+    # degenerate boxes gives inf / nan results
+    # so do an early check
+    assert (boxes1[:, 2:] >= boxes1[:, :2]).all()
+    assert (boxes2[:, 2:] >= boxes2[:, :2]).all()
+    iou, union = box_iou(boxes1, boxes2)
+
+    lt = torch.min(boxes1[:, None, :2], boxes2[:, :2])
+    rb = torch.max(boxes1[:, None, 2:], boxes2[:, 2:])
+
+    wh = (rb - lt).clamp(min=0)  # [N,M,2]
+    area = wh[:, :, 0] * wh[:, :, 1]
+
+    return iou - (area - union) / area, iou
+
+
+class TemporalAttention(nn.Module):
+    def __init__(
+        self, channels: int, num_heads: int = 4, qkv_bias=False, attn_drop: float = 0.0, scale: int = 25
+    ) -> None:
+        # channels :input[batch_size,sequence_length, channels]-->output[batch_size, sequence_length, channels]
+        # qkv_bias : Does it matter? (No)
+        # qk_scale, attn_drop,proj_drop will not be used
+        # object = Attention(dim,num head)
+        super().__init__()
+        self.num_heads = num_heads
+        # head_dim = channels // num_heads
+        # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
+        self.scale = scale  # qk_scale or head_dim ** -0.5
+        self.qkv_cls = nn.Linear(channels, channels * 3, bias=qkv_bias)
+        self.qkv_reg = nn.Linear(channels, channels * 3, bias=qkv_bias)
+        self.attn_drop = nn.Dropout(attn_drop)
+
+    def forward(
+        self,
+        x_cls: torch.Tensor,
+        x_reg: torch.Tensor,
+        cls_score: torch.Tensor,
+        ave: bool = True,
+        sim_thresh: float = 0.75,
+    ) -> torch.Tensor | tuple[torch.Tensor, None, torch.Tensor]:
+        """
+        Forward pass of the TemporalAttention module.
+
+        Args:
+            x_cls (torch.Tensor): Classification branch features [batch_size, sequence_length, channels]
+            x_reg (torch.Tensor): Regression branch features [batch_size, sequence_length, channels]
+            cls_score (torch.Tensor): Classification confidence scores [batch_size, sequence_length]
+            ave: Whether to use average pooling over reference features
+
+        Returns:
+            x_cls (torch.Tensor): Classification branch features with attention applied &  [batch_size, sequence_length, 2 * channels]
+            x_reg (None): Regression branch features (not used currently)
+            sim_round2 (torch.Tensor): Similarity weights for average pooling [batch_size, sequence_length, sequence_length]
+        """
+        device = x_cls.device
+        B, N, C = x_cls.shape
+
+        # PART 1: PREPARATION - Create Q, K, V matrices
+        # Transform features to query, key, value representations
+        qkv_cls = (
+            self.qkv_cls(x_cls).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        )  # [3, B, num_heads, N, C // num_heads]
+        qkv_reg = (
+            self.qkv_reg(x_reg).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        )  # [3, B, num_heads, N, C // num_heads]
+
+        # Unpack Q, K, V from qkv tensors
+        q_cls, k_cls, v_cls = qkv_cls[0], qkv_cls[1], qkv_cls[2]  # [B, num_heads, N, C // num_heads]
+        q_reg, k_reg, v_reg = qkv_reg[0], qkv_reg[1], qkv_reg[2]  # Use v_cls for both branches
+
+        # Normalize features for numerical stability (implementation detail)
+        q_cls = q_cls / torch.norm(q_cls, dim=-1, keepdim=True)
+        k_cls = k_cls / torch.norm(k_cls, dim=-1, keepdim=True)
+        q_reg = q_reg / torch.norm(q_reg, dim=-1, keepdim=True)
+        k_reg = k_reg / torch.norm(k_reg, dim=-1, keepdim=True)
+        v_cls_normed: torch.Tensor = v_cls / torch.norm(v_cls, dim=-1, keepdim=True)
+
+        # Prepare confidence scores matrix for attention weighting
+        # cls_score = torch.reshape(cls_score, [1, 1, 1, -1]).repeat(1, self.num_heads, N, 1)  # [1, num_heads, N, N]
+        # Assuming cls_score has shape [B, N]
+        cls_score = cls_score.unsqueeze(1).unsqueeze(2)  # [B, 1, 1, N]
+        cls_score = cls_score.repeat(1, self.num_heads, N, 1)  # [B, num_heads, N, N]
+
+        # PART 2: AFFINITY MANNER (A.M.) - Section with confidence-weighted attention
+        # Compute attention scores for classification branch
+        attn_cls: torch.Tensor = (q_cls @ k_cls.transpose(-2, -1)) * self.scale * cls_score
+        attn_cls = attn_cls.softmax(dim=-1)
+        attn_cls = self.attn_drop(attn_cls)
+
+        # Compute attention scores for regression branch
+        attn_reg: torch.Tensor = (q_reg @ k_reg.transpose(-2, -1)) * self.scale * cls_score
+        attn_reg = attn_reg.softmax(dim=-1)
+        attn_reg = self.attn_drop(attn_reg)
+
+        # Combine attention from both branches (equivalent to SA_c(C) + SA_r(R) in paper)
+        # TODO: look into only using reg branch since that is the main challenge for nighttime detection
+        attn = (attn_reg + attn_cls) / 2  # [B, num_heads, N, N]
+
+        # Apply combined attention to v_cls (the aggregation step)
+        x = (attn @ v_cls).transpose(1, 2).reshape(B, N, C)
+
+        # Original features for concatenation (this is the V_c in the paper)
+        x_ori_cls = v_cls.permute(0, 2, 1, 3).reshape(B, N, C)
+        # x_ori_reg = v_reg.permute(0, 2, 1, 3).reshape(B, N, C)
+
+        # This is the SA(F) = concat((SA_c(C) + SA_r(R)), V_c) operation from the paper
+        x_cls_out = torch.cat([x, x_ori_cls], dim=-1)
+        # x_reg = torch.cat([x, x_ori_reg], dim=-1)
+
+        # Return early if we're not using average pooling
+        if not ave:
+            return x_cls
+
+        # PART 3: AVERAGE POOLING OVER REFERENCE FEATURES (A.P.)
+        # First, compute cosine similarity between value features
+        # This corresponds to N(V_c)N(V_c)^T in the paper
+        # Result is one attn matrix per head that represents the average cosine similarity across heads
+        attn_cls_raw = v_cls_normed @ v_cls_normed.transpose(-2, -1)  # [B, num_heads, N, N]
+        # Average the similarity matrix across attention heads
+        attn_cls_raw = torch.sum(attn_cls_raw, dim=1, keepdim=False) / self.num_heads  # [B, N, N]
+        # Create binary mask for features with similarity > threshold τ (0.75)
+        ones_matrix = torch.ones(attn.shape[2:], device=device)  # [N, N]
+        zero_matrix = torch.zeros(attn.shape[2:], device=device)  # [N, N]
+        sim_mask = torch.where(attn_cls_raw > sim_thresh, ones_matrix, zero_matrix)  # [B, N, N]
+
+        # Get averaged attention weights across heads
+        sim_attn = torch.sum(attn, dim=1, keepdim=False) / self.num_heads  # [B, N, N]
+
+        # Apply mask and renormalize for average pooling
+        # The positions with < thresh will not contribute to the final feature
+        sim_round2 = torch.softmax(sim_attn, dim=-1)  # raw attention scores -> prob distributions, each row sums to 1
+        sim_round2 = sim_mask * sim_round2 / (torch.sum(sim_mask * sim_round2, dim=-1, keepdim=True))  # [B, N, N]
+
+        # Return concatenated features and similarity weights for further processing
+        return x_cls_out, None, sim_round2
+        # return x_cls_out, x_reg_out, sim_round2
+
+    def __call__(
+        self, x_cls: torch.Tensor, x_reg: torch.Tensor, cls_score: torch.Tensor
+    ) -> torch.Tensor | tuple[torch.Tensor, None, torch.Tensor]:
+        return self.forward(x_cls, x_reg, cls_score)
+
+
+class FeatureAggregationModule(nn.Module):
+    """
+    Feature Aggregation Module (FAM) for enhancing object detection in videos.
+
+    Aggregates features across frames to improve detection quality by leveraging
+    temporal information, particularly useful for challenging conditions like
+    nighttime detection.
+    """
+
+    def __init__(
+        self,
+        cls_ch: int,
+        reg_ch: int,
+        num_heads: int = 4,
+        qkv_bias: bool = False,
+        attn_drop: float = 0.0,
+        scale: int = 25,
+        temporal_window: int = 2,
+    ):
+        super().__init__()
+        self.common_ch = max(cls_ch, reg_ch)
+
+        # Projection layers for cls and reg features
+        self.cls_proj = nn.Conv2d(cls_ch, self.common_ch, kernel_size=1, bias=False)
+        self.reg_proj = nn.Conv2d(reg_ch, self.common_ch, kernel_size=1, bias=False)
+
+        self.temporal_attention = TemporalAttention(self.common_ch, num_heads, qkv_bias, attn_drop, scale=scale)
+
+        # Feature transformation layers
+        self.linear1 = nn.Linear(2 * self.common_ch, 2 * self.common_ch)
+        self.linear2 = nn.Linear(4 * self.common_ch, 4 * self.common_ch)
+
+    def weighted_feature_enrichment(self, features: torch.Tensor, similarity_weights: torch.Tensor) -> torch.Tensor:
+        """
+        Weighted feature enrichment based on the similiarity weights from `TemporalAttention`.
+
+        Args:
+            features: Transformed features from temporal attention [B, N, 2*common_channel_dim]
+            similarity_weights: Weights for averaging reference features [B, N, N]
+
+        Returns:
+            Combined features after weighted pooling [B, N, 4*common_channel_dim]
+        """
+
+        # Cast similarity weights to match feature dtype for mixed precision compatibility
+        if not self.training:
+            similarity_weights = similarity_weights.to(features.dtype)
+
+        # Weighted aggregation of support features using similarity scores
+        weighted_features = torch.bmm(similarity_weights, features)  # [B, N, 2*common_ch]
+
+        # Concatenate weighted features with key features
+        combined_features = torch.cat([weighted_features, features], dim=-1)  # [B, N, 4*common_ch]
+        return combined_features
+
+    def compute_geo_sim(self, key_preds, ref_preds):
+        key_boxes = key_preds[:, :4]
+        ref_boxes = ref_preds[:, :4]
+        cost_giou, iou = generalized_box_iou(key_boxes.to(torch.float32), ref_boxes.to(torch.float32))
+
+        return iou.to(torch.float16)
+
+    def local_agg(self, features, local_results, boxes, cls_score):
+        local_features = local_results["msa"]
+        local_features_n = local_features / torch.norm(local_features, dim=-1, keepdim=True)
+        features_n = features / torch.norm(features, dim=-1, keepdim=True)
+        cos_sim = features_n @ local_features_n.transpose(0, 1)
+
+        geo_sim = self.compute_geo_sim(boxes, local_results["boxes"])
+        N = local_results["cls_scores"].shape[0]
+        M = cls_score.shape[0]
+        pre_scores = cls_score
+        pre_scores = torch.reshape(pre_scores, [-1, 1]).repeat(1, N)
+        other_scores = local_results["cls_scores"] * local_results["reg_scores"]
+        other_scores = torch.reshape(other_scores, [1, -1]).repeat(M, 1)
+        ones_matrix = torch.ones([M, N]).to("cuda")
+        zero_matrix = torch.zeros([M, N]).to("cuda")
+        thresh_map = torch.where(other_scores - pre_scores > -0.3, ones_matrix, zero_matrix)
+        local_sim = torch.softmax(25 * cos_sim * thresh_map, dim=-1) * geo_sim
+        local_sim = local_sim / torch.sum(local_sim, dim=-1, keepdim=True)
+        local_sim = local_sim.to(features.dtype)
+        sim_features = local_sim @ local_features
+
+        return (sim_features + features) / 2
+
+    def forward(
+        self,
+        cls_features: torch.Tensor,
+        reg_features: torch.Tensor,
+        cls_scores: torch.Tensor,
+        boxes: torch.Tensor,
+        use_local_agg: bool = False,
+    ):
+        """
+        Forward pass of the Feature Aggregation Module.
+
+        Args:
+            cls_features (torch.tensor):  Classification branch features [B, N, C_cls]
+            reg_features (torch.tensor):  Regression branch features [B, N, C_reg]
+            cls_scores (torch.tensor): Confidence scores for classification [B, N]
+            boxes (torch.tensor): Bounding boxes for the current frame [B, N, 4]
+
+
+
+        """
+        B, N, C_cls = cls_features.shape
+        _, _, C_reg = reg_features.shape
+        # Reshape for 1x1 convolutions (treating the N dimension as height * width)
+        if C_cls != self.common_ch:
+            cls_features_reshaped = cls_features.view(B, 1, N, C_cls).permute(0, 3, 1, 2)  # [B, C_cls, 1, N]
+            cls_features = self.cls_proj(cls_features_reshaped)
+            cls_features = cls_features.permute(0, 2, 3, 1).view(B, N, self.common_ch)  # [B, N, common_ch]
+        if C_reg != self.common_ch:
+            reg_features_reshaped = reg_features.view(B, 1, N, C_reg).permute(0, 3, 1, 2)  # [B, C_reg, 1, N]
+            reg_features = self.reg_proj(reg_features_reshaped)
+            reg_features = reg_features.permute(0, 2, 3, 1).view(B, N, self.common_ch)  # [B, N, common_ch]
+
+        # [B, N, 2*common_ch], [B, N, N]
+        enhanced_cls_features, _, similarity_weights = self.temporal_attention(cls_features, reg_features, cls_scores)
+
+        # First feature transformation
+        transformed_cls_features = self.linear1(enhanced_cls_features)  # [B, N, 2*common_ch]
+        # if other_result != []:
+        #     other_msa = other_result['msa'].unsqueeze(0)
+        #     msa = torch.cat([msa,other_msa],dim=1)
+        pooled_cls_features = self.weighted_feature_enrichment(
+            transformed_cls_features, similarity_weights
+        )  # [B, N, 4*common_ch]
+
+        # Second feature transformation
+        final_features: torch.Tensor = self.linear2(pooled_cls_features)  # [B, N, 4*common_ch]
+
+        # Optional local aggregation for enhanced temporal consistency
+        if not use_local_agg:
+            return final_features, final_features
+
+        locally_enhanced_features = self.local_agg(
+            final_features,
+            boxes,
+            cls_scores,
+        )
+        return locally_enhanced_features, final_features
+
+    def __call__(
+        self,
+        cls_features: torch.Tensor,
+        reg_features: torch.Tensor,
+        cls_scores: torch.Tensor,
+        boxes: torch.Tensor,
+        use_local_agg: bool = False,
+    ):
+        return self.forward(cls_features, reg_features, cls_scores, boxes, use_local_agg)
