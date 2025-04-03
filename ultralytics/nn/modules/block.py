@@ -1728,7 +1728,7 @@ class TemporalAttention(nn.Module):
         cls_score: torch.Tensor,
         ave: bool = True,
         sim_thresh: float = 0.75,
-    ) -> torch.Tensor | tuple[torch.Tensor, None, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor] | tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Forward pass of the TemporalAttention module.
 
@@ -1757,7 +1757,7 @@ class TemporalAttention(nn.Module):
 
         # Unpack Q, K, V from qkv tensors
         q_cls, k_cls, v_cls = qkv_cls[0], qkv_cls[1], qkv_cls[2]  # [B, num_heads, N, C // num_heads]
-        q_reg, k_reg, v_reg = qkv_reg[0], qkv_reg[1], qkv_reg[2]  # Use v_cls for both branches
+        q_reg, k_reg, v_reg = qkv_reg[0], qkv_reg[1], qkv_reg[2]
 
         # Normalize features for numerical stability (implementation detail)
         q_cls = q_cls / torch.norm(q_cls, dim=-1, keepdim=True)
@@ -1765,6 +1765,7 @@ class TemporalAttention(nn.Module):
         q_reg = q_reg / torch.norm(q_reg, dim=-1, keepdim=True)
         k_reg = k_reg / torch.norm(k_reg, dim=-1, keepdim=True)
         v_cls_normed: torch.Tensor = v_cls / torch.norm(v_cls, dim=-1, keepdim=True)
+        v_reg_normed: torch.Tensor = v_reg / torch.norm(v_reg, dim=-1, keepdim=True)
 
         # Prepare confidence scores matrix for attention weighting
         # cls_score = torch.reshape(cls_score, [1, 1, 1, -1]).repeat(1, self.num_heads, N, 1)  # [1, num_heads, N, N]
@@ -1779,7 +1780,7 @@ class TemporalAttention(nn.Module):
         attn_cls = self.attn_drop(attn_cls)
 
         # Compute attention scores for regression branch
-        attn_reg: torch.Tensor = (q_reg @ k_reg.transpose(-2, -1)) * self.scale * cls_score
+        attn_reg: torch.Tensor = (q_reg @ k_reg.transpose(-2, -1)) * self.scale
         attn_reg = attn_reg.softmax(dim=-1)
         attn_reg = self.attn_drop(attn_reg)
 
@@ -1788,31 +1789,40 @@ class TemporalAttention(nn.Module):
         attn = (attn_reg + attn_cls) / 2  # [B, num_heads, N, N]
 
         # Apply combined attention to v_cls (the aggregation step)
-        x = (attn @ v_cls).transpose(1, 2).reshape(B, N, C)
+        x_cls_inter = (attn @ v_cls).transpose(1, 2).reshape(B, N, C)
+        x_reg_inter = (attn @ v_reg).transpose(1, 2).reshape(B, N, C)
 
         # Original features for concatenation (this is the V_c in the paper)
         x_ori_cls = v_cls.permute(0, 2, 1, 3).reshape(B, N, C)
-        # x_ori_reg = v_reg.permute(0, 2, 1, 3).reshape(B, N, C)
+        x_ori_reg = v_reg.permute(0, 2, 1, 3).reshape(B, N, C)
 
         # This is the SA(F) = concat((SA_c(C) + SA_r(R)), V_c) operation from the paper
-        x_cls_out = torch.cat([x, x_ori_cls], dim=-1)
-        # x_reg = torch.cat([x, x_ori_reg], dim=-1)
+        x_cls_out = torch.cat([x_cls_inter, x_ori_cls], dim=-1)
+        x_reg_out = torch.cat([x_reg_inter, x_ori_reg], dim=-1)
 
         # Return early if we're not using average pooling
         if not ave:
-            return x_cls
+            return x_cls_out, x_reg_out
 
         # PART 3: AVERAGE POOLING OVER REFERENCE FEATURES (A.P.)
         # First, compute cosine similarity between value features
         # This corresponds to N(V_c)N(V_c)^T in the paper
         # Result is one attn matrix per head that represents the average cosine similarity across heads
         attn_cls_raw = v_cls_normed @ v_cls_normed.transpose(-2, -1)  # [B, num_heads, N, N]
+        attn_reg_raw = v_reg_normed @ v_reg_normed.transpose(-2, -1)  # [B, num_heads, N, N]
+
         # Average the similarity matrix across attention heads
         attn_cls_raw = torch.sum(attn_cls_raw, dim=1, keepdim=False) / self.num_heads  # [B, N, N]
+        attn_reg_raw = torch.sum(attn_reg_raw, dim=1, keepdim=False) / self.num_heads  # [B, N, N]
+
         # Create binary mask for features with similarity > threshold τ (0.75)
         ones_matrix = torch.ones(attn.shape[2:], device=device)  # [N, N]
         zero_matrix = torch.zeros(attn.shape[2:], device=device)  # [N, N]
+
+        conf_sim_thresh: float = 0.99  # this value is from the paper
+
         sim_mask = torch.where(attn_cls_raw > sim_thresh, ones_matrix, zero_matrix)  # [B, N, N]
+        obj_mask = torch.where(attn_reg_raw > conf_sim_thresh, ones_matrix, zero_matrix)  # [B, N, N]
 
         # Get averaged attention weights across heads
         sim_attn = torch.sum(attn, dim=1, keepdim=False) / self.num_heads  # [B, N, N]
@@ -1822,13 +1832,15 @@ class TemporalAttention(nn.Module):
         sim_round2 = torch.softmax(sim_attn, dim=-1)  # raw attention scores -> prob distributions, each row sums to 1
         sim_round2 = sim_mask * sim_round2 / (torch.sum(sim_mask * sim_round2, dim=-1, keepdim=True))  # [B, N, N]
 
+        obj_mask = obj_mask * sim_round2 / torch.sum(sim_mask * sim_round2, dim=-1, keepdim=True)  # [B, N, N]
+
         # Return concatenated features and similarity weights for further processing
-        return x_cls_out, None, sim_round2
+        return x_cls_out, x_reg_out, sim_round2, obj_mask
         # return x_cls_out, x_reg_out, sim_round2
 
     def __call__(
         self, x_cls: torch.Tensor, x_reg: torch.Tensor, cls_score: torch.Tensor
-    ) -> torch.Tensor | tuple[torch.Tensor, None, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor] | tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         return self.forward(x_cls, x_reg, cls_score)
 
 
@@ -1862,7 +1874,9 @@ class FeatureAggregationModule(nn.Module):
 
         # Feature transformation layers
         self.linear1 = nn.Linear(2 * self.common_ch, 2 * self.common_ch)
+        self.linear1_reg = nn.Linear(2 * self.common_ch, 2 * self.common_ch)
         self.linear2 = nn.Linear(4 * self.common_ch, 4 * self.common_ch)
+        self.linear2_reg = nn.Linear(4 * self.common_ch, 4 * self.common_ch)
 
     def weighted_feature_enrichment(self, features: torch.Tensor, similarity_weights: torch.Tensor) -> torch.Tensor:
         """
@@ -1950,10 +1964,13 @@ class FeatureAggregationModule(nn.Module):
             reg_features = reg_features.permute(0, 2, 3, 1).view(B, N, self.common_ch)  # [B, N, common_ch]
 
         # [B, N, 2*common_ch], [B, N, N]
-        enhanced_cls_features, _, similarity_weights = self.temporal_attention(cls_features, reg_features, cls_scores)
+        enhanced_cls_features, enhanced_reg_features, similarity_weights, reg_similarity_weights = (
+            self.temporal_attention(cls_features, reg_features, cls_scores)
+        )
 
         # First feature transformation
         transformed_cls_features = self.linear1(enhanced_cls_features)  # [B, N, 2*common_ch]
+        transformed_reg_features = self.linear1_reg(enhanced_reg_features)  # [B, N, 2*common_ch]
         # if other_result != []:
         #     other_msa = other_result['msa'].unsqueeze(0)
         #     msa = torch.cat([msa,other_msa],dim=1)
@@ -1961,19 +1978,25 @@ class FeatureAggregationModule(nn.Module):
             transformed_cls_features, similarity_weights
         )  # [B, N, 4*common_ch]
 
+        pooled_reg_features = self.weighted_feature_enrichment(transformed_reg_features, reg_similarity_weights)
+
         # Second feature transformation
-        final_features: torch.Tensor = self.linear2(pooled_cls_features)  # [B, N, 4*common_ch]
+        final_cls_features: torch.Tensor = self.linear2(pooled_cls_features)  # [B, N, 4*common_ch]
+        final_reg_features: torch.Tensor = self.linear2_reg(pooled_reg_features)
+
+        return final_cls_features, final_reg_features
+        # [B, N, 4*common_ch]
 
         # Optional local aggregation for enhanced temporal consistency
-        if not use_local_agg:
-            return final_features, final_features
+        # if not use_local_agg:
+        #     return final_features, final_features
 
-        locally_enhanced_features = self.local_agg(
-            final_features,
-            boxes,
-            cls_scores,
-        )
-        return locally_enhanced_features, final_features
+        # locally_enhanced_features = self.local_agg(
+        #     final_features,
+        #     boxes,
+        #     cls_scores,
+        # )
+        # return locally_enhanced_features, final_features
 
     def __call__(
         self,
