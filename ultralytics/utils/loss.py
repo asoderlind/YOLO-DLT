@@ -223,6 +223,8 @@ class v8DetectionLoss:
         self.bce = nn.BCEWithLogitsLoss(reduction="none")
         self.hyp = h
         self.temporal = isinstance(m, TemporalDetect)
+        if self.temporal:
+            self.fam_mode = m.fam_mode
         self.stride = m.stride  # model strides
         self.nc = m.nc  # number of classes
         self.no = m.nc + m.reg_max * 4
@@ -277,11 +279,28 @@ class v8DetectionLoss:
             feats = preds[1] if isinstance(preds, tuple) else preds
             loss = torch.zeros(4, device=self.device)  # box, cls, dfl, con
         else:
-            loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal_cls
-            start_index = 0 if len(preds) == 3 else 1
-            feats = preds[start_index]
-            refined_cls_preds = preds[start_index + 1]  # which indices out of sum(h_i * w_i) should be used
-            refined_cls_indices = preds[start_index + 2]
+            match self.fam_mode:
+                case "cls":
+                    loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal_cls
+                    start_index = 0 if len(preds) == 4 else 1  # 4 outputs during training, 5 during validation
+                    feats = preds[start_index]
+                    refined_cls_preds = preds[start_index + 1]
+                    _ = preds[start_index + 2]  # skip reg preds
+                    refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
+                case "reg":
+                    loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal reg
+                    start_index = 0 if len(preds) == 4 else 1
+                    feats = preds[start_index]
+                    _ = preds[start_index + 1]  # skip cls preds
+                    refined_reg_preds = preds[start_index + 2]
+                    refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
+                case _:  # both cls and reg
+                    loss = torch.zeros(6, device=self.device)  # box, cls, dfl, con, temporal_cls, temporal_reg
+                    start_index = 0 if len(preds) == 4 else 1
+                    feats = preds[start_index]
+                    refined_cls_preds = preds[start_index + 1]
+                    refined_reg_preds = preds[start_index + 2]
+                    refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
 
             # Reference frames batch_idx are set < 0 in the temporal collate function
             key_frame_mask = batch["batch_idx"] >= 0
@@ -322,7 +341,6 @@ class v8DetectionLoss:
             gt_bboxes,
             mask_gt,
         )  # [batch_size, sum(h_i * w_i), 4], [batch_size, sum(h_i * w_i), nc]
-
         target_scores_sum = max(target_scores.sum(), 1)
 
         # Cls loss
@@ -333,21 +351,24 @@ class v8DetectionLoss:
         if self.temporal:
             # NOTE: temporal cls loss does not make sense for validation
             # But I can't be bothered to handle more conditionals
-            # Create batch indices tensor [batch_size, top_k]
-            # Values are the batch index repeated top_k times over the columns
-            batch_indices = (
-                torch.arange(batch_size, device=target_scores.device)
-                .view(-1, 1)
-                .expand(-1, refined_cls_indices.size(1))
-            )
-            # Crazy PyTorch indexing to get the target scores for the key frames
-            # Filter target_scores[batch_indices[i,j], refined_cls_indices[i,j]] for each i, j
-            # Keep other dim the same
-            refined_target_scores = target_scores[batch_indices, refined_cls_indices]
-            refined_target_scores_sum = max(refined_target_scores.sum(), 1)
-            loss[4] = self.bce(refined_cls_preds, refined_target_scores.to(dtype)).sum() / (
-                refined_target_scores_sum + eps
-            )
+
+            if self.fam_mode in ["cls", "both_combined", "both_separate"]:
+                # Calculate the temporal classification loss
+                loss[4] = self._calculate_temporal_cls_loss(
+                    refined_cls_preds, refined_indices, target_scores, batch_size, dtype, eps
+                )
+            if self.fam_mode in ["reg", "both_combined", "both_separate"]:
+                loss_idx = 4 if self.fam_mode == "reg" else 5
+                loss[loss_idx] = self._calculate_temporal_reg_loss(
+                    refined_reg_preds,
+                    refined_indices,
+                    target_bboxes,
+                    target_scores,
+                    anchor_points,
+                    stride_tensor,
+                    fg_mask,
+                    batch_size,
+                )
 
         # Bbox loss
         if fg_mask.sum():
@@ -404,9 +425,90 @@ class v8DetectionLoss:
         loss[2] *= self.hyp.dfl  # dfl gain
         loss[3] *= self.hyp.lambda_c  # consistency gain
         if self.temporal:
-            loss[4] *= self.hyp.temporal_cls  # temporal cls gain
+            if self.fam_mode == "cls":
+                loss[4] *= self.hyp.temporal_cls
+            elif self.fam_mode == "reg":
+                loss[4] *= self.hyp.temporal_reg
+            else:  # both_combined, both_separate
+                loss[4] *= self.hyp.temporal_cls
+                loss[5] *= self.hyp.temporal_reg
 
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
+
+    def _calculate_temporal_cls_loss(
+        self,
+        refined_cls_preds: torch.Tensor,
+        refined_indices: torch.Tensor,
+        target_scores: torch.Tensor,
+        batch_size: int,
+        dtype,
+        eps: float = 1e-7,
+    ) -> torch.Tensor:
+        """Calculate the temporal classification loss.
+
+        Args:
+            refined_cls_preds (torch.Tensor): [B, target_count, num_classes]
+            refined_indices (torch.Tensor): [B, target_count]
+            target_scores (torch.Tensor): [B, sum(h_i * w_i), num_classes]
+            batch_size (int): Batch size.
+            dtype: Data type of the tensors.
+            eps (float, optional): Small value to avoid division by zero. Defaults to 1e-7.
+        Returns:
+            torch.Tensor: Temporal classification loss.
+
+        """
+        batch_indices = (
+            torch.arange(batch_size, device=target_scores.device).view(-1, 1).expand(-1, refined_indices.size(1))
+        )
+        # Crazy PyTorch indexing to get the target scores for the key frames
+        # Filter target_scores[batch_indices[i,j], refined_indices[i,j]] for each i, j
+        # Keep other dim the same
+        refined_target_scores = target_scores[batch_indices, refined_indices]
+        refined_target_scores_sum = max(  # type: ignore
+            refined_target_scores.sum(), 1
+        )
+        return self.bce(refined_cls_preds, refined_target_scores.to(dtype)).sum() / (refined_target_scores_sum + eps)
+
+    def _calculate_temporal_reg_loss(
+        self,
+        refined_reg_preds: torch.Tensor,
+        refined_indices: torch.Tensor,
+        target_bboxes: torch.Tensor,
+        target_scores: torch.Tensor,
+        anchor_points: torch.Tensor,
+        stride_tensor: torch.Tensor,
+        fg_mask: torch.Tensor,
+        batch_size: int,
+    ) -> torch.Tensor:
+        selected_anchor_points = anchor_points[refined_indices]
+        pred_bboxes_refined = self.bbox_decode(selected_anchor_points, refined_reg_preds)
+        batch_indices = (
+            torch.arange(batch_size, device=target_scores.device).view(-1, 1).expand(-1, refined_indices.size(1))
+        )
+        refined_target_bboxes = target_bboxes[batch_indices, refined_indices]
+        refined_target_scores = target_scores[batch_indices, refined_indices]
+        refined_target_scores_sum = max(refined_target_scores.sum(), 1)  # type: ignore
+        refined_fg_mask = fg_mask[batch_indices, refined_indices]
+
+        # Select appropriate strides for the refined indices
+        selected_strides = stride_tensor[refined_indices]  # [batch_size, target_count, 1]
+
+        # Divide target bboxes by stride to match the coordinate space of predictions
+        refined_target_bboxes = refined_target_bboxes / selected_strides
+
+        if not refined_fg_mask.sum():
+            return torch.tensor(0.0, device=self.device)
+        loss, _ = self.bbox_loss(
+            refined_reg_preds,
+            pred_bboxes_refined,
+            selected_anchor_points,
+            refined_target_bboxes,
+            refined_target_scores,
+            refined_target_scores_sum,
+            refined_fg_mask,
+        )
+
+        return loss
 
 
 class v8SegmentationLoss(v8DetectionLoss):
