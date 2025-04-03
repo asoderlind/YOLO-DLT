@@ -7,7 +7,6 @@ task: detect # (str) YOLO task, i.e. detect, segment, classify, pose, obb
 mode: train # (str) YOLO mode, i.e. train, val, predict, export, track, benchmark
 
 # Train settings -------------------------------------------------------------------------------------------------------
-temporal: False # (bool) train on temporal data
 temporal_window: 3 # (int) number of frames in the temporal window
 temporal_stride: 1 # (int) temporal window stride (take the previous reference frames every n frames)
 use_fe: False # (bool) use feature enhancement for training

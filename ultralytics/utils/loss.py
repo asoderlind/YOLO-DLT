@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ultralytics.DLN.model import DLN
+from ultralytics.nn.modules.head import TemporalDetect
 from ultralytics.utils.metrics import OKS_SIGMA
 from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
 from ultralytics.utils.tal import RotatedTaskAlignedAssigner, TaskAlignedAssigner, dist2bbox, dist2rbox, make_anchors
@@ -221,6 +222,7 @@ class v8DetectionLoss:
         m = model.model[-1]  # Detect() module
         self.bce = nn.BCEWithLogitsLoss(reduction="none")
         self.hyp = h
+        self.temporal = isinstance(m, TemporalDetect)
         self.stride = m.stride  # model strides
         self.nc = m.nc  # number of classes
         self.no = m.nc + m.reg_max * 4
@@ -271,8 +273,7 @@ class v8DetectionLoss:
     def __call__(self, preds, batch, **kwargs):
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
         eps = 1e-7
-
-        if not self.hyp.temporal:
+        if not self.temporal:
             feats = preds[1] if isinstance(preds, tuple) else preds
             loss = torch.zeros(4, device=self.device)  # box, cls, dfl, con
         else:
@@ -329,7 +330,7 @@ class v8DetectionLoss:
         loss[1] = self.bce(pred_scores, target_scores.to(dtype)).sum() / (target_scores_sum + eps)  # BCE
 
         # Temporal cls loss
-        if self.hyp.temporal:
+        if self.temporal:
             # NOTE: temporal cls loss does not make sense for validation
             # But I can't be bothered to handle more conditionals
             # Create batch indices tensor [batch_size, top_k]
@@ -402,7 +403,7 @@ class v8DetectionLoss:
         loss[1] *= self.hyp.cls  # cls gain
         loss[2] *= self.hyp.dfl  # dfl gain
         loss[3] *= self.hyp.lambda_c  # consistency gain
-        if self.hyp.temporal:
+        if self.temporal:
             loss[4] *= self.hyp.temporal_cls  # temporal cls gain
 
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
