@@ -34,6 +34,7 @@ model_ghostspdconv = YOLO("dlt-models/yolo11n-GhostSPDConv.yaml")
 model_progressive_spdconv = YOLO("dlt-models/yolo11n-ProgSPDConv.yaml")
 model_repc3k2 = YOLO("dlt-models/yolo11n-RepC3k2.yaml")
 model_rfac3k2 = YOLO("dlt-models/yolo11n-RFAC3k2.yaml")
+model_yolo11s = YOLO("yolo11s.yaml")
 
 
 model_ghostconv.info()
@@ -70,3 +71,4 @@ model_ghostspdconv.info()
 model_progressive_spdconv.info()
 model_repc3k2.info()
 model_rfac3k2.info()
+model_yolo11s.info()

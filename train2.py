@@ -155,16 +155,22 @@ if __name__ == "__main__":
     #     model="runs/detect/bdd100k_night-yolo11n-SPDConv3/weights/last.pt",
     #     resume=True,
     # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-repc3k2",
+    #     model="runs/detect/bdd100k_night-yolo11n-repc3k2/weights/last.pt",
+    #     resume=True,
+    # )
+    # train_model(name="bdd100k_night-yolo11n-rfac3k2", model="dlt-models/yolo11n-RFAC3k2.yaml")
     train_model(
-        name="bdd100k_night-yolo11n-repc3k2",
-        model="runs/detect/bdd100k_night-yolo11n-repc3k2/weights/last.pt",
+        name="bdd100k_night-yolo11n-progressive-spdconv",
+        model="runs/detect/bdd100k_night-yolo11n-progressive-spdconv/weights/last.pt",
         resume=True,
     )
-    train_model(name="bdd100k_night-yolo11n-rfac3k2", model="dlt-models/yolo11n-RFAC3k2.yaml")
-    train_model(name="bdd100k_night-yolo11n-progressive-spdconv", model="dlt-models/yolo11n-ProgSPDConv.yaml")
     # These are not critical
     train_model(name="bdd100k_night-yolo11n-focal-eiou", model="yolo11n.yaml", iou_type="focal-eiou")
     train_model(name="bdd100k_night-yolo11n-wiou3", model="yolo11n.yaml", iou_type="wiou3")
     train_model(name="bdd100k_night-yolo11n-siou", model="yolo11n.yaml", iou_type="siou")
     train_model(name="bdd100k_night-yolo11n-isiou", model="yolo11n.yaml", iou_type="isiou")
     train_model(name="bdd100k_night-yolo11n-ciou+nwd", model="yolo11n.yaml", iou_type="ciou+nwd")
+    train_model(name="bdd100k_night-yolo11n-progressive-spdconv-2", model="dlt-models/yolo11n-ProgSPDConv-2.yaml")
+    train_model(name="bdd100k_night-yolo11n-nwd", model="yolo11n.yaml", iou_type="nwd")
