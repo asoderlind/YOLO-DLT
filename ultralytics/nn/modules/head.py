@@ -298,7 +298,6 @@ class TemporalDetect(Detect):
         key_frame_batch_indices = torch.arange(0, batch_size, self.temporal_window + 1, device=x[0].device)
         x = [x[i][key_frame_batch_indices] for i in range(len(x))]
 
-        # WORK IN PROGRESS
         if self.training:  # Training path
             return (
                 x,
@@ -306,14 +305,13 @@ class TemporalDetect(Detect):
                 key_frame_indices,
             )  # this way x will still be index 1 in the return tuple
 
-        # INFERENCE IS DEFINITELY NOT WORKING YET
         y = self._temporal_inference(x, final_cls_preds, key_frame_indices)  # [bs, 4 + num_classes, sum_i(w_i * h_i)]
         return y if self.export else (y, x, final_cls_preds, key_frame_indices)
 
     def FSM(
         self,
         raw_preds: torch.Tensor,
-        vid_fetures: torch.Tensor,
+        vid_features: torch.Tensor,
         reg_features: torch.Tensor,
         nms_thresh: float = 0.75,
         topk_pre: int = 750,
@@ -418,7 +416,7 @@ class TemporalDetect(Detect):
             assert len(final_indices) == topk_post, f"Expected {topk_post} indices, got {len(final_indices)}"
 
             # Extract features directly using final indices
-            batch_cls_features = vid_fetures[b, final_indices]
+            batch_cls_features = vid_features[b, final_indices]
             batch_reg_features = reg_features[b, final_indices]
 
             # Get selected boxes and scores
