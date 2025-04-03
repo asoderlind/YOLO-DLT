@@ -169,9 +169,19 @@ if __name__ == "__main__":
     # These are not critical
     # train_model(name="bdd100k_night-yolo11n-focal-eiou", model="yolo11n.yaml", iou_type="focal-eiou")
     # train_model(name="bdd100k_night-yolo11n-wiou3", model="yolo11n.yaml", iou_type="wiou3")
+
+    train_model(
+        name="bdd100k_night-yolo11n-spdconv-rfac3k2",
+        model="dlt-models/yolo11n-spdconv-rfac3k2.yaml",
+    )
+    train_model(
+        name="bdd100k_night-yolo11n-spdconv-repc3k2",
+        model="dlt-models/yolo11n-spdconv-repc3k2.yaml",
+    )
     train_model(
         name="bdd100k_night-yolo11n-final-ciou",
-        model="dlt-models/yolo11n-final.yaml",
+        model="runs/detect/bdd100k_night-yolo11n-final-ciou/weights/last.pt",
+        resume=True,
     )
     train_model(
         name="bdd100k_night-yolo11n-final-1",
