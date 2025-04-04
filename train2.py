@@ -180,6 +180,22 @@ if __name__ == "__main__":
         model="dlt-models/yolo11n-spdconv-repc3k2.yaml",
     )
     train_model(
+        name="bdd100k_night-yolo11n-spdconv-fa",
+        model="dlt-models/yolo11n-spdconv-fa.yaml",
+    )
+    train_model(
+        name="bdd100k_night-yolo11n-spdconv-cl",
+        model="dlt-models/yolo11n-spdconv-cl.yaml",
+    )
+    train_model(
+        name="bdd100k_night-yolo11n-spdconv-fa-cl",
+        model="dlt-models/yolo11n-spdconv-fa-cl.yaml",
+    )
+    train_model(
+        name="bdd100k_night-yolo11n-gc+newconv",
+        model="dlt-models/yolo11n-GC+NewConv.yaml",
+    )
+    train_model(
         name="bdd100k_night-yolo11n-final-ciou",
         model="runs/detect/bdd100k_night-yolo11n-final-ciou/weights/last.pt",
         resume=True,
