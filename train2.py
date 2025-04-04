@@ -187,7 +187,7 @@ if __name__ == "__main__":
     # )
     train_model(
         name="bdd100k_night-yolo11n-spdconv-full-mosaic",
-        model="dlt-models/yolo11n-SPDConv3.yaml",
+        model="dlt-models/yolo11n-SPDConv-3.yaml",
         close_mosaic=0,
     )
     train_model(
@@ -205,7 +205,7 @@ if __name__ == "__main__":
     )
     train_model(
         name="bdd100k_night-yolo11n-spdconv-augs",
-        model="dlt-models/yolo11n-SPDConv3.yaml",
+        model="dlt-models/yolo11n-SPDConv-3.yaml",
         degrees=15,
         shear=10,
         crop=0.75,
