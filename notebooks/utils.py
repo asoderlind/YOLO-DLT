@@ -8,7 +8,12 @@ import torchvision.transforms as transforms
 import numpy as np
 
 
-def draw_yolo_bboxes(image_path, label_path, w=1280, h=720, id2cls={0: "person"}, text_size=1, text_thickness=2):
+MAX_DIST = 150
+
+
+def draw_yolo_bboxes(
+    image_path, label_path, w: int, h: int, id2cls: dict, classes: list[int], text_size=1, text_thickness=2
+):
     # Load the image
     img = cv2.imread(image_path)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -16,34 +21,36 @@ def draw_yolo_bboxes(image_path, label_path, w=1280, h=720, id2cls={0: "person"}
     with open(label_path, "rt") as f:
         data_lines = f.readlines()
 
-    bboxes = []
-    distances = []
+    labels: list[tuple[int, int, int, int, str, str]] = []
 
     for item in range(len(data_lines)):
         if len(data_lines[item].split(" ")) == 5:
-            cl, a, b, c, d = data_lines[item].split(" ")
-            cl = int(cl)
-            e = None
-        if len(data_lines[item].split(" ")) == 6:
-            cl, a, b, c, d, e = data_lines[item].split(" ")
-            cl = int(cl)
-            e = float(e)
+            cls, x_center, y_center, w_box, h_box = data_lines[item].split(" ")
+            cls = int(cls)
+            dist = -1.0
+        else:
+            cls, x_center, y_center, w_box, h_box, dist = data_lines[item].split(" ")
+            cls = int(cls)
+            dist = f"{float(dist) * MAX_DIST:.2f}"
 
-        x1 = int((float(a) - float(c) / 2) * float(w))
-        y1 = int((float(b) - float(d) / 2) * float(h))
-        x2 = int((float(a) + float(c) / 2) * float(w))
-        y2 = int((float(b) + float(d) / 2) * float(h))
+        x1 = int((float(x_center) - float(w_box) / 2) * float(w))
+        y1 = int((float(y_center) - float(h_box) / 2) * float(h))
+        x2 = int((float(x_center) + float(w_box) / 2) * float(w))
+        y2 = int((float(y_center) + float(h_box) / 2) * float(h))
 
-        bboxes.append([x1, y1, x2, y2, cl])
-        distances.append(e)
+        if cls not in classes:
+            continue
+        else:
+            _class = id2cls[cls] if cls in id2cls else str(cls)
+            labels.append((x1, y1, x2, y2, _class, dist))
 
-    for c, d in zip(bboxes, distances):
-        cv2.rectangle(img, (c[0], c[1]), (c[2], c[3]), (0, 255, 0), 2)
-        _class = id2cls[c[4]] if c[4] in id2cls else str(c[4])
+    for label in labels:
+        x1, y1, x2, y2, cls, dist = label
+        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.putText(
             img,
-            f"{_class},{d if d is not None else ''}",
-            (int((c[0] + c[2]) / 2), int((c[1] + c[3]) / 2)),
+            f"{cls},{dist if dist != -1 else ''}",
+            (x1, y1 - 5),
             0,
             text_size,
             (255, 255, 255),
