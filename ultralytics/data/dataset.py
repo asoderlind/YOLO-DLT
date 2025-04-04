@@ -328,6 +328,59 @@ class TemporalYOLODataset(YOLODataset):
         frame_id = int(frame_str[5:])
         return vid_id, frame_id
 
+    def get_valid_index(self, index: int) -> int:
+        """
+        Get an index that is sure to have enough reference frames if possible,
+        minimizing zero padding by selecting the most optimal frame in the video.
+        """
+        # Get video ID and frames
+        vid_id = self.dataset_idx_to_video_id[index]
+        frames = self.video_to_frames[vid_id]
+
+        # Find position of current index in frame list using binary search for larger videos
+        if len(frames) > 100:  # Only use binary search for longer videos
+            left, right = 0, len(frames) - 1
+            frame_position = -1
+            while left <= right:
+                mid = (left + right) // 2
+                if frames[mid][1] == index:
+                    frame_position = mid
+                    break
+                elif frames[mid][1] < index:
+                    left = mid + 1
+                else:
+                    right = mid - 1
+            if frame_position == -1:  # Fallback if not found (shouldn't happen)
+                frame_position = next((i for i, (_, idx) in enumerate(frames) if idx == index), 0)
+        else:
+            # For smaller videos, linear search is fine
+            frame_position = next((i for i, (_, idx) in enumerate(frames) if idx == index), 0)
+
+        # Check if there are enough frames before the current index
+        if frame_position >= self.temporal_window * self.temporal_stride:
+            # Enough frames before, return the current index
+            return index
+
+        # Not enough frames at current position, find optimal position
+        required_history = self.temporal_window * self.temporal_stride
+
+        # Try to find a valid position that requires minimal padding
+        if len(frames) > required_history:
+            # Return the first frame that has enough history
+            return frames[required_history][1]
+
+        # Video is too short for full history, return the last frame
+        # which minimizes the needed padding
+        if len(frames) > 0:
+            return frames[-1][1]
+
+        # Fallback
+        LOGGER.warning(
+            f"WARNING ⚠️ No valid index found for {index}, returning the original index. "
+            "This will result in zero padding for the reference frames."
+        )
+        return index
+
     def get_reference_frames(self, idx: int, global_sampling=False) -> list[tuple[int, int]]:
         """
         Get reference frames indicies for a given frame index.
@@ -368,6 +421,8 @@ class TemporalYOLODataset(YOLODataset):
         """
         Returns temporal information including main frame and reference frames.
         """
+        # Minimize zero padding by selecting the most optimal frame in the video
+        index = self.get_valid_index(index)
         # Get main frame data using parent implementation
         main_data = super().__getitem__(index)
 
