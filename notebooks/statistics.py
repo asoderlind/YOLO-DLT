@@ -83,7 +83,7 @@ def get_statistics(dataset_path, image_formats=["jpg"]) -> dict:
     return statistics
 
 
-#stats = get_statistics('../../yolo-testing/datasets/bdd100k_night')
+# stats = get_statistics('../../yolo-testing/datasets/bdd100k_night')
 # stats = get_statistics('../../yolo-testing/datasets/waymo_open_dataset', image_format="jpeg")
 # stats = get_statistics('../../yolo-testing/datasets/night_Australia')
 # stats = get_statistics('../../yolo-testing/datasets/night_only_Canada')
@@ -95,7 +95,7 @@ parser.add_argument("name", type=str, default="bdd100k_night")
 args = parser.parse_args()
 
 stats = get_statistics(
-    f"../../yolo-testing/datasets/{args.name}", image_formats=["jpg", "jpeg", "png"]
+    f"../../yolo-testing/datasets/{args.name}", image_formats=["jpg", "jpeg", "png", "JPG", "JPEG", "PNG"]
 )
 
 for key, value in stats.items():
