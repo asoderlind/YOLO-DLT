@@ -1092,7 +1092,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
                 m.legacy = legacy
         elif m is TemporalDetect:
             chs = [ch[x] for x in f]
-            args.insert(1 if len(args) > 1 else 0, chs)
+            args.insert(1, chs) if len(args) > 1 else args.append(chs)
         elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
             args.insert(1, [ch[x] for x in f])
         elif m is CBLinear:
