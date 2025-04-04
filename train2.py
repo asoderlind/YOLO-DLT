@@ -180,14 +180,20 @@ if __name__ == "__main__":
     #     model="runs/detect/bdd100k_night-yolo11n-spdconv-repc3k2/weights/last.pt",
     #     resume=True,
     # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-spdconv-fa",
+    #     model="runs/detect/bdd100k_night-yolo11n-spdconv-fa/weights/last.pt",
+    #     resume=True,
+    # )
     train_model(
-        name="bdd100k_night-yolo11n-spdconv-fa",
-        model="runs/detect/bdd100k_night-yolo11n-spdconv-fa/weights/last.pt",
-        resume=True,
+        name="bdd100k_night-yolo11n-spdconv-full-mosaic",
+        model="dlt-models/yolo11n-SPDConv3.yaml",
+        close_mosaic=0,
     )
     train_model(
         name="bdd100k_night-yolo11n-spdconv-cl",
-        model="dlt-models/yolo11n-spdconv-cl.yaml",
+        model="runs/detect/bdd100k_night-yolo11n-spdconv-cl/weights/last.pt",
+        resume=True,
     )
     train_model(
         name="bdd100k_night-yolo11n-spdconv-fa-cl",
@@ -196,11 +202,6 @@ if __name__ == "__main__":
     train_model(
         name="bdd100k_night-yolo11n-gc+newconv",
         model="dlt-models/yolo11n-GC+NewConv.yaml",
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-spdconv-full-mosaic",
-        model="dlt-models/yolo11n-SPDConv3.yaml",
-        close_mosaic=0,
     )
     train_model(
         name="bdd100k_night-yolo11n-spdconv-augs",
