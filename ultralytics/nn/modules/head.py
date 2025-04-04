@@ -10,7 +10,7 @@ from torch.nn.init import constant_, xavier_uniform_
 
 from ultralytics.utils.tal import TORCH_1_10, dist2bbox, dist2rbox, make_anchors
 
-from .block import DFL, BNContrastiveHead, ContrastiveHead, FeatureAggregationModule, Proto
+from .block import DFL, BNContrastiveHead, ContrastiveHead, FeatureAggregationModule, FeatureSelectionModule, Proto
 from .conv import Conv, DWConv
 from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer
 from .utils import DETECT_FAM_MODE, FSM_TYPE, bias_init_with_prob, linear_init
@@ -177,9 +177,11 @@ class TemporalDetect(Detect):
 
     temporal_window = 2  # default temporal window
 
-    def __init__(self, nc=80, ch=(), fam_mode: DETECT_FAM_MODE = "both_combined", fsm_type: FSM_TYPE = "nms"):
+    def __init__(self, nc=80, ch=(), fam_mode: DETECT_FAM_MODE = "both_combined", fsm_type: FSM_TYPE = "thresh"):
         """Initialize the YOLO Temporal detection layer with specified number of classes and channels."""
         super().__init__(nc, ch)
+
+        self.fsm = FeatureSelectionModule(type=fsm_type)
 
         # separate reg and cls convs from the final pred layer
         reg_ch = max(16, ch[0] // 4, self.reg_max * 4)
@@ -270,7 +272,7 @@ class TemporalDetect(Detect):
         # selected_boxes: [batch_size, topk_post, 4]
         # selected_scores: [batch_size, topk_post]
         # selected_indices: [batch_size, topk_post]
-        selected_cls_feats, selected_reg_feats, selected_boxes, selected_scores, selected_indices = self.FSM(
+        selected_cls_feats, selected_reg_feats, selected_boxes, selected_scores, selected_indices = self.fsm(
             raw_predictions, flat_vid_features, flat_reg_features
         )
 
@@ -509,110 +511,6 @@ class TemporalDetect(Detect):
         final_cls_preds = self.linear_pred_cls(enhanced_cls_feats)  # [batch_size, topk_post, num_classes]
         final_reg_preds = self.linear_pred_reg(enhanced_reg_feats)  # [batch_size, topk_post, 4 * reg_max]
         return final_cls_preds, final_reg_preds, key_frame_indices  # both cls and reg features
-
-    def FSM(
-        self,
-        raw_preds: torch.Tensor,
-        vid_features: torch.Tensor,
-        reg_features: torch.Tensor,
-        nms_thresh: float = 0.75,
-        target_count: int = 85,  # target proposal count based on paper + margin
-        conf_thresh: float = 0.001,  # Base threshold
-    ):
-        """
-        Feature Selection Module (FSM) implementation following YOLOV++ paper.
-        Selects high-quality candidate regions from raw predictions for temporal aggregation.
-
-        Args:
-            raw_preds (torch.Tensor): Raw predictions from _inference() with shape [batch_size, 4+nc, sum(h_i*w_i)]
-            vid_features (torch.Tensor): Video classification features from each detection level
-            reg_features (torch.Tensor): Regression features from each detection level
-            nms_thresh (float): NMS threshold for removing redundant detections
-            target_count (int): Target number of proposals to select
-            conf_thresh (float): Confidence threshold for filtering predictions
-
-        Returns:
-            selected_cls_features (torch.Tensor): Selected classification features [batch_size, target_count, cls_ch]
-            selected_reg_features (torch.Tensor): Selected regression features [batch_size, target_count, reg_ch]
-            selected_boxes (torch.Tensor): Selected bounding boxes [batch_size, target_count, 4]
-            selected_scores (torch.Tensor): Selected confidence scores [batch_size, target_count]
-            selected_indices (torch.Tensor): Selected indices [batch_size, target_count]
-        """
-
-        # Prepare predictions in the right format
-        predictions = raw_preds.permute(0, 2, 1)  # [batch_size, sum(h_i*w_i), 4+nc]
-        batch_size = raw_preds.shape[0]
-        device = raw_preds.device
-
-        # Initialize tensors with correct dimensions
-        selected_cls_features = torch.zeros(batch_size, target_count, vid_features.shape[-1], device=device)
-        selected_reg_features = torch.zeros(batch_size, target_count, reg_features.shape[-1], device=device)
-        selected_boxes = torch.zeros(batch_size, target_count, 4, device=device)
-        selected_scores = torch.zeros(batch_size, target_count, device=device)
-        selected_indices = torch.zeros(batch_size, target_count, dtype=torch.long, device=device)
-
-        # Process for each batch
-        for b in range(batch_size):
-            # Extract boxes and scores
-            boxes = predictions[b, :, :4]  # [sum(h_i*w_i), 4]
-            scores = predictions[b, :, 4:]  # [sum(h_i*w_i), nc]
-
-            # Get max class scores and class IDs
-            max_scores, cls_ids = scores.max(dim=1)  # [sum(h_i*w_i)], [sum(h_i*w_i)]
-
-            # Apply confidence threshold
-            thresh_mask = max_scores > conf_thresh  # [sum(h_i*w_i)]
-            # Thresh indices are the indices of the boxes that pass the confidence threshold
-            thresh_indices = torch.where(thresh_mask)[0]  # [sum(h_i*w_i)]
-
-            # Modulate to target count
-
-            if len(thresh_indices) < target_count:
-                # Not enough proposals - get top proposals not yet included
-                remaining_indices = torch.where(~thresh_mask)[0]  # [sum(h_i*w_i)]
-                if not len(remaining_indices) > 0:
-                    raise ValueError(
-                        "No remaining indices to select from. You must have set the target count too high."
-                    )
-
-                # Get top needed scores
-                remaining_scores = max_scores[remaining_indices]
-                needed = target_count - len(thresh_indices)
-
-                if len(remaining_scores) < needed:
-                    # If not enough remaining scores, explode I guess
-                    raise ValueError(
-                        "Not enough remaining scores to select from. You must have set the target count too high."
-                    )
-
-                _, topk_indices = torch.topk(remaining_scores, needed)
-                additional_indices = remaining_indices[topk_indices]
-
-                # Combine indices
-                thresh_indices = torch.cat([thresh_indices, additional_indices])
-
-            elif len(thresh_indices) > target_count:
-                # Too many proposals - keep only top ones
-                thresh_scores = max_scores[thresh_indices]
-                _, topk_indices = torch.topk(thresh_scores, target_count)
-                thresh_indices = thresh_indices[topk_indices]
-
-            assert len(thresh_indices) == target_count, f"Expected {target_count} indices, got {len(thresh_indices)}"
-
-            # Fill tensors with selected indices
-            selected_indices[b, : len(thresh_indices)] = thresh_indices
-            selected_cls_features[b, : len(thresh_indices)] = vid_features[b, thresh_indices]
-            selected_reg_features[b, : len(thresh_indices)] = reg_features[b, thresh_indices]
-            selected_boxes[b, : len(thresh_indices)] = boxes[thresh_indices]
-            selected_scores[b, : len(thresh_indices)] = max_scores[thresh_indices]
-
-        return (
-            selected_cls_features,  # [batch_size, target_count, cls_ch]
-            selected_reg_features,  # [batch_size, target_count, reg_ch]
-            selected_boxes,  # [batch_size, target_count, 4]
-            selected_scores,  # [batch_size, target_count]
-            selected_indices,  # [batch_size, target_count]
-        )
 
     def _temporal_inference(
         self,

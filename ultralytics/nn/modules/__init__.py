@@ -53,6 +53,7 @@ from .block import (
     ContrastiveHead,
     EfficientFEM,
     FeatureAggregationModule,
+    FeatureSelectionModule,
     GhostBottleneck,
     HGBlock,
     HGStem,
@@ -213,4 +214,5 @@ __all__ = (
     "RepBottleneck",
     "TemporalDetect",
     "FeatureAggregationModule",
+    "FeatureSelectionModule",
 )

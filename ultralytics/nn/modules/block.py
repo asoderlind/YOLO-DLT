@@ -6,12 +6,14 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision.ops import batched_nms
 
+from ultralytics.utils import LOGGER
 from ultralytics.utils.torch_utils import fuse_conv_and_bn
 
 from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, RFAConv, autopad
 from .transformer import TransformerBlock
-from .utils import FAM_MODE
+from .utils import FAM_MODE, FSM_TYPE
 
 __all__ = (
     "DFL",
@@ -1967,3 +1969,235 @@ class FeatureAggregationModule(nn.Module):
         cls_scores: torch.Tensor,
     ):
         return self.forward(cls_features, reg_features, cls_scores)
+
+
+class FeatureSelectionModule:
+    """
+    Feature Selection Module (FSM) for YOLOV++ video object detection.
+    Selects high-quality candidate regions from raw predictions for temporal aggregation.
+    """
+
+    def __init__(
+        self,
+        type: FSM_TYPE = "thresh",
+        thresh_count: int = 85,
+        conf_thresh: float = 0.001,
+        nms_thresh: float = 0.75,
+        topk_pre: int = 750,
+        topk_post: int = 30,
+    ):
+        """
+        Initialize the Feature Selection Module.
+
+        Args:
+            method (str): Selection method, either "thresh" or "nms"
+
+            thresh_count (int): Target number of proposals to select for threshold method
+            conf_thresh (float): Confidence threshold for filtering predictions for threshold method
+
+            nms_thresh (float): NMS threshold for removing redundant detections (used only with "nms" method)
+            topk_pre (int): Number of top proposals to consider before NMS (used only with "nms" method)
+            topk_post (int): Number of top proposals to keep after NMS (used only with "nms" method)
+        """
+        self.type = type
+        self.target_count = thresh_count
+        self.conf_thresh = conf_thresh
+        self.nms_thresh = nms_thresh
+        self.topk_pre = topk_pre
+        self.topk_post = topk_post
+
+    def __call__(
+        self, raw_preds: torch.Tensor, vid_features: torch.Tensor, reg_features: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Select features based on the configured method.
+
+        Returns:
+            tuple: (selected_cls_features, selected_reg_features, selected_boxes,
+                   selected_scores, selected_indices)
+        """
+        if self.type == "thresh":
+            return self._threshold_selection(raw_preds, vid_features, reg_features)
+        elif self.type == "nms":
+            return self._nms_selection(raw_preds, vid_features, reg_features)
+        else:
+            raise ValueError(f"Unknown selection method: {self.type}")
+
+    def _threshold_selection(
+        self, raw_preds: torch.Tensor, vid_features: torch.Tensor, reg_features: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Select features using simple confidence threshold and top-k selection.
+        """
+
+        predictions = raw_preds.permute(0, 2, 1)
+        batch_size = raw_preds.shape[0]
+        device = raw_preds.device
+
+        # Initialize tensors
+        selected_cls_features = torch.zeros(batch_size, self.target_count, vid_features.shape[-1], device=device)
+        selected_reg_features = torch.zeros(batch_size, self.target_count, reg_features.shape[-1], device=device)
+        selected_boxes = torch.zeros(batch_size, self.target_count, 4, device=device)
+        selected_scores = torch.zeros(batch_size, self.target_count, device=device)
+        selected_indices = torch.zeros(batch_size, self.target_count, dtype=torch.long, device=device)
+
+        # Process each batch
+        for b in range(batch_size):
+            # Extract boxes and scores
+            boxes = predictions[b, :, :4]
+            scores = predictions[b, :, 4:]
+
+            # Get max scores and class IDs
+            max_scores, _ = scores.max(dim=1)
+
+            # Apply threshold
+            thresh_mask = max_scores > self.conf_thresh
+            thresh_indices = torch.where(thresh_mask)[0]
+
+            # Handle target count
+            if len(thresh_indices) < self.target_count:
+                # Add additional indices if needed
+                remaining_indices = torch.where(~thresh_mask)[0]
+
+                if not len(remaining_indices) > 0:
+                    # We should never reach this point, but if we do fail early
+                    raise ValueError("No remaining indices to select from.You must have set the target count too high.")
+
+                remaining_scores = max_scores[remaining_indices]
+                needed = self.target_count - len(thresh_indices)
+
+                if len(remaining_scores) >= needed:
+                    _, topk_indices = torch.topk(remaining_scores, needed)
+                    additional_indices = remaining_indices[topk_indices]
+                    thresh_indices = torch.cat([thresh_indices, additional_indices])
+                else:
+                    # Handle case where we don't have enough remaining scores
+                    # We should never reach this point, but if we do, we need to pad
+                    LOGGER.warning(
+                        "Not enough remaining scores to reach target count. Padding with highest scoring index."
+                        "Double check your target count."
+                    )
+                    _, topk_indices = torch.topk(remaining_scores, len(remaining_scores))
+                    additional_indices = remaining_indices[topk_indices]
+                    thresh_indices = torch.cat([thresh_indices, additional_indices])
+                    # Pad with repeats of the highest scoring index to reach target count
+                    highest_idx = thresh_indices[max_scores[thresh_indices].argmax()].item()
+                    padding = torch.full(
+                        (self.target_count - len(thresh_indices),), highest_idx, dtype=torch.long, device=device
+                    )
+                    thresh_indices = torch.cat([thresh_indices, padding])
+
+            elif len(thresh_indices) > self.target_count:
+                # Take top-k if we have too many
+                thresh_scores = max_scores[thresh_indices]
+                _, topk_indices = torch.topk(thresh_scores, self.target_count)
+                thresh_indices = thresh_indices[topk_indices]
+
+            assert len(thresh_indices) == self.target_count, (
+                f"Expected {self.target_count} indices, got {len(thresh_indices)}"
+            )
+
+            # Fill tensors with selected indices
+            selected_indices[b] = thresh_indices
+            selected_cls_features[b] = vid_features[b, thresh_indices]
+            selected_reg_features[b] = reg_features[b, thresh_indices]
+            selected_boxes[b] = boxes[thresh_indices]
+            selected_scores[b] = max_scores[thresh_indices]
+
+        return (
+            selected_cls_features,  # [batch_size, target_count, cls_ch]
+            selected_reg_features,  # [batch_size, target_count, reg_ch]
+            selected_boxes,  # [batch_size, target_count, 4]
+            selected_scores,  # [batch_size, target_count]
+            selected_indices,  # [batch_size, target_count]
+        )
+
+    def _nms_selection(
+        self, raw_preds: torch.Tensor, vid_features: torch.Tensor, reg_features: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Select features using NMS to eliminate redundant detections.
+        """
+        # Implement NMS-based selection
+        # This would include:
+        # 1. Getting high-confidence proposals
+        # 2. Running NMS to eliminate redundant boxes
+        # 3. Selecting features from the remaining proposals
+
+        # Similar structure to threshold selection, but with NMS
+        predictions = raw_preds.permute(0, 2, 1)
+        batch_size = raw_preds.shape[0]
+        device = raw_preds.device
+
+        # Initialize tensors (same as threshold method)
+        selected_cls_features = torch.zeros(batch_size, self.topk_post, vid_features.shape[-1], device=device)
+        selected_reg_features = torch.zeros(batch_size, self.topk_post, reg_features.shape[-1], device=device)
+        selected_boxes = torch.zeros(batch_size, self.topk_post, 4, device=device)
+        selected_scores = torch.zeros(batch_size, self.topk_post, device=device)
+        selected_indices = torch.zeros(batch_size, self.topk_post, dtype=torch.long, device=device)
+
+        for b in range(batch_size):
+            boxes = predictions[b, :, :4]
+            scores = predictions[b, :, 4:]
+            max_scores, cls_ids = scores.max(dim=1)
+
+            if len(max_scores) > self.topk_pre:
+                # Take top-k proposals
+                topk_values, topk_indices = torch.topk(max_scores, self.topk_pre)
+            else:
+                topk_indices = torch.arange(len(max_scores), device=device)
+                topk_values = max_scores[topk_indices]
+
+            # Apply NMS
+            nms_indices = batched_nms(
+                boxes[topk_indices],
+                topk_values,
+                cls_ids[topk_indices],
+                self.nms_thresh,
+            )
+
+            if len(nms_indices) < self.topk_post:
+                if len(nms_indices) == 0:
+                    # No detections after NMS, use top-k
+                    final_indices = topk_indices[: self.topk_post]
+                else:
+                    final_indices = topk_indices[nms_indices]
+
+                    mask = torch.ones(len(topk_indices), dtype=torch.bool, device=device)
+                    mask[nms_indices] = False
+
+                    remaining = topk_indices[mask]
+
+                    additional_needed = self.topk_post - len(final_indices)
+                    if len(remaining) > 0:
+                        # Add more boxes to reach target count
+                        additional_indices = remaining[:additional_needed]
+                        final_indices = torch.cat([final_indices, additional_indices])
+                    else:
+                        # Pad with duplicates of the highest scoring index
+                        padding_indices = torch.full(
+                            (additional_needed,), final_indices[0].item(), dtype=torch.long, device=device
+                        )
+                        final_indices = torch.cat([final_indices, padding_indices])
+            else:
+                # Take top-k after NMS
+                if len(nms_indices) > self.topk_post:
+                    nms_indices = nms_indices[: self.topk_post]
+                final_indices = topk_indices[nms_indices]
+
+            assert len(final_indices) == self.topk_post, f"Expected {self.topk_post} indices, got {len(final_indices)}"
+
+            # Fill tensors with selected indices
+            selected_cls_features[b] = vid_features[b, final_indices]
+            selected_reg_features[b] = reg_features[b, final_indices]
+            selected_boxes[b] = boxes[final_indices]
+            selected_scores[b] = max_scores[final_indices]
+            selected_indices[b] = final_indices
+
+        return (
+            selected_cls_features,  # [batch_size, topk_post, cls_ch]
+            selected_reg_features,  # [batch_size, topk_post, reg_ch]
+            selected_boxes,  # [batch_size, topk_post, 4]
+            selected_scores,  # [batch_size, topk_post]
+            selected_indices,  # [batch_size, topk_post]
+        )
