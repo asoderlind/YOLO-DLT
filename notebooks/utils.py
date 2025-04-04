@@ -49,11 +49,11 @@ def draw_yolo_bboxes(
         cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.putText(
             img,
-            f"{cls},{dist if dist != -1 else ''}",
+            f"{cls}{',' + str(dist) if dist != -1 else ''}",
             (x1, y1 - 5),
             0,
             text_size,
-            (255, 255, 255),
+            (0, 255, 0),
             text_thickness,
         )
 

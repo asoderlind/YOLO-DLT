@@ -19,12 +19,30 @@ KITTI = {
     "DontCare": 8,
 }
 
+BDD100K = {
+    "person": 0,
+    "rider": 1,
+    "car": 2,
+    "bus": 3,
+    "truck": 4,
+    "bike": 5,
+    "motor": 6,
+    "tl_green": 7,
+    "tl_red": 8,
+    "tl_yellow": 9,
+    "tl_none": 10,
+    "traffic_signal": 11,
+    "train": 12,
+}
+
 
 def get_id2cls(dataset: str):
     # switch statement
     id2cls = {}
     if dataset == "kitti-yolo":
         class2index = KITTI
+    elif dataset == "bdd100k_night":
+        class2index = BDD100K
     else:
         raise ValueError(f"Dataset {dataset} not supported")
     id2cls = {v: k for k, v in class2index.items()}
@@ -37,11 +55,21 @@ def main(dataset: str):
         dataset_path = os.path.join(path, "kitti-yolo")
         classes = [0, 1, 2, 3, 4, 5, 6, 7]
         id2cls = get_id2cls(dataset)
+    elif dataset == "bdd100k_night":
+        dataset_path = os.path.join(path, "bdd100k_night")
+        classes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        id2cls = get_id2cls(dataset)
     else:
         raise ValueError(f"Dataset {dataset} not supported")
 
     # Example usage
-    img_path = random.sample(glob.glob(f"{dataset_path}/images/train/*"), 1)[0]
+    all_imgs_path = f"{dataset_path}/images/train/*"
+    print(f"Path: {all_imgs_path}")
+    all_imgs = glob.glob(all_imgs_path)
+    print("Example images:")
+    print(all_imgs[:3])
+    print(f"Number of images: {len(all_imgs)}")
+    img_path = random.sample(glob.glob(all_imgs_path), 1)[0]
     image_name = os.path.basename(img_path)[:-4]
     label_path = f"{dataset_path}/labels/train/{image_name}.txt"
 
@@ -61,7 +89,7 @@ if __name__ == "__main__":
         "dataset",
         type=str,
         default="kitti-yolo",
-        choices=["kitti-yolo"],
+        choices=["kitti-yolo", "bdd100k_night"],
         help="Dataset to use",
     )
     args = parser.parse_args()
