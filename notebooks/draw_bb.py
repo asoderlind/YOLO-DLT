@@ -49,7 +49,7 @@ def get_id2cls(dataset: str):
     return id2cls
 
 
-def main(dataset: str):
+def main(dataset: str, img_name: str | None = None):
     # switch statement
     if dataset == "kitti-yolo":
         dataset_path = os.path.join(path, "kitti-yolo")
@@ -63,13 +63,25 @@ def main(dataset: str):
         raise ValueError(f"Dataset {dataset} not supported")
 
     # Example usage
-    all_imgs_path = f"{dataset_path}/images/train/*"
+    all_imgs_path = f"{dataset_path}/images/train"
     print(f"Path: {all_imgs_path}")
-    all_imgs = glob.glob(all_imgs_path)
+
+    all_imgs = glob.glob(f"{all_imgs_path}/*")
+
     print("Example images:")
     print(all_imgs[:3])
+
     print(f"Number of images: {len(all_imgs)}")
-    img_path = random.sample(glob.glob(all_imgs_path), 1)[0]
+
+    print("img_name:", img_name)
+
+    if img_name is not None:
+        img_path = os.path.join(all_imgs_path, img_name)
+        if not os.path.exists(img_path):
+            raise ValueError(f"Image {img_name} not found in {all_imgs_path}")
+    else:
+        img_path = random.sample(all_imgs, 1)[0]
+
     image_name = os.path.basename(img_path)[:-4]
     label_path = f"{dataset_path}/labels/train/{image_name}.txt"
 
@@ -92,5 +104,10 @@ if __name__ == "__main__":
         choices=["kitti-yolo", "bdd100k_night"],
         help="Dataset to use",
     )
+    parser.add_argument(
+        "--img",
+        type=str,
+        help="Name of the image to use",
+    )
     args = parser.parse_args()
-    main(args.dataset)
+    main(args.dataset, img_name=args.img)
