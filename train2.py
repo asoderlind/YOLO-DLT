@@ -219,6 +219,10 @@ if __name__ == "__main__":
         model="dlt-models/yolo11n-spdconv-4.yaml",
     )
     train_model(
+        name="bdd100k_night-yolo11n-spdconv-partial-rfac3k2",
+        model="dlt-models/yolo11n-spdconv-partial-rfac3k2.yaml",
+    )
+    train_model(
         name="bdd100k_night-yolo11n-gc+newconv",
         model="dlt-models/yolo11n-GC+NewConv.yaml",
     )
