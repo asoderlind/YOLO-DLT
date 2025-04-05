@@ -581,6 +581,22 @@ class TemporalDetect(Detect):
         return torch.cat((dbox, cls.sigmoid()), 1)
 
 
+class EOVODetect(Detect):
+    temporal_window = 2  # default temporal window
+
+    def __init__(self, nc=80, ch=()):
+        """Initialize the YOLO model attributes such as the number of masks, prototypes, and the convolution layers."""
+        super().__init__(nc, ch)
+
+    def forward(
+        self, x: list[torch.Tensor]
+    ) -> list[torch.Tensor] | tuple[torch.Tensor, list[torch.Tensor]] | torch.Tensor:
+        for i in range(self.nl):
+            x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i])), 1)
+
+        raw_predictions = self._inference(x)  # [bs, 4 + num_classes, sum_i(w_i * h_i)]
+
+
 class Segment(Detect):
     """YOLO Segment head for segmentation models."""
 
