@@ -200,7 +200,7 @@ if __name__ == "__main__":
         model="dlt-models/yolo11n-SPDConv-3.yaml",
         degrees=15,
         shear=10,
-        crop=0.75,
+        crop_fraction=0.75,
         hsv_v=0.6,
     )
     train_model(
