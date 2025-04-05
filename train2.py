@@ -208,34 +208,20 @@ if __name__ == "__main__":
     #     model="dlt-models/yolo11n-SPDConv-3.yaml",
     #     iou_type="thiou",
     # )
-    train_model(
-        name="bdd100k_night-yolo11n-SPDConv-3-thiou-gain",
-        model="runs/detect/bdd100k_night-yolo11n-SPDConv-3-thiou-gain/weights/last.pt",
-        resume=True,
-        iou_type="thiou",
-        box=9.0,
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-spdconv-4",
-        model="dlt-models/yolo11n-spdconv-4.yaml",
-    )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-SPDConv-3-thiou-gain",
+    #     model="runs/detect/bdd100k_night-yolo11n-SPDConv-3-thiou-gain/weights/last.pt",
+    #     resume=True,
+    #     iou_type="thiou",
+    #     box=9.0,
+    # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-spdconv-4",
+    #     model="dlt-models/yolo11n-spdconv-4.yaml",
+    # )
     train_model(
         name="bdd100k_night-yolo11n-spdconv-partial-rfac3k2",
-        model="dlt-models/yolo11n-spdconv-partial-rfac3k2.yaml",
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-gc+newconv",
-        model="dlt-models/yolo11n-GC+NewConv.yaml",
-    )
-
-    train_model(
-        name="bdd100k_night-yolo11n-spdconv-fa-cl",
-        model="runs/detect/bdd100k_night-yolo11n-spdconv-fa-cl/weights/last.pt",
-        resume=True,
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-final-ciou",
-        model="runs/detect/bdd100k_night-yolo11n-final-ciou/weights/last.pt",
+        model="runs/detect/bdd100k_night-yolo11n-spdconv-partial-rfac3k2/weights/last.pt",
         resume=True,
     )
     train_model(
@@ -244,6 +230,23 @@ if __name__ == "__main__":
         resume=True,
         iou_type="thiou",
     )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-gc+newconv",
+    #     model="dlt-models/yolo11n-GC+NewConv.yaml",
+    # )
+
+    train_model(
+        name="bdd100k_night-yolo11n-final-ciou",
+        model="runs/detect/bdd100k_night-yolo11n-final-ciou/weights/last.pt",
+        resume=True,
+    )
+
+    train_model(
+        name="bdd100k_night-yolo11n-spdconv-fa-cl",
+        model="runs/detect/bdd100k_night-yolo11n-spdconv-fa-cl/weights/last.pt",
+        resume=True,
+    )
+
     train_model(
         name="bdd100k_night-yolo11n-siou",
         model="runs/detect/bdd100k_night-yolo11n-siou/weights/last.pt",
@@ -252,5 +255,4 @@ if __name__ == "__main__":
     )
     train_model(name="bdd100k_night-yolo11n-isiou", model="yolo11n.yaml", iou_type="isiou")
     train_model(name="bdd100k_night-yolo11n-ciou+nwd", model="yolo11n.yaml", iou_type="ciou+nwd")
-    train_model(name="bdd100k_night-yolo11n-progressive-spdconv-2", model="dlt-models/yolo11n-ProgSPDConv-2.yaml")
     train_model(name="bdd100k_night-yolo11n-nwd", model="yolo11n.yaml", iou_type="nwd")
