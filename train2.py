@@ -196,10 +196,6 @@ if __name__ == "__main__":
     #     resume=True,
     # )
     train_model(
-        name="bdd100k_night-yolo11n-gc+newconv",
-        model="dlt-models/yolo11n-GC+NewConv.yaml",
-    )
-    train_model(
         name="bdd100k_night-yolo11n-spdconv-augs",
         model="dlt-models/yolo11n-SPDConv-3.yaml",
         degrees=15,
@@ -207,6 +203,26 @@ if __name__ == "__main__":
         crop=0.75,
         hsv_v=0.6,
     )
+    train_model(
+        name="bdd100k_night-yolo11n-SPDConv-3-thiou",
+        model="dlt-models/yolo11n-SPDConv-3.yaml",
+        iou_type="thiou",
+    )
+    train_model(
+        name="bdd100k_night-yolo11n-SPDConv-3-thiou-gain",
+        model="dlt-models/yolo11n-SPDConv-3.yaml",
+        iou_type="thiou",
+        box=9.0,
+    )
+    train_model(
+        name="bdd100k_night-yolo11n-spdconv-4",
+        model="dlt-models/yolo11n-spdconv-4.yaml",
+    )
+    train_model(
+        name="bdd100k_night-yolo11n-gc+newconv",
+        model="dlt-models/yolo11n-GC+NewConv.yaml",
+    )
+
     train_model(
         name="bdd100k_night-yolo11n-spdconv-fa-cl",
         model="runs/detect/bdd100k_night-yolo11n-spdconv-fa-cl/weights/last.pt",
