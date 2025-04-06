@@ -219,32 +219,42 @@ if __name__ == "__main__":
     #     name="bdd100k_night-yolo11n-spdconv-4",
     #     model="dlt-models/yolo11n-spdconv-4.yaml",
     # )
-    train_model(
-        name="bdd100k_night-yolo11n-spdconv-partial-rfac3k2",
-        model="runs/detect/bdd100k_night-yolo11n-spdconv-partial-rfac3k2/weights/last.pt",
-        resume=True,
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-final-1",
-        model="runs/detect/bdd100k_night-yolo11n-final-1/weights/last.pt",
-        resume=True,
-        iou_type="thiou",
-    )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-spdconv-partial-rfac3k2",
+    #     model="runs/detect/bdd100k_night-yolo11n-spdconv-partial-rfac3k2/weights/last.pt",
+    #     resume=True,
+    # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-final-1",
+    #     model="runs/detect/bdd100k_night-yolo11n-final-1/weights/last.pt",
+    #     resume=True,
+    #     iou_type="thiou",
+    # )
     # train_model(
     #     name="bdd100k_night-yolo11n-gc+newconv",
     #     model="dlt-models/yolo11n-GC+NewConv.yaml",
     # )
 
-    train_model(
-        name="bdd100k_night-yolo11n-final-ciou",
-        model="runs/detect/bdd100k_night-yolo11n-final-ciou/weights/last.pt",
-        resume=True,
-    )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-final-ciou",
+    #     model="runs/detect/bdd100k_night-yolo11n-final-ciou/weights/last.pt",
+    #     resume=True,
+    # )
 
+    # train_model(
+    #     name="bdd100k_night-yolo11n-spdconv-fa-cl",
+    #     model="runs/detect/bdd100k_night-yolo11n-spdconv-fa-cl/weights/last.pt",
+    #     resume=True,
+    # )
     train_model(
-        name="bdd100k_night-yolo11n-spdconv-fa-cl",
-        model="runs/detect/bdd100k_night-yolo11n-spdconv-fa-cl/weights/last.pt",
-        resume=True,
+        name="bdd100k-yolo11n-spdconv-3",
+        model="dlt-models/yolo11n-SPDConv-3.yaml",
+        data="bdd100k.yaml",
+    )
+    train_model(
+        name="bdd100k-yolo11n-spdconv-rfac3k2",
+        model="dlt-models/yolo11n-spdconv-rfac3k2.yaml",
+        data="bdd100k.yaml",
     )
 
     train_model(
