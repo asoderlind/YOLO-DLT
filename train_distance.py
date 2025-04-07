@@ -45,7 +45,4 @@ def train_with_distance(
 
 
 # Augmentation ablations
-train_with_distance(scale=0.0, mosaic=0.0)
-train_with_distance(scale=0.0, mosaic=1.0)
-train_with_distance(scale=0.5, mosaic=0.0)
-train_with_distance(scale=0.5, mosaic=1.0)
+train_with_distance(data_path="carla.yaml")

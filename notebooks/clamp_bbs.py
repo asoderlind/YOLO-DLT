@@ -79,4 +79,4 @@ def clamp_all_bbs(dataset_name: str, dry: bool = False):
             print(f"Clamped bounding boxes for {img_name} and saved to {label_file}")
 
 
-clamp_all_bbs("waymo128", dry=False)
+clamp_all_bbs("carla-yolo", dry=False)
