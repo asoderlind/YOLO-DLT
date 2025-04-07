@@ -35,6 +35,14 @@ BDD100K = {
     "train": 12,
 }
 
+WAYMO = {
+    "unknown": 0,
+    "vehicle": 1,
+    "pedestrian": 2,
+    "sign": 3,
+    "cyclist": 4,
+}
+
 
 def get_id2cls(dataset: str):
     # switch statement
@@ -43,6 +51,8 @@ def get_id2cls(dataset: str):
         class2index = KITTI
     elif dataset == "bdd100k_night":
         class2index = BDD100K
+    elif dataset == "waymo-noConf":
+        class2index = WAYMO
     else:
         raise ValueError(f"Dataset {dataset} not supported")
     id2cls = {v: k for k, v in class2index.items()}
@@ -55,10 +65,17 @@ def main(dataset: str, img_name: str | None = None):
         dataset_path = os.path.join(path, "kitti-yolo")
         classes = [0, 1, 2, 3, 4, 5, 6, 7]
         id2cls = get_id2cls(dataset)
+        max_dist = 150.0
     elif dataset == "bdd100k_night":
         dataset_path = os.path.join(path, "bdd100k_night")
         classes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
         id2cls = get_id2cls(dataset)
+        max_dist = -1.0
+    elif dataset == "waymo-noConf":
+        dataset_path = os.path.join(path, "waymo-noConf")
+        classes = [1, 2, 3, 4]
+        id2cls = get_id2cls(dataset)
+        max_dist = 85.0
     else:
         raise ValueError(f"Dataset {dataset} not supported")
 
@@ -82,7 +99,9 @@ def main(dataset: str, img_name: str | None = None):
     else:
         img_path = random.sample(all_imgs, 1)[0]
 
-    image_name = os.path.basename(img_path)[:-4]
+    image_name = (
+        os.path.basename(img_path).replace(".jpg", "").replace(".png", "").replace(".jpeg", "").replace(".JPEG", "")
+    )
     label_path = f"{dataset_path}/labels/train/{image_name}.txt"
 
     print(img_path, label_path)
@@ -92,7 +111,7 @@ def main(dataset: str, img_name: str | None = None):
     img_w, img_h = img.size
     print(img_w, img_h)
 
-    draw_yolo_bboxes(img_path, label_path, img_w, img_h, id2cls, classes)
+    draw_yolo_bboxes(img_path, label_path, img_w, img_h, id2cls, classes, max_dist=max_dist)
 
 
 if __name__ == "__main__":
@@ -101,7 +120,7 @@ if __name__ == "__main__":
         "dataset",
         type=str,
         default="kitti-yolo",
-        choices=["kitti-yolo", "bdd100k_night"],
+        choices=["kitti-yolo", "bdd100k_night", "waymo-noConf"],
         help="Dataset to use",
     )
     parser.add_argument(

@@ -8,12 +8,19 @@ import torchvision.transforms as transforms
 import numpy as np
 
 
-MAX_DIST = 150
-
-
 def draw_yolo_bboxes(
-    image_path, label_path, w: int, h: int, id2cls: dict, classes: list[int], text_size=1, text_thickness=2
+    image_path: str,
+    label_path: str,
+    w: int,
+    h: int,
+    id2cls: dict,
+    classes: list[int],
+    max_dist=-1,
+    text_size=1,
+    text_thickness=2,
 ):
+    print("image_path:", image_path)
+    print("label_path:", label_path)
     # Load the image
     img = cv2.imread(image_path)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -31,7 +38,7 @@ def draw_yolo_bboxes(
         else:
             cls, x_center, y_center, w_box, h_box, dist = data_lines[item].split(" ")
             cls = int(cls)
-            dist = f"{float(dist) * MAX_DIST:.2f}"
+            dist = f"{float(dist) * max_dist:.2f}"
 
         x1 = int((float(x_center) - float(w_box) / 2) * float(w))
         y1 = int((float(y_center) - float(h_box) / 2) * float(h))
