@@ -594,7 +594,136 @@ class EOVODetect(Detect):
         for i in range(self.nl):
             x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i])), 1)
 
-        raw_predictions = self._inference(x)  # [bs, 4 + num_classes, sum_i(w_i * h_i)]
+        if x[0].shape[0] == 1:  # single frame
+            if self.training:
+                return x
+            else:
+                return self._inference(x) if self.export else (self._inference(x), x)
+
+        # Get the previous frames for each key frame
+        batch_size_temporal = x[0].shape[0]
+        batch_size = batch_size_temporal // (self.temporal_window + 1)
+
+        # Create index tensor for all reference frames just after the key frame
+        prev_indices = torch.arange(0, batch_size_temporal, self.temporal_window + 1, device=x[0].device)
+        x_prev = [x_i[prev_indices] for x_i in x]  # [bs, 4 * reg_max + nc, h_i, w_i]
+
+        # 1. Take previous frame bounding boxes
+        previous_predictions = self._inference(x_prev)  # [bs, 4 + num_classes, sum_i(w_i * h_i)]
+
+        # 2. Validate the previous frame bounding boxes (conf > 0.5)
+        prev_pred = previous_predictions.permute(0, 2, 1)  # [bs, sum_i(w_i * h_i), 4 + num_classes]
+        prev_boxes = prev_pred[:, :, :4]  # [bs, sum_i(w_i * h_i), 4]
+        prev_scores = prev_pred[:, :, 4:]  # [bs, sum_i(w_i * h_i), num_classes]
+
+        # Get max scores for each box
+        max_scores, _ = prev_scores.max(dim=-1)  # [bs, sum_i(w_i * h_i)]
+
+        # Apply the threshold
+        conf_thresh = 0.5
+        valid_mask = max_scores > conf_thresh  # [bs, sum_i(w_i * h_i)]
+
+        # Get valid boxes for each batch
+        valid_boxes: list[torch.Tensor] = []
+        for b in range(batch_size):
+            batch_valid_mask = valid_mask[b]  # [sum_i(w_i * h_i)]
+            batch_valid_boxes = prev_boxes[b, batch_valid_mask]  # [valid_boxes, 4]
+            valid_boxes.append(batch_valid_boxes)  # bs, [valid_boxes_i, 4]
+
+        # if no valid boxes, just return normal inference
+        if all(len(v) == 0 for v in valid_boxes):
+            if self.training:
+                return x
+            else:
+                return self._inference(x) if self.export else (self._inference(x), x)
+
+        # Create binary masks for each batch and for each layer
+        # M is contains a list for each batch and those lists contain a binary mask for each layer
+        M: list[list[torch.Tensor]] = []
+        for b in range(batch_size):
+            # Get the valid boxes for this batch
+            batch_valid_boxes = valid_boxes[b]
+            if len(batch_valid_boxes) == 0:
+                M.append([])  # No valid boxes for this batch
+                continue
+            M_b: list[torch.Tensor] = []
+            for i in range(self.nl):
+                # rescale the boxes to current stride
+                batch_valid_boxes_i = batch_valid_boxes.clone()
+                batch_valid_boxes_i /= self.strides[i]  # [valid_boxes_i, 4]
+                # Rescale to cut down on computing cost
+                rescale_factor = 0.8  # from paper
+                batch_valid_boxes_i *= rescale_factor
+                # Create a binary mask for the valid boxes
+                M_i = torch.zeros((x[i].shape[2], x[i].shape[3]), device=x[i].device)
+                for box in batch_valid_boxes_i:
+                    x1, y1, x2, y2 = box.int()
+                    M_i[y1:y2, x1:x2] = 1.0
+                M_b.append(M_i)
+            M.append(M_b)
+
+        # Extract the features for each batch and each layer
+        # F is contains a list for each batch and those lists contain the features for each layer
+        F: list[list[list[torch.Tensor]]] = []  # [batch, layer, temporal]
+        F_indices: list[list[list[torch.Tensor]]] = []  # [batch, layer, temporal] indices for reconstruction
+
+        for b_idx in range(batch_size):
+            batch_start = b_idx * (self.temporal_window + 1)
+
+            # Skip if no mask for this batch
+            if not M[b_idx]:
+                F.append([])
+                F_indices.append([])
+                continue
+
+            F_b: list[list[torch.Tensor]] = []  # Features for each layer
+            F_indices_b: list[list[torch.Tensor]] = []  # Indices for each layer
+
+            for layer_idx in range(self.nl):
+                mask = M[b_idx][layer_idx]  # [H, W]
+
+                # Get features for all frames in this sequence
+                seq_features = []
+                seq_indices = []
+
+                for t in range(self.temporal_window + 1):
+                    frame_idx = batch_start + t
+
+                    # Get features for this frame at this layer
+                    frame_features = x[layer_idx][frame_idx]  # [C, H, W]
+                    C = frame_features.shape[0]
+
+                    # Find masked locations
+                    masked_locations = torch.nonzero(mask)  # [num_masked, 2] (y, x)
+
+                    if masked_locations.shape[0] == 0:
+                        # No masked locations, add empty tensor
+                        seq_features.append(torch.tensor([], device=x[0].device))
+                        seq_indices.append(torch.tensor([], device=x[0].device))
+                        continue
+
+                    # Extract features at masked locations
+                    # Convert indices to linear indices for easier processing
+                    H, W = mask.shape
+                    y, x = masked_locations[:, 0], masked_locations[:, 1]
+                    linear_indices = y * W + x  # [num_masked]
+
+                    # Reshape features to [C, H*W]
+                    flat_features = frame_features.reshape(C, -1)
+
+                    # Extract features at masked locations
+                    masked_features = flat_features[:, linear_indices]  # [C, num_masked]
+
+                    seq_features.append(masked_features)
+                    seq_indices.append(linear_indices)
+
+                F_b.append(seq_features)
+                F_indices_b.append(seq_indices)
+
+            F.append(F_b)
+            F_indices.append(F_indices_b)
+
+        return torch.tensor()
 
 
 class Segment(Detect):

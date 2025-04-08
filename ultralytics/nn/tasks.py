@@ -54,6 +54,7 @@ from ultralytics.nn.modules import (
     DWFocus,
     EfficientFEM,
     EfficientFocus,
+    EOVODetect,
     Focus,
     GhostBottleneck,
     GhostConv,
@@ -1084,7 +1085,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m in frozenset({Detect, WorldDetect, Segment, Pose, OBB, ImagePoolingAttn, v10Detect}):
+        elif m in frozenset({Detect, WorldDetect, Segment, Pose, OBB, ImagePoolingAttn, v10Detect, EOVODetect}):
             args.append([ch[x] for x in f])
             if m is Segment:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
@@ -1210,7 +1211,7 @@ def guess_model_task(model):
                 return "pose"
             elif isinstance(m, OBB):
                 return "obb"
-            elif isinstance(m, (Detect, WorldDetect, v10Detect, TemporalDetect)):
+            elif isinstance(m, (Detect, WorldDetect, v10Detect, TemporalDetect, EOVODetect)):
                 return "detect"
 
     # Guess from model filename

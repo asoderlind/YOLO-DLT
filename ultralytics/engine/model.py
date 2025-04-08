@@ -11,7 +11,7 @@ from PIL import Image
 from ultralytics.cfg import TASK2DATA, get_cfg, get_save_dir
 from ultralytics.engine.results import Results
 from ultralytics.hub import HUB_WEB_ROOT, HUBTrainingSession
-from ultralytics.nn.modules.head import TemporalDetect
+from ultralytics.nn.modules.head import EOVODetect, TemporalDetect
 from ultralytics.nn.tasks import attempt_load_one_weight, guess_model_task, yaml_model_load
 from ultralytics.utils import (
     ARGV,
@@ -807,8 +807,10 @@ class Model(torch.nn.Module):
             # Hack to set the temporal window if temporal is enabled
             # This is ugly, but at least for the user it will work as expected
             # Please, please, please don't forget that this is not implemented for the val() method
-            if isinstance(self.trainer.model.model[-1], TemporalDetect):
-                self.trainer.model.model[-1].temporal_window = args["temporal_window"]
+            if isinstance(self.trainer.model.model[-1], TemporalDetect) or isinstance(
+                self.trainer.model.model[-1], EOVODetect
+            ):
+                self.trainer.model.model[-1].temporal_window = args.get("temporal_window", self.args["temporal_window"])
                 self.model = self.trainer.model
 
         self.trainer.hub_session = self.session  # attach optional HUB session

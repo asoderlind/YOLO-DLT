@@ -10,7 +10,7 @@ import torch.nn as nn
 from ultralytics.data import build_dataloader, build_yolo_dataset
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.models import yolo
-from ultralytics.nn.modules.head import TemporalDetect
+from ultralytics.nn.modules.head import EOVODetect, TemporalDetect
 from ultralytics.nn.tasks import DetectionModel
 from ultralytics.utils import LOGGER, RANK
 from ultralytics.utils.plotting import plot_images, plot_labels, plot_results
@@ -41,7 +41,11 @@ class DetectionTrainer(BaseTrainer):
             batch (int, optional): Size of batches, this is for `rect`. Defaults to None.
         """
         gs = max(int(de_parallel(self.model).stride.max() if self.model else 0), 32)
-        dataset_type = "temporal" if isinstance(self.model.model[-1], TemporalDetect) else "default"
+        dataset_type = (
+            "temporal"
+            if isinstance(self.model.model[-1], TemporalDetect) or isinstance(self.model.model[-1], EOVODetect)
+            else "default"
+        )
         return build_yolo_dataset(
             self.args, img_path, batch, self.data, mode=mode, rect=mode == "val", stride=gs, dataset_type=dataset_type
         )

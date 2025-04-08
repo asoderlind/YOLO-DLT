@@ -101,7 +101,18 @@ from .conv import (
     RFAConv,
     SpatialAttention,
 )
-from .head import OBB, Classify, Detect, Pose, RTDETRDecoder, Segment, TemporalDetect, WorldDetect, v10Detect
+from .head import (
+    OBB,
+    Classify,
+    Detect,
+    EOVODetect,
+    Pose,
+    RTDETRDecoder,
+    Segment,
+    TemporalDetect,
+    WorldDetect,
+    v10Detect,
+)
 from .transformer import (
     AIFI,
     MLP,
@@ -215,4 +226,5 @@ __all__ = (
     "TemporalDetect",
     "FeatureAggregationModule",
     "FeatureSelectionModule",
+    "EOVODetect",
 )
