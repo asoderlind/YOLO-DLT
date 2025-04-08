@@ -195,6 +195,10 @@ if __name__ == "__main__":
     #     model="runs/detect/bdd100k_night-yolo11n-spdconv-cl/weights/last.pt",
     #     resume=True,
     # )
+
+    ###############################################################################
+    # NOTE: BELOW THIS LINE HASS NOT YET BEEN ADDED TO THE SPREADSHEET
+    ###############################################################################
     # train_model(
     #     name="bdd100k_night-yolo11n-spdconv-augs",
     #     model="dlt-models/yolo11n-SPDConv-3.yaml",
@@ -258,11 +262,16 @@ if __name__ == "__main__":
     #   data="bdd100k.yaml",
     # )
 
+    # train_model(
+    #     name="bdd100k-yolo11n-spdconv-cl",
+    #     model="runs/detect/bdd100k-yolo11n-spdconv-cl/weights/last.pt",
+    #     data="bdd100k.yaml",
+    #     resume=True,
+    # )
+
     train_model(
-        name="bdd100k-yolo11n-spdconv-cl",
-        model="runs/detect/bdd100k-yolo11n-spdconv-cl/weights/last.pt",
-        data="bdd100k.yaml",
-        resume=True,
+        name="bdd100k_night-yolo11n-spdconv-sppfcsp",
+        model="dlt-models/yolo11n-spdconv-sppfcsp.yaml",
     )
 
     train_model(
