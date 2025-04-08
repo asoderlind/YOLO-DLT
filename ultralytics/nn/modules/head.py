@@ -683,8 +683,8 @@ class EOVODetect(Detect):
                 mask = M[b_idx][layer_idx]  # [H, W]
 
                 # Get features for all frames in this sequence
-                seq_features = []
-                seq_indices = []
+                seq_features: list[torch.Tensor] = []  # [C, num_masked]
+                seq_indices: list[torch.Tensor] = []  # [num_masked]
 
                 for t in range(self.temporal_window + 1):
                     frame_idx = batch_start + t
@@ -705,8 +705,8 @@ class EOVODetect(Detect):
                     # Extract features at masked locations
                     # Convert indices to linear indices for easier processing
                     H, W = mask.shape
-                    y, x = masked_locations[:, 0], masked_locations[:, 1]
-                    linear_indices = y * W + x  # [num_masked]
+                    y_i, x_i = masked_locations[:, 0], masked_locations[:, 1]
+                    linear_indices = y_i * W + x_i  # [num_masked]
 
                     # Reshape features to [C, H*W]
                     flat_features = frame_features.reshape(C, -1)
@@ -722,6 +722,8 @@ class EOVODetect(Detect):
 
             F.append(F_b)
             F_indices.append(F_indices_b)
+
+            breakpoint()
 
         return torch.tensor()
 
