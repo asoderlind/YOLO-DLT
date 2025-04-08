@@ -62,6 +62,9 @@ def clamp_all_bbs(dataset_name: str, dry: bool = False):
             if box_height > 1 or box_height < 0:
                 print(f"Warning: box_height {box_height} out of bounds for {img_name}")
 
+            if distance > 1:
+                print(f"Warning: distance {distance} out of bounds for {img_name}")
+
             # Clamp the values between 0 and 1
             x_center = min(max(x_center, 0.0), 1.0)
             y_center = min(max(y_center, 0.0), 1.0)
