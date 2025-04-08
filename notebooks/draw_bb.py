@@ -43,6 +43,15 @@ WAYMO = {
     "cyclist": 4,
 }
 
+CARLA = {
+    "Car": 0,
+    "Truck": 1,
+    "Van": 2,
+    "Bus": 3,
+    "Motorcycle": 4,
+    "Bicycle": 5,
+}
+
 
 def get_id2cls(dataset: str):
     # switch statement
@@ -53,6 +62,8 @@ def get_id2cls(dataset: str):
         class2index = BDD100K
     elif dataset == "waymo-noConf":
         class2index = WAYMO
+    elif dataset == "carla-yolo":
+        class2index = CARLA
     else:
         raise ValueError(f"Dataset {dataset} not supported")
     id2cls = {v: k for k, v in class2index.items()}
@@ -76,6 +87,11 @@ def main(dataset: str, img_name: str | None = None):
         classes = [1, 2, 3, 4]
         id2cls = get_id2cls(dataset)
         max_dist = 85.0
+    elif dataset == "carla-yolo":
+        dataset_path = os.path.join(path, "carla-yolo")
+        classes = [0, 1, 2, 3, 4, 5]
+        id2cls = get_id2cls(dataset)
+        max_dist = 100.0
     else:
         raise ValueError(f"Dataset {dataset} not supported")
 
@@ -120,7 +136,7 @@ if __name__ == "__main__":
         "dataset",
         type=str,
         default="kitti-yolo",
-        choices=["kitti-yolo", "bdd100k_night", "waymo-noConf"],
+        choices=["kitti-yolo", "bdd100k_night", "waymo-noConf", "carla-yolo"],
         help="Dataset to use",
     )
     parser.add_argument(
