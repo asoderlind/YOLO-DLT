@@ -29,6 +29,7 @@ from ultralytics.nn.modules import (
     SPP,
     SPPELAN,
     SPPF,
+    SPPFCSP,
     AConv,
     ADown,
     BiFPNAdd,
@@ -1016,6 +1017,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             DWFocus,
             GhostFocus,
             ProgressiveFocus,
+            SPPFCSP,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments

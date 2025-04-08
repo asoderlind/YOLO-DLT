@@ -34,6 +34,7 @@ from .block import (
     SPP,
     SPPELAN,
     SPPF,
+    SPPFCSP,
     AConv,
     ADown,
     Attention,
@@ -210,4 +211,5 @@ __all__ = (
     "RFABottleneck",
     "RepC3k",
     "RepBottleneck",
+    "SPPFCSP",
 )
