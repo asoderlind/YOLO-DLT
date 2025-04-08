@@ -163,5 +163,5 @@ stats = get_statistics(f"../../yolo-testing/datasets/{args.name}")
 for key, value in stats.items():
     print(f"{key}: {value}")
 
-if args.name.lower() in ["kitti-yolo", "carla-yolo", "waymo-noconf"]:
+if args.name.lower() in ["kitti-yolo", "carla-night", "waymo-noconf"]:
     distance_distribution_histogram(f"../../yolo-testing/datasets/{args.name}")
