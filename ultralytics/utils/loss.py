@@ -231,7 +231,9 @@ class DistanceLoss(nn.Module):
         if target_distance is None:
             return torch.tensor(0.0).to(pred_dist.device)
         if pred_dist.shape != target_distance.shape:
-            print("WARNING: pred_dist and target_distance shapes do not match.")
+            print(
+                f"WARNING: pred_dist shape ({pred_dist.shape}) and target_distance shape ({target_distance.shape}) do not match."
+            )
             return torch.tensor(0.0).to(pred_dist.device)
 
         # Create a mask for valid distances (i.e. not equal to 0) and also where fg_mask is True
