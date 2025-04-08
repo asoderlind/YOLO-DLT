@@ -259,8 +259,16 @@ def train_with_distance(
 
 
 # Augmentation ablations
+<<<<<<< HEAD
 train_with_distance(scale=0.0, mosaic=0.0)
 train_with_distance(scale=0.0, mosaic=1.0)
 train_with_distance(scale=0.5, mosaic=0.0)
 train_with_distance(scale=0.5, mosaic=1.0)
 >>>>>>> 327a1be6 (prepare for ablations for augs)
+=======
+# train_with_distance(data_path="carla.yaml", use_dist=False, d=0.0, classes=[0, 1, 2, 3, 4, 5])
+
+# train_with_distance(data_path="kitti.yaml", use_dist=True, d=0.05, classes=KITTI_CLASSES)
+# train_with_distance(data_path="carla.yaml", use_dist=True, d=0.05, classes=[0, 1, 2, 3, 4, 5])
+train_with_distance(data_path="carla.yaml", use_dist=True, d=0.0, classes=[0, 1, 2, 3, 4, 5])
+>>>>>>> cbbd73c4 (update)
