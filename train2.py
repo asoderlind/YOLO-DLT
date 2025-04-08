@@ -262,16 +262,17 @@ if __name__ == "__main__":
     #   data="bdd100k.yaml",
     # )
 
-    # train_model(
-    #     name="bdd100k-yolo11n-spdconv-cl",
-    #     model="runs/detect/bdd100k-yolo11n-spdconv-cl/weights/last.pt",
-    #     data="bdd100k.yaml",
-    #     resume=True,
-    # )
+    train_model(
+        name="bdd100k-yolo11n-spdconv-cl",
+        model="runs/detect/bdd100k-yolo11n-spdconv-cl/weights/last.pt",
+        data="bdd100k.yaml",
+        resume=True,
+    )
 
     train_model(
         name="bdd100k_night-yolo11n-spdconv-sppfcsp",
-        model="dlt-models/yolo11n-spdconv-sppfcsp.yaml",
+        model="runs/detect/bdd100k_night-yolo11n-spdconv-sppfcsp/weights/last.pt",
+        resume=True,
     )
 
     train_model(
