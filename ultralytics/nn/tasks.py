@@ -85,6 +85,7 @@ from ultralytics.nn.modules import (
     WorldDetect,
     v10Detect,
 )
+from ultralytics.nn.modules.utils import TEMPORAL_MAPPING
 from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, colorstr, emojis, yaml_load
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
 from ultralytics.utils.loss import (
@@ -288,6 +289,12 @@ class BaseModel(torch.nn.Module):
         """
         model = weights["model"] if isinstance(weights, dict) else weights  # torchvision models are not dicts
         csd = model.float().state_dict()  # checkpoint state_dict as FP32
+        # Do YOLOV specific mapping of weights
+        if isinstance(self.model[-1], TemporalDetect):
+            for key in list(csd.keys()):
+                if key not in TEMPORAL_MAPPING:
+                    continue
+                csd[TEMPORAL_MAPPING[key]] = csd.pop(key)
         csd = intersect_dicts(csd, self.state_dict())  # intersect
         self.load_state_dict(csd, strict=False)  # load
         if verbose:
