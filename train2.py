@@ -155,24 +155,32 @@ if __name__ == "__main__":
     #     lr0=0.01,
     #     freeze=10,
     # )
+    # train_model(
+    #     name="waymo-noConf-noDist-vid-yolo11n-bdd100k_night-noFreeze-lr0.005",
+    #     model="runs/detect/bdd100k_night-yolo11n-seed-test-0/weights/last.pt",
+    #     data="waymo-noConf-noDist-vid.yaml",
+    #     epochs=50,
+    #     lr0=0.005,
+    # )
+    train_model(
+        name="waymo-noConf-noDist-vid-yolo11n-bdd100k_night-noFreeze-30e-lr0.001",
+        model="runs/detect/bdd100k_night-yolo11n-seed-test-0/weights/last.pt",
+        data="waymo-noConf-noDist-vid.yaml",
+        epochs=30,
+        lr0=0.001,
+    )
     train_model(
         name="waymo-noConf-noDist-vid-yolo11n-bdd100k_night-noFreeze-lr0.005",
         model="runs/detect/bdd100k_night-yolo11n-seed-test-0/weights/last.pt",
         data="waymo-noConf-noDist-vid.yaml",
         epochs=50,
-        lr0=0.005,
+        lr0=0.0005,
     )
     train_model(
         name="waymo-noConf-noDist-vid-yolo11n-spdconv-bdd100k_night-50e",
-        model="runs/detect/bdd100k_night-yolo11n-SPDConv3/weights/last.pt",
+        model="runs/detect/waymo-noConf-noDist-vid-yolo11n-spdconv-bdd100k_night-50e/weights/last.pt",
         data="waymo-noConf-noDist-vid.yaml",
         epochs=50,
-    )
-    train_model(
-        name="waymo-noConf-noDist-vid-yolo11n-spdconv-bdd100k_night",
-        model="runs/detect/waymo-noConf-noDist-vid-yolo11n-spdconv-bdd100k_night/weights/last.pt",
-        data="waymo-noConf-noDist-vid.yaml",
-        epochs=100,
         resume=True,
     )
     train_model(name="bdd100k_night-yolo11n-nwd-ciou-assigner", model="yolo11n.yaml", iou_type="nwd")
