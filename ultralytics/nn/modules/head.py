@@ -177,7 +177,7 @@ class TemporalDetect(Detect):
 
     temporal_window = 2  # default temporal window
 
-    def __init__(self, nc=80, ch=(), fam_mode: DETECT_FAM_MODE = "both_combined", fsm_type: FSM_TYPE = "thresh"):
+    def __init__(self, nc=80, ch=(), fam_mode: DETECT_FAM_MODE = "cls", fsm_type: FSM_TYPE = "nms"):
         """Initialize the YOLO Temporal detection layer with specified number of classes and channels."""
         super().__init__(nc, ch)
 
