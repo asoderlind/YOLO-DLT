@@ -1460,6 +1460,9 @@ def get_distance_errors_per_class(
 
     e_A = [np.zeros((1, 1)) for _ in range(nc)]
     e_R = [np.zeros((1, 1)) for _ in range(nc)]
+    e_min = [np.zeros((1, 1)) for _ in range(nc)]
+    e_mean = [np.zeros((1, 1)) for _ in range(nc)]
+    e_max = [np.zeros((1, 1)) for _ in range(nc)]
 
     # de-normalize the distances
     dist_gt_cls[:, 0] = dist_gt_cls[:, 0] * max_dist
@@ -1470,10 +1473,22 @@ def get_distance_errors_per_class(
         # Filter out pairs of predictions and ground truth with a certain class
         pred_gt = dist_gt_cls[dist_gt_cls[:, 2] == idx]
         if len(pred_gt) > 0:
-            absolute_errors = np.abs(pred_gt[:, 0] - pred_gt[:, 1])
+            errors = pred_gt[:, 0] - pred_gt[:, 1]
+            # Calculate min, mean, and max errors
+            e_min[idx] = np.min(errors)
+            e_mean[idx] = np.mean(errors)
+            e_max[idx] = np.max(errors)
+            # Calculate mean absolute and relative errors
+            absolute_errors = np.abs(errors)
             relative_errors = absolute_errors / np.maximum(pred_gt[:, 1], 1)
             e_A[idx] = np.mean(absolute_errors)
             e_R[idx] = np.mean(relative_errors)
+
+    # Print errors for each class
+    for i in range(nc):
+        LOGGER.info(
+            f"Class {i}: e_A = {e_A[i]}, e_R = {e_R[i]}, " f"min = {e_min[i]}, mean = {e_mean[i]}, max = {e_max[i]}"
+        )
 
     return e_A, e_R
 
