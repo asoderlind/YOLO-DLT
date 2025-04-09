@@ -1971,7 +1971,7 @@ class FeatureAggregationModule(nn.Module):
         return self.forward(cls_features, reg_features, cls_scores)
 
 
-class FeatureSelectionModule:
+class FeatureSelectionModule(nn.Module):
     """
     Feature Selection Module (FSM) for YOLOV++ video object detection.
     Selects high-quality candidate regions from raw predictions for temporal aggregation.
@@ -1979,10 +1979,11 @@ class FeatureSelectionModule:
 
     def __init__(
         self,
-        type: FSM_TYPE = "thresh",
+        fsm_type: FSM_TYPE = "thresh",
         thresh_count: int = 85,
         conf_thresh: float = 0.001,
-        nms_thresh: float = 0.75,
+        nms_thresh_train: float = 0.75,
+        nms_thresh_val: float = 0.5,
         topk_pre: int = 750,
         topk_post: int = 30,
     ):
@@ -1999,10 +2000,12 @@ class FeatureSelectionModule:
             topk_pre (int): Number of top proposals to consider before NMS (used only with "nms" method)
             topk_post (int): Number of top proposals to keep after NMS (used only with "nms" method)
         """
-        self.type = type
+        super().__init__()
+        self.fsm_type = fsm_type
         self.target_count = thresh_count
         self.conf_thresh = conf_thresh
-        self.nms_thresh = nms_thresh
+        self.nms_thresh_train = nms_thresh_train
+        self.nms_thresh_val = nms_thresh_val
         self.topk_pre = topk_pre
         self.topk_post = topk_post
 
@@ -2016,12 +2019,12 @@ class FeatureSelectionModule:
             tuple: (selected_cls_features, selected_reg_features, selected_boxes,
                    selected_scores, selected_indices)
         """
-        if self.type == "thresh":
+        if self.fsm_type == "thresh":
             return self._threshold_selection(raw_preds, vid_features, reg_features)
-        elif self.type == "nms":
+        elif self.fsm_type == "nms":
             return self._nms_selection(raw_preds, vid_features, reg_features)
         else:
-            raise ValueError(f"Unknown selection method: {self.type}")
+            raise ValueError(f"Unknown selection method: {self.fsm_type}")
 
     def _threshold_selection(
         self, raw_preds: torch.Tensor, vid_features: torch.Tensor, reg_features: torch.Tensor
@@ -2153,7 +2156,7 @@ class FeatureSelectionModule:
                 boxes[topk_indices],
                 topk_values,
                 cls_ids[topk_indices],
-                self.nms_thresh,
+                iou_threshold=self.nms_thresh_train if self.training else self.nms_thresh_val,
             )
 
             if len(nms_indices) < self.topk_post:

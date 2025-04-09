@@ -181,7 +181,7 @@ class TemporalDetect(Detect):
         """Initialize the YOLO Temporal detection layer with specified number of classes and channels."""
         super().__init__(nc, ch)
 
-        self.fsm = FeatureSelectionModule(type=fsm_type)
+        self.fsm = FeatureSelectionModule(fsm_type=fsm_type)
 
         # separate reg and cls convs from the final pred layer
         reg_ch = max(16, ch[0] // 4, self.reg_max * 4)
