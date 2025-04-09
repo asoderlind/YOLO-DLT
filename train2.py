@@ -287,5 +287,5 @@ if __name__ == "__main__":
         resume=True,
         iou_type="isiou",
     )
-    train_model(name="bdd100k_night-yolo11n-ciou+nwd", model="yolo11n.yaml", iou_type="ciou+nwd")
     train_model(name="bdd100k_night-yolo11n-nwd", model="yolo11n.yaml", iou_type="nwd")
+    train_model(name="bdd100k_night-yolo11n-ciou+nwd", model="yolo11n.yaml", iou_type="ciou+nwd")
