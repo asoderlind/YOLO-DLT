@@ -93,3 +93,18 @@ def multi_scale_deformable_attn_pytorch(
 FAM_MODE = Literal["both", "cls", "reg"]
 FSM_TYPE = Literal["nms", "thresh"]
 DETECT_FAM_MODE = Literal["both_combined", "both_separate", "cls", "reg"]
+
+TEMPORAL_MAPPING = {
+    "model.23.cv2.0.2.weight": "model.23.cv2_pred.0.weight",
+    "model.23.cv2.0.2.bias": "model.23.cv2_pred.0.bias",
+    "model.23.cv2.1.2.weight": "model.23.cv2_pred.1.weight",
+    "model.23.cv2.1.2.bias": "model.23.cv2_pred.1.bias",
+    "model.23.cv2.2.2.weight": "model.23.cv2_pred.2.weight",
+    "model.23.cv2.2.2.bias": "model.23.cv2_pred.2.bias",
+    "model.23.cv3.0.2.weight": "model.23.cv3_pred.0.weight",
+    "model.23.cv3.0.2.bias": "model.23.cv3_pred.0.bias",
+    "model.23.cv3.1.2.weight": "model.23.cv3_pred.1.weight",
+    "model.23.cv3.1.2.bias": "model.23.cv3_pred.1.bias",
+    "model.23.cv3.2.2.weight": "model.23.cv3_pred.2.weight",
+    "model.23.cv3.2.2.bias": "model.23.cv3_pred.2.bias",
+}
