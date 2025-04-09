@@ -20,11 +20,11 @@ def train_with_distance(
     device: str = DEVICE,
     **kwargs,
 ):
-    resume = model_path != "yolo11n.pt"
     model = YOLO(model_path)
     name = f"{data_path}-{model_path}-{EPOCHS}e-{OPTIMIZER}-{'dist' if use_dist else 'noDist'}-scale{scale}-mosaic{mosaic}-noDontCare-d{d}_"
 
     model.train(
+        pretrained=True,
         data=data_path,
         epochs=EPOCHS,
         device=device,
@@ -39,16 +39,21 @@ def train_with_distance(
         scale=scale,
         use_dist=use_dist,
         dist=d,
-        resume=resume,
         classes=classes,
-        cache=False
+        cache=False,
+        **kwargs,
     )
 
 
 # Augmentation ablations
 # train_with_distance(data_path="carla.yaml", use_dist=False, d=0.0, classes=[0, 1, 2, 3, 4, 5])
 
-#train_with_distance(data_path="kitti.yaml", use_dist=True, d=0.05, classes=KITTI_CLASSES)
-train_with_distance(data_path="carla.yaml", use_dist=True, d=0.05, classes=[0, 1, 2, 3, 4, 5])
-train_with_distance(data_path="carla.yaml", use_dist=True, d=0.0, classes=[0, 1, 2, 3, 4, 5])
-
+train_with_distance(
+    data_path="kitti.yaml",
+    model_path="./runs/detect/kitti.yaml-yolo11n.pt-100e-SGD-noDist-scale0.0-mosaic1.0-noDontCare-d0_/weights/best.pt",
+    use_dist=True,
+    classes=KITTI_CLASSES,
+    freeze=23,
+)
+# train_with_distance(data_path="carla.yaml", use_dist=True, d=0.05, classes=[0, 1, 2, 3, 4, 5])
+# train_with_distance(data_path="carla.yaml", use_dist=True, d=0.0, classes=[0, 1, 2, 3, 4, 5])
