@@ -185,39 +185,60 @@ class TemporalDetect(Detect):
 
         # separate reg and cls convs from the final pred layer
         reg_ch = max(16, ch[0] // 4, self.reg_max * 4)
-        vid_cls_ch = max(ch[0], min(self.nc, 100))
+        cls_ch = max(ch[0], min(self.nc, 100))
+
         # reg branch with modular pred layer
         self.cv2 = nn.ModuleList(nn.Sequential(Conv(x, reg_ch, k=3), Conv(reg_ch, reg_ch, k=3)) for x in ch)
         self.cv2_pred = nn.ModuleList(nn.Conv2d(reg_ch, 4 * self.reg_max, 1) for _ in ch)
 
-        # Regular cls branch stays the same
-
-        # New video object classification branch (same structure as cls branch)
-        self.vid_cls = nn.ModuleList(
+        # cls branch with modular pred layer
+        self.cv3 = nn.ModuleList(
             nn.Sequential(
-                nn.Sequential(DWConv(x, x, k=3), Conv(x, vid_cls_ch, k=1)),
-                nn.Sequential(DWConv(vid_cls_ch, vid_cls_ch, k=3), Conv(vid_cls_ch, vid_cls_ch, k=1)),
+                nn.Sequential(DWConv(x, x, 3), Conv(x, cls_ch, 1)),
+                nn.Sequential(DWConv(cls_ch, cls_ch, 3), Conv(cls_ch, cls_ch, 1)),
             )
             for x in ch
         )
+        self.cv3_pred = nn.ModuleList(nn.Conv2d(cls_ch, self.nc, 1) for _ in ch)
 
-        common_ch = max(reg_ch, vid_cls_ch)
-        self.fam_mode = fam_mode
+        self.fam_mode: DETECT_FAM_MODE = fam_mode
+
+        # New video object classification branch (same structure as cls branch)
+        self.vid_cls = (
+            nn.ModuleList(
+                nn.Sequential(
+                    nn.Sequential(DWConv(x, x, k=3), Conv(x, cls_ch, k=1)),
+                    nn.Sequential(DWConv(cls_ch, cls_ch, k=3), Conv(cls_ch, cls_ch, k=1)),
+                )
+                for x in ch
+            )
+            if self.fam_mode in {"both_combined", "both_separate", "cls"}
+            else None
+        )
+
+        # New video object regression branch (same structure as reg branch)
+        self.vid_reg = (
+            nn.ModuleList(nn.Sequential(Conv(x, reg_ch, k=3), Conv(reg_ch, reg_ch, k=3)) for x in ch)
+            if self.fam_mode in {"both_combined", "both_separate", "reg"}
+            else None
+        )
+
+        common_ch = max(reg_ch, cls_ch)
         match self.fam_mode:
             case "both_combined":
-                self.fam = FeatureAggregationModule(cls_ch=vid_cls_ch, reg_ch=reg_ch, mode="both")
+                self.fam = FeatureAggregationModule(cls_ch=cls_ch, reg_ch=reg_ch, mode="both")
                 self.linear_pred_cls = nn.Linear(4 * common_ch, self.nc)
                 self.linear_pred_reg = nn.Linear(4 * common_ch, 4 * self.reg_max)
             case "both_separate":
-                self.fam_cls = FeatureAggregationModule(cls_ch=vid_cls_ch, reg_ch=reg_ch, mode="cls")
-                self.fam_reg = FeatureAggregationModule(cls_ch=vid_cls_ch, reg_ch=reg_ch, mode="reg")
+                self.fam_cls = FeatureAggregationModule(cls_ch=cls_ch, reg_ch=reg_ch, mode="cls")
+                self.fam_reg = FeatureAggregationModule(cls_ch=cls_ch, reg_ch=reg_ch, mode="reg")
                 self.linear_pred_cls = nn.Linear(4 * common_ch, self.nc)
                 self.linear_pred_reg = nn.Linear(4 * common_ch, 4 * self.reg_max)
             case "cls":
-                self.fam = FeatureAggregationModule(cls_ch=vid_cls_ch, reg_ch=reg_ch, mode="cls")
+                self.fam = FeatureAggregationModule(cls_ch=cls_ch, reg_ch=reg_ch, mode="cls")
                 self.linear_pred = nn.Linear(4 * common_ch, self.nc)
             case "reg":
-                self.fam = FeatureAggregationModule(cls_ch=vid_cls_ch, reg_ch=reg_ch, mode="reg")
+                self.fam = FeatureAggregationModule(cls_ch=cls_ch, reg_ch=reg_ch, mode="reg")
                 self.linear_pred = nn.Linear(4 * common_ch, 4 * self.reg_max)
             case _:
                 raise ValueError(f"Invalid fam_mode: {self.fam_mode}")
@@ -227,9 +248,11 @@ class TemporalDetect(Detect):
         m = self  # self.model[-1]  # Detect() module
         # cf = torch.bincount(torch.tensor(np.concatenate(dataset.labels, 0)[:, 0]).long(), minlength=nc) + 1
         # ncf = math.log(0.6 / (m.nc - 0.999999)) if cf is None else torch.log(cf / cf.sum())  # nominal class frequency
-        for a, b, s in zip(m.cv2_pred, m.cv3, m.stride):  # cv2_pred is just a singular conv2d list now
+        for a, b, s in zip(
+            m.cv2_pred, m.cv3_pred, m.stride
+        ):  # cv2_pred & cv3_pred are just a singular conv2d lists now
             a.bias.data[:] = 1.0  # box
-            b[-1].bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
+            b.bias.data[: m.nc] = math.log(5 / m.nc / (640 / s) ** 2)  # cls (.01 objects, 80 classes, 640 img)
         if self.end2end:
             for a, b, s in zip(m.one2one_cv2, m.one2one_cv3, m.stride):  # from
                 a[-1].bias.data[:] = 1.0  # box
@@ -243,8 +266,8 @@ class TemporalDetect(Detect):
         before_nms_reg_feats: list[torch.Tensor] = []
 
         for i in range(self.nl):
-            reg_feat = self.cv2[i](x[i])
-            vid_cls_feat = self.vid_cls[i](x[i])
+            reg_feat = self.vid_reg[i](x[i]) if self.vid_reg else self.cv2[i](x[i])
+            vid_cls_feat = self.vid_cls[i](x[i]) if self.vid_cls else self.cv3[i](x[i])
 
             # store features for FSM
             before_nms_vid_feats.append(vid_cls_feat)
@@ -252,7 +275,7 @@ class TemporalDetect(Detect):
 
             # same as original model:
             reg_out = self.cv2_pred[i](reg_feat)
-            cls_out = self.cv3[i](x[i])
+            cls_out = self.cv3_pred[i](vid_cls_feat)
             x[i] = torch.cat((reg_out, cls_out), 1)
 
         # flatten features for FSM
