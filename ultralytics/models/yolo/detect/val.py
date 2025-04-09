@@ -101,7 +101,7 @@ class DetectionValidator(BaseValidator):
 
     def get_desc(self):
         """Return a formatted string summarizing class metrics of YOLO model."""
-        return ("%22s" + "%11s" * 8) % (
+        return ("%22s" + "%11s" * 11) % (
             "Class",
             "Images",
             "Instances",
@@ -110,7 +110,10 @@ class DetectionValidator(BaseValidator):
             "mAP50",
             "mAP50-95)",
             "Dist(e_A",
-            "e_R)",
+            "e_R",
+            "e_min",
+            "e_mean",
+            "e_max)",
         )
 
     def postprocess(self, preds):

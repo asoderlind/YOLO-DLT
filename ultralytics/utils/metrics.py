@@ -1380,6 +1380,9 @@ class DistMetrics(SimpleClass):
     def __init__(self) -> None:
         self.e_A: list[np.ndarray] = []  # list storing absolute distance errors (nc,)
         self.e_R: list[np.ndarray] = []  # list storing relative distance errors (nc,)
+        self.e_min: list[np.ndarray] = []  # list storing min distance errors (nc,)
+        self.e_mean: list[np.ndarray] = []  # list storing mean distance errors (nc,)
+        self.e_max: list[np.ndarray] = []  # list storing max distance errors (nc,)
 
     @property
     def mean_absolute_error(self) -> float:
@@ -1391,13 +1394,34 @@ class DistMetrics(SimpleClass):
         """Mean relative distance error."""
         return sum(self.e_R) / len(self.e_R) if len(self.e_R) else 0.0
 
+    @property
+    def mean_min_error(self) -> float:
+        """Mean min error."""
+        return sum(self.e_min) / len(self.e_min) if len(self.e_min) else 0.0
+
+    @property
+    def mean_mean_error(self) -> float:
+        """Mean mean error."""
+        return sum(self.e_mean) / len(self.e_mean) if len(self.e_mean) else 0.0
+
+    @property
+    def mean_max_error(self) -> float:
+        """Mean max error."""
+        return sum(self.e_max) / len(self.e_max) if len(self.e_max) else 0.0
+
     def mean_results(self):
         """Returns [mean_absolute_error, mean_relative_error]."""
-        return [self.mean_absolute_error, self.mean_relative_error]
+        return [
+            self.mean_absolute_error,
+            self.mean_relative_error,
+            self.mean_min_error,
+            self.mean_mean_error,
+            self.mean_max_error,
+        ]
 
     def class_result(self, i):
         """Returns [absolute_error, relative_error] for a specific class."""
-        return self.e_A[i], self.e_R[i]
+        return self.e_A[i], self.e_R[i], self.e_min[i], self.e_mean[i], self.e_max[i]
 
     def update(self, results):
         """
@@ -1408,7 +1432,7 @@ class DistMetrics(SimpleClass):
                 - e_A (list): List of absolute distance error values.
                 - e_R (list): List of relative distance error values.
         """
-        self.e_A, self.e_R = results
+        self.e_A, self.e_R, self.e_min, self.e_mean, self.e_max = results
 
     def fitness(self):
         """
@@ -1484,13 +1508,7 @@ def get_distance_errors_per_class(
             e_A[idx] = np.mean(absolute_errors)
             e_R[idx] = np.mean(relative_errors)
 
-    # Print errors for each class
-    for i in range(nc):
-        LOGGER.info(
-            f"Class {i}: e_A = {e_A[i]}, e_R = {e_R[i]}, " f"min = {e_min[i]}, mean = {e_mean[i]}, max = {e_max[i]}"
-        )
-
-    return e_A, e_R
+    return e_A, e_R, e_min, e_mean, e_max
 
 
 class DetMetrics(SimpleClass):
@@ -1564,6 +1582,9 @@ class DetMetrics(SimpleClass):
             "metrics/mAP50-95(B)",
             "metrics/e_A(D)",
             "metrics/e_R(D)",
+            "metrics/e_min(D)",
+            "metrics/e_mean(D)",
+            "metrics/e_max(D)",
         ]
 
     def mean_results(self):
