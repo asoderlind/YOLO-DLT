@@ -1543,12 +1543,13 @@ class DetMetrics(SimpleClass):
         curves_results: TODO
     """
 
-    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names={}) -> None:
+    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names={}, max_dist=150) -> None:
         """Initialize a DetMetrics instance with a save directory, plot flag, callback function, and class names."""
         self.save_dir = save_dir
         self.plot = plot
         self.on_plot = on_plot
         self.names = names
+        self.max_dist = max_dist
         self.box = Metric()
         self.dist = DistMetrics()
         self.speed = {"preprocess": 0.0, "inference": 0.0, "loss": 0.0, "postprocess": 0.0}
@@ -1569,7 +1570,9 @@ class DetMetrics(SimpleClass):
         nc = len(self.names)
         self.box.nc = nc
         self.box.update(results)
-        results = get_distance_errors_per_class(pred2gt_dist, pred2gt_cls, pred_dist, target_cls, nc)
+        results = get_distance_errors_per_class(
+            pred2gt_dist, pred2gt_cls, pred_dist, target_cls, nc, max_dist=self.max_dist
+        )
         self.dist.update(results)
 
     @property
