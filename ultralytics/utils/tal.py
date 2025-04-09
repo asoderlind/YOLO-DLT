@@ -169,7 +169,7 @@ class TaskAlignedAssigner(nn.Module):
         """IoU calculation for horizontal bounding boxes."""
         # still use CIoU for wiou to avoid tracking mean here
         effective_iou_type = (
-            self.iou_type if (not self.iou_type.startswith("wiou")) or self.iou_type == "nwd" else "ciou"
+            self.iou_type if (not self.iou_type.startswith("wiou")) or "nwd" in self.iou_type else "ciou"
         )
         effective_iou_type = "ciou" if (self.iou_type.startswith("wiou") or "nwd" in self.iou_type) else self.iou_type
         return bbox_iou(gt_bboxes, pd_bboxes, xywh=False, iou_type=effective_iou_type).squeeze(-1).clamp_(0)
