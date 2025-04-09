@@ -289,8 +289,9 @@ if __name__ == "__main__":
     # )
     train_model(
         name="waymo-noConf-noDist-vid-yolo11n-bdd100k_night",
-        model="runs/detect/bdd100k_night-yolo11n-seed-test-0/weights/last.pt",
+        model="runs/detect/waymo-noConf-noDist-vid-yolo11n-bdd100k_night/weights/last.pt",
         data="waymo-noConf-noDist-vid.yaml",
+        resume=True,
     )
     train_model(
         name="waymo-noConf-noDist-vid-yolo11n-spdconv-bdd100k_night",
