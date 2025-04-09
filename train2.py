@@ -281,21 +281,21 @@ if __name__ == "__main__":
     #     resume=True,
     #     iou_type="siou",
     # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-isiou",
+    #     model="runs/detect/bdd100k_night-yolo11n-isiou/weights/last.pt",
+    #     resume=True,
+    #     iou_type="isiou",
+    # )
     train_model(
-        name="bdd100k_night-yolo11n-isiou",
-        model="runs/detect/bdd100k_night-yolo11n-isiou/weights/last.pt",
-        resume=True,
-        iou_type="isiou",
-    )
-    train_model(
-        name="waymo-noConf-noDist-vid-yolo11n",
+        name="waymo-noConf-noDist-vid-yolo11n-bdd100k_night",
         model="runs/detect/bdd100k_night-yolo11n-seed-test-0/weights/last.pt",
         data="waymo-noConf-noDist-vid.yaml",
     )
     train_model(
-        name="waymo-noConf-noDist-vid-yolo11n-spdconv",
+        name="waymo-noConf-noDist-vid-yolo11n-spdconv-bdd100k_night",
         model="runs/detect/bdd100k_night-yolo11n-SPDConv-3/weights/last.pt",
         data="waymo-noConf-noDist-vid.yaml",
     )
-    train_model(name="bdd100k_night-yolo11n-nwd", model="yolo11n.yaml", iou_type="nwd")
+    train_model(name="bdd100k_night-yolo11n-nwd-ciou-assigner", model="yolo11n.yaml", iou_type="nwd")
     train_model(name="bdd100k_night-yolo11n-ciou+nwd", model="yolo11n.yaml", iou_type="ciou+nwd")
