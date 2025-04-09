@@ -2075,7 +2075,7 @@ class FeatureSelectionModule:
                     # We should never reach this point, but if we do, we need to pad
                     LOGGER.warning(
                         "Not enough remaining scores to reach target count. Padding with highest scoring index."
-                        "Double check your target count."
+                        " Double check your target count."
                     )
                     _, topk_indices = torch.topk(remaining_scores, len(remaining_scores))
                     additional_indices = remaining_indices[topk_indices]
