@@ -808,7 +808,7 @@ class Model(torch.nn.Module):
             # This is ugly, but at least for the user it will work as expected
             # Please, please, please don't forget that this is not implemented for the val() method
             if isinstance(self.trainer.model.model[-1], TemporalDetect):
-                self.trainer.model.model[-1].temporal_window = args["temporal_window"]
+                self.trainer.model.model[-1].temporal_window = args.get("temporal_window", self.args["temporal_window"])
                 self.model = self.trainer.model
 
         self.trainer.hub_session = self.session  # attach optional HUB session
