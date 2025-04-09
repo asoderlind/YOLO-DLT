@@ -176,6 +176,34 @@ if __name__ == "__main__":
         epochs=50,
         lr0=0.0005,
     )
+
+    train_model(
+        name="waymo-noConf-noDist-vid-yolo11n-bdd100k_night-headTune-20e",
+        model="runs/detect/bdd100k_night-yolo11n-seed-test-0/weights/last.pt",
+        data="waymo-noConf-noDist-vid.yaml",
+        epochs=20,
+        lr0=0.001,
+        freeze=22,
+        optimizer="AdamW",
+    )
+    train_model(
+        name="waymo-noConf-noDist-vid-yolo11n-bdd100k_night-headTune-30e",
+        model="runs/detect/bdd100k_night-yolo11n-seed-test-0/weights/last.pt",
+        data="waymo-noConf-noDist-vid.yaml",
+        epochs=20,
+        lr0=0.001,
+        freeze=22,
+        optimizer="AdamW",
+    )
+    train_model(
+        name="waymo-noConf-noDist-vid-yolo11n-bdd100k_night-headTune-20e",
+        model="runs/detect/bdd100k_night-yolo11n-seed-test-0/weights/last.pt",
+        data="waymo-noConf-noDist-vid.yaml",
+        epochs=20,
+        lr0=0.001,
+        freeze=22,
+    )
+
     train_model(
         name="waymo-noConf-noDist-vid-yolo11n-spdconv-bdd100k_night-50e",
         model="runs/detect/waymo-noConf-noDist-vid-yolo11n-spdconv-bdd100k_night-50e/weights/last.pt",
