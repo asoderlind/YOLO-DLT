@@ -124,16 +124,19 @@ def train_model(
 # Example usage
 if __name__ == "__main__":
     train_model(
-        name="waymo-noConf-noDist-vid-yolo11n-spdconv-bdd100k_night",
-        model="runs/detect/bdd100k_night-yolo11n-SPDConv3/weights/last.pt",
-        data="waymo-noConf-noDist-vid.yaml",
-        epochs=100,
-    )
-    train_model(
         name="waymo-noConf-noDist-vid-yolo11n-bdd100k_night",
         model="runs/detect/bdd100k_night-yolo11n-seed-test-0/weights/last.pt",
         data="waymo-noConf-noDist-vid.yaml",
+        epochs=50,
+        lr0=0.001,
+        freeze=10,
+    )
+    train_model(
+        name="waymo-noConf-noDist-vid-yolo11n-spdconv-bdd100k_night",
+        model="runs/detect/waymo-noConf-noDist-vid-yolo11n-spdconv-bdd100k_night/weights/last.pt",
+        data="waymo-noConf-noDist-vid.yaml",
         epochs=100,
+        resume=True,
     )
     train_model(name="bdd100k_night-yolo11n-nwd-ciou-assigner", model="yolo11n.yaml", iou_type="nwd")
     train_model(name="bdd100k_night-yolo11n-ciou+nwd", model="yolo11n.yaml", iou_type="ciou+nwd")
