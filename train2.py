@@ -133,10 +133,26 @@ if __name__ == "__main__":
     # )
     train_model(
         name="waymo-noConf-noDist-vid-yolo11n-bdd100k_night",
-        model="runs/detect/bdd100k_night-yolo11n-seed-test-0/weights/last.pt",
+        model="runs/detect/detect/waymo-noConf-noDist-vid-yolo11n-bdd100k_night4/last.pt",
         data="waymo-noConf-noDist-vid.yaml",
         epochs=50,
         lr0=0.005,
+        freeze=10,
+        resume=True,
+    )
+    train_model(
+        name="waymo-noConf-noDist-vid-yolo11n-bdd100k_night-noFreeze",
+        model="runs/detect/bdd100k_night-yolo11n-seed-test-0/weights/last.pt",
+        data="waymo-noConf-noDist-vid.yaml",
+        epochs=50,
+        lr0=0.001,
+    )
+    train_model(
+        name="waymo-noConf-noDist-vid-yolo11n-bdd100k_night-lr0.01",
+        model="runs/detect/bdd100k_night-yolo11n-seed-test-0/weights/last.pt",
+        data="waymo-noConf-noDist-vid.yaml",
+        epochs=50,
+        lr0=0.01,
         freeze=10,
     )
     train_model(
