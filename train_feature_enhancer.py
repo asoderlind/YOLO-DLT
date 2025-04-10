@@ -4,27 +4,29 @@ from ultralytics import YOLO
 # With training first layer at same time as rest of net
 fe = True
 epochs = 200
-lcs = 0.5
+lc = 0.5
 
-model = YOLO("yolo11n.yaml")
+data = "exDark-yolo.yaml"
+model = YOLO("dlt-models/yolo11n-SPDConv-3.yaml")
+
 model.train(
-    data="../ultralytics/cfg/datasets/bdd100k_night.yaml",
+    data=data,
     use_fe=fe,
     epochs=epochs,
-    batch=16,
     augment=True,
     device="cuda",
     lambda_c=lc,
     optimizer="auto",
-    name=f"bdd100k_night-{'fe-' if fe else ''}{epochs}-allLoss-lc{lc}-Auto-aug-preLoad"
+    name=f"{model}-{data}-{'fe-' if fe else ''}-e{epochs}-allLoss-lc{lc}-Auto-aug-preLoad",
 )
 
 
 # With training only first layer then freezing
-pathConv1 = f"bdd100k_night-conv1-e10-lc{lc}"
-model = YOLO("yolo11n.yaml")
+epochs = 10
+pathConv1 = f"{model}-{data}-conv1-e{epochs}-lc{lc}"
+model = YOLO("dlt-models/yolo11n-SPDConv-3.yaml")
 model.train(
-    data="../ultralytics/cfg/datasets/exDark-yolo.yaml",
+    data=data,
     epochs=10,
     batch=16,
     pretrained=True,
@@ -37,16 +39,15 @@ model.train(
     box=0.0,
     cls=0.0,
     dfl=0.0,
-    save_json=True,
-    name=pathConv1
+    name=pathConv1,
 )
 
 freezeNum = 1
-model=YOLO(f"runs/detect/{pathConv1}/weights/last.pt")
+epochs = 200
+model = YOLO(f"runs/detect/{pathConv1}/weights/last.pt")
 model.train(
-    data="../ultralytics/cfg/datasets/bdd100k_night.yaml",
-    epochs=200,
-    batch=16,
+    data="bdd100k_night.yaml",
+    epochs=epochs,
     pretrained=False,
     optimizer="auto",
     device="cuda",
@@ -54,7 +55,7 @@ model.train(
     val=True,
     lambda_c=lc,
     augment=True,
-    name=f"{pathConv1}-freeze{freezeNum}-e200_",
+    name=f"{pathConv1}-freeze{freezeNum}-e{epochs}_",
     save_json=True,
-    freeze=freezeNum
+    freeze=freezeNum,
 )
