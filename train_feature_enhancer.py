@@ -42,7 +42,6 @@ model.train(
 )
 """
 
-
 # With training only first layer then freezing
 epochs = 10
 fe = True
@@ -53,6 +52,7 @@ data = "exDark-yolo.yaml"
 
 pathConv1 = f"{model_name}-{data}-conv1-e{epochs}-lc{lc}"
 model = YOLO(model_name)
+"""
 model.train(
     data=data,
     epochs=10,
@@ -69,12 +69,13 @@ model.train(
     dfl=0.0,
     name=pathConv1,
 )
+"""
 
 freezeNum = 1
 epochs = 200
 model = YOLO(f"runs/detect/{pathConv1}/weights/last.pt")
 model.train(
-    data="bdd100k_night.yaml",
+    data=data,
     epochs=epochs,
     pretrained=False,
     optimizer="auto",
