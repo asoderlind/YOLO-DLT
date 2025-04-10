@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 from torch.nn.init import constant_, xavier_uniform_
 
+from ultralytics.utils import LOGGER
 from ultralytics.utils.tal import TORCH_1_10, dist2bbox, dist2rbox, make_anchors
 
 from .block import DFL, BNContrastiveHead, ContrastiveHead, FeatureAggregationModule, FeatureSelectionModule, Proto
@@ -602,6 +603,17 @@ class TemporalDetect(Detect):
             dbox = self.decode_bboxes(self.dfl(box), self.anchors.unsqueeze(0)) * self.strides
 
         return torch.cat((dbox, cls.sigmoid()), 1)
+
+    def freeze_base_detector(self):
+        """Freeze the regular detection branches (cv2 and cv3) of the model."""
+        LOGGER.info("Freezing regular detection branches except for the last layer.")
+        for i in range(self.nl):
+            self.cv2[i].eval()
+            self.cv3[i].eval()
+            for param in self.cv2[i].parameters():
+                param.requires_grad = False
+            for param in self.cv3[i].parameters():
+                param.requires_grad = False
 
 
 class Segment(Detect):
