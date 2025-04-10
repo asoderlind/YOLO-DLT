@@ -45,6 +45,9 @@ model.train(
 
 # With training only first layer then freezing
 epochs = 10
+fe = True
+lc = 0.5
+
 pathConv1 = f"{model_name}-{data}-conv1-e{epochs}-lc{lc}"
 model = YOLO(model_name)
 model.train(
