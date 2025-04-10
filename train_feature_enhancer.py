@@ -1,5 +1,6 @@
 from ultralytics import YOLO
 
+""" might resume this one later
 # Without fe
 fe = False
 epochs = 200
@@ -20,7 +21,6 @@ model.train(
     name=f"{model_name}-{data}-{'fe-' if fe else ''}-e{epochs}-allLoss-lc{lc}-Auto-aug-preLoad",
 )
 
-""" might resume this one later
 # With training first layer at same time as rest of net
 fe = True
 epochs = 200
@@ -47,6 +47,9 @@ model.train(
 epochs = 10
 fe = True
 lc = 0.5
+
+model_name = "dlt-models/yolo11n-SPDConv-3.yaml"
+data = "exDark-yolo.yaml"
 
 pathConv1 = f"{model_name}-{data}-conv1-e{epochs}-lc{lc}"
 model = YOLO(model_name)
