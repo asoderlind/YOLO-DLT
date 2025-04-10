@@ -311,3 +311,8 @@ if __name__ == "__main__":
         name="bdd100k_night-yolo11n-concat",
         model="dlt-models/yolo11n-concat.yaml",
     )
+    train_model(
+        name="bdd100k_night-yolo11n-spdconv-ciou+nwd-assigner",
+        model="dlt-models/yolo11n-SPDConv-3.yaml",
+        iou_type="ciou+nwd",
+    )
