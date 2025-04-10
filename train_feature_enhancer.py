@@ -7,7 +7,8 @@ epochs = 200
 lc = 0.5
 
 data = "exDark-yolo.yaml"
-model = YOLO("dlt-models/yolo11n-SPDConv-3.yaml")
+model_name = "dlt-models/yolo11n-SPDConv-3.yaml"
+model = YOLO(model_name)
 
 model.train(
     data=data,
@@ -17,14 +18,14 @@ model.train(
     device="cuda",
     lambda_c=lc,
     optimizer="auto",
-    name=f"{model}-{data}-{'fe-' if fe else ''}-e{epochs}-allLoss-lc{lc}-Auto-aug-preLoad",
+    name=f"{model_name}-{data}-{'fe-' if fe else ''}-e{epochs}-allLoss-lc{lc}-Auto-aug-preLoad",
 )
 
 
 # With training only first layer then freezing
 epochs = 10
-pathConv1 = f"{model}-{data}-conv1-e{epochs}-lc{lc}"
-model = YOLO("dlt-models/yolo11n-SPDConv-3.yaml")
+pathConv1 = f"{model_name}-{data}-conv1-e{epochs}-lc{lc}"
+model = YOLO(model_name)
 model.train(
     data=data,
     epochs=10,
