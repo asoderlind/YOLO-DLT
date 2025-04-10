@@ -277,7 +277,12 @@ if __name__ == "__main__":
     #     resume=True,
     #     iou_type="nwd",
     # )
-    train_model(name="bdd100k_night-yolo11n-ciou+nwd-assigner", model="yolo11n.yaml", iou_type="ciou+nwd")
+    train_model(
+        name="bdd100k_night-yolo11n-ciou+nwd-assigner",
+        model="runs/detect/bdd100k_night-yolo11n-ciou+nwd-assigner/weights/last.pt",
+        resume=True,
+        iou_type="ciou+nwd",
+    )
     train_model(
         name="bdd100k_night-yolo11n-bic-full",
         model="dlt-models/yolo11n-bic-full.yaml",
