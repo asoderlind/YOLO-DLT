@@ -1687,3 +1687,44 @@ class SPPFCSP(nn.Module):
         y2: torch.Tensor = self.cv6(self.cv5(y1))
         y_out = self.cv7(torch.cat((y_skip, y2), dim=1))
         return y_out
+
+
+class Transpose(nn.Module):
+    """Normal Transpose, default for upsampling"""
+
+    def __init__(self, c1, c2, k=2, s=2):
+        super().__init__()
+        self.upsample_transpose = torch.nn.ConvTranspose2d(
+            in_channels=c1, out_channels=c2, kernel_size=k, stride=s, bias=True
+        )
+
+    def forward(self, x):
+        return self.upsample_transpose(x)
+
+
+class BiC(nn.Module):
+    """Bi Concat Block in PAN"""
+
+    def __init__(self, c1: list[int], c2: int, channel_reduction: int = 1, adaptive_upsample: bool = True) -> None:
+        """
+        0: left -> below
+        1: above -> left
+        2: below -> above
+        """
+        super().__init__()
+        hidden_ch = c2 // channel_reduction
+        self.cv1 = Conv(c1[1], hidden_ch, k=1, s=1)  # left
+        self.cv2 = Conv(c1[2], hidden_ch, k=1, s=1)  # above
+        self.cv3 = Conv(hidden_ch * 3, c2, k=1, s=1)  # output
+
+        if adaptive_upsample:
+            self.upsample = Transpose(c1=c1[0], c2=hidden_ch)
+        else:
+            self.upsample = nn.Sequential(Conv(c1=c1[0], c2=hidden_ch), nn.Upsample(scale_factor=2, mode="nearest"))  # type: ignore[assignment]
+        self.downsample = Conv(c1=hidden_ch, c2=hidden_ch, k=3, s=2)
+
+    def forward(self, x: list[torch.Tensor]) -> torch.Tensor:
+        x0 = self.upsample(x[0])
+        x1 = self.cv1(x[1])
+        x2 = self.downsample(self.cv2(x[2]))
+        return self.cv3(torch.cat((x0, x1, x2), dim=1))

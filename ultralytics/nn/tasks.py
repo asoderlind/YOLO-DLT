@@ -32,6 +32,7 @@ from ultralytics.nn.modules import (
     SPPFCSP,
     AConv,
     ADown,
+    BiC,
     BiFPNAdd,
     Bottleneck,
     BottleneckCSP,
@@ -82,6 +83,7 @@ from ultralytics.nn.modules import (
     SimAM,
     SimSPPF,
     TorchVision,
+    Transpose,
     WorldDetect,
     v10Detect,
 )
@@ -1018,6 +1020,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             GhostFocus,
             ProgressiveFocus,
             SPPFCSP,
+            Transpose,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
@@ -1104,6 +1107,12 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [c1, *args]
         elif m is SimAM:
             c2 = ch[f]
+        elif m is BiC:
+            c1 = [ch[f_i] for f_i in f]
+            c2 = args[0]
+            if c2 != nc:
+                c2 = make_divisible(min(c2, max_channels) * width, 8)
+            args = [c1, c2, *args[1:]]
         else:
             c2 = ch[f]
 

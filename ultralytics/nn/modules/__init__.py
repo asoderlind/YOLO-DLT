@@ -38,6 +38,7 @@ from .block import (
     AConv,
     ADown,
     Attention,
+    BiC,
     BiFPNAdd,
     BNContrastiveHead,
     Bottleneck,
@@ -72,6 +73,7 @@ from .block import (
     SimAM,
     SimSPPF,
     TorchVision,
+    Transpose,
 )
 from .conv import (
     CBAM,
@@ -212,4 +214,6 @@ __all__ = (
     "RepC3k",
     "RepBottleneck",
     "SPPFCSP",
+    "Transpose",
+    "BiC",
 )
