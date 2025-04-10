@@ -1,6 +1,26 @@
 from ultralytics import YOLO
 
+# Without fe
+fe = False
+epochs = 200
+lc = 0.0
 
+data = "exDark-yolo.yaml"
+model_name = "dlt-models/yolo11n-SPDConv-3.yaml"
+model = YOLO(model_name)
+
+model.train(
+    data=data,
+    use_fe=fe,
+    epochs=epochs,
+    augment=True,
+    device="cuda",
+    lambda_c=lc,
+    optimizer="auto",
+    name=f"{model_name}-{data}-{'fe-' if fe else ''}-e{epochs}-allLoss-lc{lc}-Auto-aug-preLoad",
+)
+
+""" might resume this one later
 # With training first layer at same time as rest of net
 fe = True
 epochs = 200
@@ -20,6 +40,7 @@ model.train(
     optimizer="auto",
     name=f"{model_name}-{data}-{'fe-' if fe else ''}-e{epochs}-allLoss-lc{lc}-Auto-aug-preLoad",
 )
+"""
 
 
 # With training only first layer then freezing
