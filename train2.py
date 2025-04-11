@@ -317,3 +317,8 @@ if __name__ == "__main__":
         model="dlt-models/yolo11n-SPDConv-3.yaml",
         iou_type="ciou+nwd",
     )
+    train_model(
+        name="bdd100k_night-yolo11n-spdconv-thiou-mpd-assigner",
+        model="dlt-models/yolo11n-SPDConv-3.yaml",
+        iou_type="thiou",
+    )
