@@ -154,10 +154,12 @@ class TaskAlignedAssigner(nn.Module):
     def iou_calculation(self, gt_bboxes, pd_bboxes):
         """IoU calculation for horizontal bounding boxes."""
         # still use CIoU for wiou to avoid tracking mean here
-        effective_iou_type = (
-            self.iou_type if (not self.iou_type.startswith("wiou")) or "nwd" in self.iou_type else "ciou"
-        )
-        effective_iou_type = "ciou" if (self.iou_type.startswith("wiou") or "nwd" in self.iou_type) else self.iou_type
+        if self.iou_type.startswith("wiou") or "nwd" in self.iou_type:
+            effective_iou_type = "ciou"
+        elif self.iou_type == "thiou":
+            effective_iou_type = "mpdiou"
+        else:
+            effective_iou_type = self.iou_type
         return bbox_iou(gt_bboxes, pd_bboxes, xywh=False, iou_type=effective_iou_type).squeeze(-1).clamp_(0)
 
     def select_topk_candidates(self, metrics, largest=True, topk_mask=None):
