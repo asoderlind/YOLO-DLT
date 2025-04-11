@@ -277,23 +277,24 @@ if __name__ == "__main__":
     #     resume=True,
     #     iou_type="nwd",
     # )
-    train_model(
-        name="bdd100k_night-yolo11n-ciou+nwd-assigner",
-        model="runs/detect/bdd100k_night-yolo11n-ciou+nwd-assigner/weights/last.pt",
-        resume=True,
-        iou_type="ciou+nwd",
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-bic-full",
-        model="dlt-models/yolo11n-bic-full.yaml",
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-bic-reduced-channel",
-        model="dlt-models/yolo11n-bic-reduced-channel.yaml",
-    )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-ciou+nwd-assigner",
+    #     model="runs/detect/bdd100k_night-yolo11n-ciou+nwd-assigner/weights/last.pt",
+    #     resume=True,
+    #     iou_type="ciou+nwd",
+    # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-bic-full",
+    #     model="dlt-models/yolo11n-bic-full.yaml",
+    # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-bic-reduced-channel",
+    #     model="dlt-models/yolo11n-bic-reduced-channel.yaml",
+    # )
     train_model(
         name="bdd100k_night-yolo11n-bic-reduced-channel-simple-upsample",
-        model="dlt-models/yolo11n-bic-reduced-channel-simple-upsample.yaml",
+        model="runs/detect/bdd100k_night-yolo11n-bic-reduced-channel-simple-upsample/weights/last.pt",
+        resume=True,
     )
     train_model(
         name="bdd100k_night-yolo11n-bic-selective-1",
