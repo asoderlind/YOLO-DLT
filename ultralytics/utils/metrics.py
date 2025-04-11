@@ -186,9 +186,52 @@ def bbox_iou(
         return calculate_isiou(b1_x1, b1_y1, b1_x2, b1_y2, b2_x1, b2_y1, b2_x2, b2_y2, **kwargs)
     elif iou_type == "thiou":
         return calculate_thiou(iou, b1_x1, b1_y1, b1_x2, b1_y2, b2_x1, b2_y1, b2_x2, b2_y2, **kwargs)
+    elif iou_type == "mpdiou":
+        return calculate_mpdiou(iou, b1_x1, b1_y1, b1_x2, b1_y2, b2_x1, b2_y1, b2_x2, b2_y2)
     else:
         valid_types = "iou, giou, diou, ciou, wiou, wiou1, wiou2, wiou3, nwd"
         raise ValueError(f"Invalid IoU type: {iou_type}. Must be one of {valid_types}.")
+
+
+def calculate_mpdiou(
+    iou: torch.Tensor,
+    b1_x1: torch.Tensor,
+    b1_y1: torch.Tensor,
+    b1_x2: torch.Tensor,
+    b1_y2: torch.Tensor,
+    b2_x1: torch.Tensor,
+    b2_y1: torch.Tensor,
+    b2_x2: torch.Tensor,
+    b2_y2: torch.Tensor,
+    eps: float = 1e-7,
+) -> torch.Tensor:
+    """
+    Calculate the Minimum Penalty Distance IoU (MPDIoU)
+
+    Args:
+        iou: IoU values between boxes
+        b1_x1, b1_y1, b1_x2, b1_y2: Coordinates of first bounding box (predicted)
+        b2_x1, b2_y1, b2_x2, b2_y2: Coordinates of second bounding box (ground truth)
+        eps: Small value to prevent division by zero
+
+    Returns:
+        MPDIoU values between boxes
+    """
+    # Calculate the squared distances between corners
+    d_1_2 = torch.pow(b2_x1 - b1_x1, 2) + torch.pow(b2_y1 - b1_y1, 2)
+    d_2_2 = torch.pow(b2_x2 - b1_x2, 2) + torch.pow(b2_y2 - b1_y2, 2)
+
+    # Calculate squared height and width of ground truth box
+    h_2_gt = torch.pow(b2_y1 - b2_y2, 2)
+    w_2_gt = torch.pow(b2_x1 - b2_x2, 2)
+
+    # Calculate the penalty terms
+    penalty_term = d_1_2 / (h_2_gt + w_2_gt + eps) + d_2_2 / (h_2_gt + w_2_gt + eps)
+
+    # Calculate MPDIoU
+    mpdiou = iou - penalty_term
+
+    return mpdiou
 
 
 def calculate_thiou(
