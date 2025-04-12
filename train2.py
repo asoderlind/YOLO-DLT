@@ -291,26 +291,27 @@ if __name__ == "__main__":
     #     name="bdd100k_night-yolo11n-bic-reduced-channel",
     #     model="dlt-models/yolo11n-bic-reduced-channel.yaml",
     # )
-    train_model(
-        name="bdd100k_night-yolo11n-bic-reduced-channel-simple-upsample",
-        model="runs/detect/bdd100k_night-yolo11n-bic-reduced-channel-simple-upsample/weights/last.pt",
-        resume=True,
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-bic-selective-1",
-        model="dlt-models/yolo11n-bic-selective-1.yaml",
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-bic-selective-2",
-        model="dlt-models/yolo11n-bic-selective-2.yaml",
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-transpose",
-        model="dlt-models/yolo11n-transpose.yaml",
-    )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-bic-reduced-channel-simple-upsample",
+    #     model="runs/detect/bdd100k_night-yolo11n-bic-reduced-channel-simple-upsample/weights/last.pt",
+    #     resume=True,
+    # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-bic-selective-1",
+    #     model="dlt-models/yolo11n-bic-selective-1.yaml",
+    # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-bic-selective-2",
+    #     model="dlt-models/yolo11n-bic-selective-2.yaml",
+    # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-transpose",
+    #     model="dlt-models/yolo11n-transpose.yaml",
+    # )
     train_model(
         name="bdd100k_night-yolo11n-concat",
-        model="dlt-models/yolo11n-concat.yaml",
+        model="runs/detect/bdd100k_night-yolo11n-concat/weights/last.pt",
+        resume=True,
     )
     train_model(
         name="bdd100k_night-yolo11n-spdconv-ciou+nwd-assigner",
