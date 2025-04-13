@@ -308,18 +308,23 @@ if __name__ == "__main__":
     #     name="bdd100k_night-yolo11n-transpose",
     #     model="dlt-models/yolo11n-transpose.yaml",
     # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-concat",
+    #     model="runs/detect/bdd100k_night-yolo11n-concat/weights/last.pt",
+    #     resume=True,
+    # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-spdconv-ciou+nwd-assigner",
+    #     model="dlt-models/yolo11n-SPDConv-3.yaml",
+    #     iou_type="ciou+nwd",
+    # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-spdconv-thiou-mpd-assigner",
+    #     model="dlt-models/yolo11n-SPDConv-3.yaml",
+    #     iou_type="thiou",
+    # )
     train_model(
-        name="bdd100k_night-yolo11n-concat",
-        model="runs/detect/bdd100k_night-yolo11n-concat/weights/last.pt",
-        resume=True,
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-spdconv-ciou+nwd-assigner",
+        name="bdd100k_night-yolo11n-spdconv-mpdiou",
         model="dlt-models/yolo11n-SPDConv-3.yaml",
-        iou_type="ciou+nwd",
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-spdconv-thiou-mpd-assigner",
-        model="dlt-models/yolo11n-SPDConv-3.yaml",
-        iou_type="thiou",
+        iou_type="mpdiou",
     )
