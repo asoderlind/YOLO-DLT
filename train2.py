@@ -325,6 +325,17 @@ if __name__ == "__main__":
     # )
     train_model(
         name="bdd100k_night-yolo11n-spdconv-mpdiou",
-        model="dlt-models/yolo11n-SPDConv-3.yaml",
+        model="runs/detect/bdd100k_night-yolo11n-spdconv-mpdiou/weights/last.pt",
+        resume=True,
         iou_type="mpdiou",
+    )
+    train_model(
+        name="carla_yolo-yolo11n-spdconv",
+        model="dlt-models/yolo11n-SPDConv-3.yaml",
+        data="carla-yolo.yaml",
+    )
+    train_model(
+        name="carla_yolo-yolo11n"
+        model="yolo11n.yaml"
+        data="carla-yolo.yaml",
     )
