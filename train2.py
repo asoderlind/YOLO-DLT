@@ -335,7 +335,7 @@ if __name__ == "__main__":
         data="carla-yolo.yaml",
     )
     train_model(
-        name="carla_yolo-yolo11n"
-        model="yolo11n.yaml"
+        name="carla_yolo-yolo11n",
+        model="yolo11n.yaml",
         data="carla-yolo.yaml",
     )
