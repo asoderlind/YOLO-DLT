@@ -283,8 +283,8 @@ if __name__ == "__main__":
     # )
 
     train_model(
-        name="bdd100k_night-yolo11n-bic-reduced-channel-bottleneckbiformer",
-        model="dlt-models/yolo11n-bic-reduced-channel-bottleneckbiformer.yaml",
+        name="bdd100k_night-yolo11n-bic-reduced-channel-simam",
+        model="dlt-models/yolo11n-bic-reduced-channel-simam.yaml",
     )
     train_model(
         name="bdd100k_night-yolo11s",
