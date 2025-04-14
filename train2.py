@@ -283,8 +283,13 @@ if __name__ == "__main__":
     # )
 
     train_model(
+        name="bdd100k_night-yolo11n-bic-reduced-channel-bottleneckbiformer",
+        model="dlt-models/yolo11n-bic-reduced-channel-bottleneckbiformer.yaml",
+    )
+    train_model(
         name="bdd100k_night-yolo11s",
-        model="yolo11s.yaml",
+        model="runs/detect/bdd100k_night-yolo11s/weights/last.pt",
+        resume=True,
     )
 
     # train_model(
