@@ -272,71 +272,23 @@ if __name__ == "__main__":
     #     optimizer="AdamW",
     # )
     # train_model(
-    #     name="bdd100k_night-yolo11n-nwd-ciou-assigner",
-    #     model="runs/detect/bdd100k_night-yolo11n-nwd-ciou-assigner/weights/last.pt",
-    #     resume=True,
-    #     iou_type="nwd",
-    # )
-    # train_model(
-    #     name="bdd100k_night-yolo11n-ciou+nwd-assigner",
-    #     model="runs/detect/bdd100k_night-yolo11n-ciou+nwd-assigner/weights/last.pt",
-    #     resume=True,
-    #     iou_type="ciou+nwd",
-    # )
-    # train_model(
-    #     name="bdd100k_night-yolo11n-bic-full",
-    #     model="dlt-models/yolo11n-bic-full.yaml",
-    # )
-    # train_model(
-    #     name="bdd100k_night-yolo11n-bic-reduced-channel",
-    #     model="dlt-models/yolo11n-bic-reduced-channel.yaml",
-    # )
-    # train_model(
-    #     name="bdd100k_night-yolo11n-bic-reduced-channel-simple-upsample",
-    #     model="runs/detect/bdd100k_night-yolo11n-bic-reduced-channel-simple-upsample/weights/last.pt",
-    #     resume=True,
-    # )
-    # train_model(
-    #     name="bdd100k_night-yolo11n-bic-selective-1",
-    #     model="dlt-models/yolo11n-bic-selective-1.yaml",
-    # )
-    # train_model(
-    #     name="bdd100k_night-yolo11n-bic-selective-2",
-    #     model="dlt-models/yolo11n-bic-selective-2.yaml",
-    # )
-    # train_model(
-    #     name="bdd100k_night-yolo11n-transpose",
-    #     model="dlt-models/yolo11n-transpose.yaml",
-    # )
-    # train_model(
-    #     name="bdd100k_night-yolo11n-concat",
-    #     model="runs/detect/bdd100k_night-yolo11n-concat/weights/last.pt",
-    #     resume=True,
-    # )
-    # train_model(
-    #     name="bdd100k_night-yolo11n-spdconv-ciou+nwd-assigner",
-    #     model="dlt-models/yolo11n-SPDConv-3.yaml",
-    #     iou_type="ciou+nwd",
-    # )
-    # train_model(
-    #     name="bdd100k_night-yolo11n-spdconv-thiou-mpd-assigner",
-    #     model="dlt-models/yolo11n-SPDConv-3.yaml",
-    #     iou_type="thiou",
-    # )
-    # train_model(
     #     name="bdd100k_night-yolo11n-spdconv-mpdiou",
     #     model="runs/detect/bdd100k_night-yolo11n-spdconv-mpdiou/weights/last.pt",
     #     resume=True,
     #     iou_type="mpdiou",
     # )
     train_model(
-        name="carla_yolo-yolo11n-spdconv",
-        model="runs/detect/carla_yolo-yolo11n-spdconv/weights/last.pt",
-        resume=True,
-        data="carla-yolo.yaml",
+        name="bdd100k_night-yolo11n-bic-reduced-channel-sppfcsp",
+        model="dlt-models/yolo11n-bic-reduced-channel-sppfcsp.yaml",
     )
-    train_model(
-        name="carla_yolo-yolo11n",
-        model="yolo11n.yaml",
-        data="carla-yolo.yaml",
-    )
+    # train_model(
+    #     name="carla_yolo-yolo11n-spdconv",
+    #     model="runs/detect/carla_yolo-yolo11n-spdconv/weights/last.pt",
+    #     resume=True,
+    #     data="carla-yolo.yaml",
+    # )
+    # train_model(
+    #     name="carla_yolo-yolo11n",
+    #     model="yolo11n.yaml",
+    #     data="carla-yolo.yaml",
+    # )
