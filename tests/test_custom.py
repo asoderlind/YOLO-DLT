@@ -2,7 +2,22 @@ import pytest
 import torch
 import torch.nn as nn
 
-from ultralytics.nn.modules import ECA, FA, FEM, GC, SE, BiFPNAdd, Conv, HybridConv, NewConv, RFAConv, SimAM, SimSPPF
+from ultralytics.nn.modules import (
+    ECA,
+    FA,
+    FEM,
+    GC,
+    SE,
+    BiFormer,
+    BiFPNAdd,
+    BiLevelRoutingAttention,
+    Conv,
+    HybridConv,
+    NewConv,
+    RFAConv,
+    SimAM,
+    SimSPPF,
+)
 
 
 class TestGC:
@@ -1210,3 +1225,548 @@ class TestFA:
 
         assert fa.CBR2.conv.in_channels == hidden_channels, "Incorrect CBR2 input channels"
         assert fa.CBR2.conv.out_channels == hidden_channels, "Incorrect CBR2 output channels"
+
+
+class TestBiFormer:
+    """Test suite for the BiFormerBlock module."""
+
+    @pytest.fixture
+    def biformer_fixture(self):
+        """Create test data and BiFormerBlock instance for testing."""
+        batch_size = 4
+        dim = 64
+        height = 32
+        width = 32
+        num_heads = 8
+        n_win = 8  # Must divide height and width evenly
+        topk = 4
+        drop_path = 0.0
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Create input tensor
+        x = torch.randn(batch_size, dim, height, width, device=device)
+
+        # Initialize BiFormerBlock module
+        biformer = BiFormer(dim=dim, num_heads=num_heads, n_win=n_win, topk=topk, drop_path=drop_path).to(device)
+
+        return {
+            "batch_size": batch_size,
+            "dim": dim,
+            "height": height,
+            "width": width,
+            "num_heads": num_heads,
+            "n_win": n_win,
+            "topk": topk,
+            "drop_path": drop_path,
+            "device": device,
+            "input": x,
+            "biformer": biformer,
+        }
+
+    def test_output_shape(self, biformer_fixture):
+        """Test that the output shape matches the input shape."""
+        x = biformer_fixture["input"]
+        biformer = biformer_fixture["biformer"]
+        batch_size = biformer_fixture["batch_size"]
+        dim = biformer_fixture["dim"]
+        height = biformer_fixture["height"]
+        width = biformer_fixture["width"]
+
+        # Forward pass
+        output = biformer(x)
+
+        # Check output shape
+        assert output.shape == (batch_size, dim, height, width), (
+            f"Expected shape {(batch_size, dim, height, width)}, got {output.shape}"
+        )
+
+    def test_gradients_flow(self, biformer_fixture):
+        """Test that gradients flow correctly through the BiFormerBlock."""
+        x = biformer_fixture["input"].clone().requires_grad_(True)
+        biformer = biformer_fixture["biformer"]
+
+        # Forward pass
+        output = biformer(x)
+
+        # Create a dummy loss and do backward pass
+        loss = output.mean()
+        loss.backward()
+
+        # Check that gradients have been computed for the input
+        assert x.grad is not None, "Input gradient is None"
+        assert not torch.allclose(x.grad, torch.zeros_like(x.grad)), "Input gradient is all zeros"
+
+        # Check that gradients have been computed for BiFormerBlock parameters
+        for name, param in biformer.named_parameters():
+            assert param.grad is not None, f"Parameter {name} gradient is None"
+            assert not torch.allclose(param.grad, torch.zeros_like(param.grad)), (
+                f"Parameter {name} gradient is all zeros"
+            )
+
+    def test_positional_embedding(self, biformer_fixture):
+        """Test the positional embedding in BiFormerBlock."""
+        x = biformer_fixture["input"]
+        biformer = biformer_fixture["biformer"]
+
+        # Get the positional embedding directly
+        pos_embed = biformer.pos_embed(x)
+
+        # Check shape of positional embedding
+        assert pos_embed.shape == x.shape, f"Expected positional embedding shape {x.shape}, got {pos_embed.shape}"
+
+    def test_residual_connections(self, biformer_fixture):
+        """Test that residual connections are properly implemented."""
+        x = biformer_fixture["input"]
+        biformer = biformer_fixture["biformer"]
+
+        # Create dummy attention and MLP modules that return zero tensors
+        class ZeroModule(nn.Module):
+            def forward(self, x):
+                return torch.zeros_like(x)
+
+        # Save original modules
+        original_attn = biformer.attn
+        original_mlp = biformer.mlp
+
+        try:
+            # Replace with zero modules
+            biformer.attn = ZeroModule()
+            biformer.mlp = ZeroModule()
+
+            # With drop_path=0, and zero attention/MLP output,
+            # the output should equal the input plus position embedding
+            x_pos = x + biformer.pos_embed(x)
+            output = biformer(x)
+
+            # Check that output matches input with position embedding
+            assert torch.allclose(output, x_pos, rtol=1e-5, atol=1e-5), (
+                "Residual connections are not properly implemented"
+            )
+
+        finally:
+            # Restore original modules
+            biformer.attn = original_attn
+            biformer.mlp = original_mlp
+
+    def test_non_divisible_input_handling(self):
+        """Test that the module handles inputs with dimensions not divisible by n_win."""
+        batch_size = 2
+        dim = 32
+        height = 33  # Not divisible by n_win=8
+        width = 34  # Not divisible by n_win=8
+        n_win = 8
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Create input tensor
+        x = torch.randn(batch_size, dim, height, width, device=device)
+
+        # Initialize BiFormerBlock module
+        biformer = BiFormer(
+            dim=dim,
+            n_win=n_win,
+        ).to(device)
+
+        # Forward pass
+        output = biformer(x)
+
+        # Check output shape matches input shape
+        assert output.shape == (batch_size, dim, height, width), (
+            f"Expected shape {(batch_size, dim, height, width)}, got {output.shape}"
+        )
+
+    @pytest.mark.parametrize("topk", [1, 2, 4, 8])
+    def test_different_topk_values(self, topk):
+        """Test BiFormerBlock with different topk values."""
+        batch_size = 2
+        dim = 32
+        height = 32
+        width = 32
+        n_win = 8
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Create input tensor
+        x = torch.randn(batch_size, dim, height, width, device=device)
+
+        # Initialize BiFormerBlock module
+        biformer = BiFormer(
+            dim=dim,
+            n_win=n_win,
+            topk=topk,
+        ).to(device)
+
+        # Forward pass
+        output = biformer(x)
+
+        # Check output shape
+        assert output.shape == (batch_size, dim, height, width), (
+            f"Expected shape {(batch_size, dim, height, width)} with topk={topk}, got {output.shape}"
+        )
+
+    @pytest.mark.parametrize("drop_path", [0.0, 0.1, 0.3])
+    def test_different_drop_path_values(self, drop_path):
+        """Test BiFormerBlock with different drop_path values."""
+        batch_size = 2
+        dim = 32
+        height = 32
+        width = 32
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Create input tensor
+        x = torch.randn(batch_size, dim, height, width, device=device)
+
+        # Initialize BiFormerBlock module
+        biformer = BiFormer(
+            dim=dim,
+            drop_path=drop_path,
+        ).to(device)
+
+        # Set to training mode to activate drop path
+        biformer.train()
+
+        # Forward pass
+        output = biformer(x)
+
+        # Check output shape
+        assert output.shape == (batch_size, dim, height, width), (
+            f"Expected shape {(batch_size, dim, height, width)} with drop_path={drop_path}, got {output.shape}"
+        )
+
+    def test_device_compatibility(self, biformer_fixture):
+        """Test that BiFormerBlock works correctly when moved between devices."""
+        if not torch.cuda.is_available():
+            pytest.skip("CUDA not available, skipping device compatibility test")
+
+        x = biformer_fixture["input"]
+        biformer = biformer_fixture["biformer"]
+
+        # Move to CPU
+        biformer_cpu = biformer.to("cpu")
+        x_cpu = x.to("cpu")
+
+        # Forward pass on CPU
+        output_cpu = biformer_cpu(x_cpu)
+
+        # Move back to CUDA
+        biformer_cuda = biformer_cpu.to("cuda")
+        x_cuda = x_cpu.to("cuda")
+
+        # Forward pass on CUDA
+        output_cuda = biformer_cuda(x_cuda)
+
+        # Check shapes match
+        assert output_cpu.shape == output_cuda.shape, "Output shapes don't match across devices"
+
+
+class TestBiLevelRoutingAttention:
+    """Test suite for the BiLevelRoutingAttention module."""
+
+    @pytest.fixture
+    def bilevelrouting_fixture(self):
+        """Create test data and BiLevelRoutingAttention instance for testing."""
+        batch_size = 4
+        height = 32
+        width = 32
+        dim = 64
+        num_heads = 8
+        n_win = 8
+        qk_dim = 64
+        topk = 4
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Create input tensor in NHWC format for attention
+        x = torch.randn(batch_size, height, width, dim, device=device)
+
+        # Initialize BiLevelRoutingAttention module
+        bilevelrouting = BiLevelRoutingAttention(
+            dim=dim, num_heads=num_heads, n_win=n_win, qk_dim=qk_dim, topk=topk
+        ).to(device)
+
+        return {
+            "batch_size": batch_size,
+            "height": height,
+            "width": width,
+            "dim": dim,
+            "num_heads": num_heads,
+            "n_win": n_win,
+            "qk_dim": qk_dim,
+            "topk": topk,
+            "device": device,
+            "input": x,
+            "bilevelrouting": bilevelrouting,
+        }
+
+    def test_output_shape(self, bilevelrouting_fixture):
+        """Test that the output shape matches the input shape."""
+        x = bilevelrouting_fixture["input"]
+        bilevelrouting = bilevelrouting_fixture["bilevelrouting"]
+        batch_size = bilevelrouting_fixture["batch_size"]
+        height = bilevelrouting_fixture["height"]
+        width = bilevelrouting_fixture["width"]
+        dim = bilevelrouting_fixture["dim"]
+
+        # Forward pass
+        output = bilevelrouting(x)
+
+        # Check output shape
+        assert output.shape == (batch_size, height, width, dim), (
+            f"Expected shape {(batch_size, height, width, dim)}, got {output.shape}"
+        )
+
+    def test_padding_for_non_divisible_input(self):
+        """Test that the module correctly pads and crops inputs not divisible by n_win."""
+        batch_size = 2
+        height = 33  # Not divisible by n_win
+        width = 35  # Not divisible by n_win
+        dim = 32
+        n_win = 8
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Create input tensor
+        x = torch.randn(batch_size, height, width, dim, device=device)
+
+        # Initialize BiLevelRoutingAttention module
+        bilevelrouting = BiLevelRoutingAttention(
+            dim=dim,
+            n_win=n_win,
+        ).to(device)
+
+        # Forward pass
+        output = bilevelrouting(x)
+
+        # Check output shape matches input shape (showing proper padding/cropping)
+        assert output.shape == (batch_size, height, width, dim), (
+            f"Expected shape {(batch_size, height, width, dim)}, got {output.shape}"
+        )
+
+    def test_lepe_implementation(self, bilevelrouting_fixture):
+        """Test the LEPE (Local Enhancement via Positional Encoding) component."""
+        x = bilevelrouting_fixture["input"]
+        bilevelrouting = bilevelrouting_fixture["bilevelrouting"]
+
+        # Extract the value part (approximate)
+        batch_size, height, width, dim = x.shape
+
+        # Convert to NCHW format for LEPE
+        x_nchw = x.permute(0, 3, 1, 2)
+
+        # Apply LEPE directly
+        lepe_out = bilevelrouting.lepe(x_nchw)
+
+        # Check output shape
+        assert lepe_out.shape == (batch_size, dim, height, width), (
+            f"Expected LEPE output shape {(batch_size, dim, height, width)}, got {lepe_out.shape}"
+        )
+
+    def test_router_topk_selection(self, bilevelrouting_fixture):
+        """Test that the router selects the topk windows correctly."""
+        x = bilevelrouting_fixture["input"]
+        bilevelrouting = bilevelrouting_fixture["bilevelrouting"]
+        topk = bilevelrouting_fixture["topk"]
+
+        # Get the router
+        router = bilevelrouting.router
+
+        # Create sample query and key windows
+        n_win = bilevelrouting_fixture["n_win"]
+        batch_size = bilevelrouting_fixture["batch_size"]
+        qk_dim = bilevelrouting_fixture["qk_dim"]
+
+        q_win = torch.randn(batch_size, n_win * n_win, qk_dim, device=x.device)
+        k_win = torch.randn(batch_size, n_win * n_win, qk_dim, device=x.device)
+
+        # Call router directly
+        r_weight, r_idx = router(q_win, k_win)
+
+        # Check shapes
+        assert r_weight.shape == (batch_size, n_win * n_win, topk), (
+            f"Expected routing weights shape {(batch_size, n_win * n_win, topk)}, got {r_weight.shape}"
+        )
+        assert r_idx.shape == (batch_size, n_win * n_win, topk), (
+            f"Expected routing indices shape {(batch_size, n_win * n_win, topk)}, got {r_idx.shape}"
+        )
+
+        # Check that indices are within valid range
+        assert torch.all(r_idx >= 0) and torch.all(r_idx < n_win * n_win), "Routing indices are out of valid range"
+
+        # Check that weights sum to 1 (softmax output)
+        assert torch.allclose(r_weight.sum(dim=-1), torch.ones(batch_size, n_win * n_win, device=x.device)), (
+            "Routing weights do not sum to 1"
+        )
+
+    def test_kv_gather(self, bilevelrouting_fixture):
+        """Test the KVGather functionality."""
+        x = bilevelrouting_fixture["input"]
+        bilevelrouting = bilevelrouting_fixture["bilevelrouting"]
+
+        # Get the KVGather module
+        kv_gather = bilevelrouting.kv_gather
+
+        # Create sample data
+        batch_size = bilevelrouting_fixture["batch_size"]
+        n_win = bilevelrouting_fixture["n_win"]
+        topk = bilevelrouting_fixture["topk"]
+        qk_dim = bilevelrouting_fixture["qk_dim"]
+        dim = bilevelrouting_fixture["dim"]
+        h_win = bilevelrouting_fixture["height"] // n_win
+        w_win = bilevelrouting_fixture["width"] // n_win
+
+        # Routing indices and weights
+        r_idx = torch.randint(0, n_win * n_win, (batch_size, n_win * n_win, topk), device=x.device)
+        r_weight = torch.softmax(torch.rand(batch_size, n_win * n_win, topk, device=x.device), dim=-1)
+
+        # Key-value tensor
+        kv = torch.randn(batch_size, n_win * n_win, h_win * w_win, qk_dim + dim, device=x.device)
+
+        # Apply KVGather
+        kv_sel = kv_gather(r_idx=r_idx, r_weight=r_weight, kv=kv)
+
+        # Check output shape
+        assert kv_sel.shape == (batch_size, n_win * n_win, topk, h_win * w_win, qk_dim + dim), (
+            f"Expected shape {(batch_size, n_win * n_win, topk, h_win * w_win, qk_dim + dim)}, got {kv_sel.shape}"
+        )
+
+    def test_attention_mechanism(self, bilevelrouting_fixture):
+        """Test the multi-head attention mechanism in BiLevelRoutingAttention."""
+        bilevelrouting = bilevelrouting_fixture["bilevelrouting"]
+        num_heads = bilevelrouting_fixture["num_heads"]
+
+        # Create simplified test data
+        batch_size = 2
+        n_win = 4
+        topk = 2
+        h_win = w_win = 4
+        qk_dim = bilevelrouting_fixture["qk_dim"]
+        dim = bilevelrouting_fixture["dim"]
+
+        # Create query, key, value tensors for attention
+        q_pix = torch.randn(
+            batch_size * n_win * n_win,
+            num_heads,
+            h_win * w_win,
+            qk_dim // num_heads,
+            device=bilevelrouting_fixture["device"],
+        )
+        k_pix_sel = torch.randn(
+            batch_size * n_win * n_win,
+            num_heads,
+            qk_dim // num_heads,
+            topk * h_win * w_win,
+            device=bilevelrouting_fixture["device"],
+        )
+        v_pix_sel = torch.randn(
+            batch_size * n_win * n_win,
+            num_heads,
+            topk * h_win * w_win,
+            dim // num_heads,
+            device=bilevelrouting_fixture["device"],
+        )
+
+        # Compute attention directly
+        attn_weight = (q_pix * bilevelrouting.scale) @ k_pix_sel
+        attn_weight = bilevelrouting.attn_act(attn_weight)
+        out = attn_weight @ v_pix_sel
+
+        # Check output shape
+        assert out.shape == (batch_size * n_win * n_win, num_heads, h_win * w_win, dim // num_heads), (
+            f"Expected shape {(batch_size * n_win * n_win, num_heads, h_win * w_win, dim // num_heads)}, got {out.shape}"
+        )
+
+        # Check attention weights
+        assert torch.all(attn_weight >= 0) and torch.all(attn_weight <= 1), "Attention weights not in range [0, 1]"
+        assert torch.allclose(attn_weight.sum(dim=-1), torch.ones_like(attn_weight.sum(dim=-1))), (
+            "Attention weights do not sum to 1 along the correct dimension"
+        )
+
+    def test_end_to_end_flow(self, bilevelrouting_fixture):
+        """Test the complete flow of data through BiLevelRoutingAttention."""
+        x = bilevelrouting_fixture["input"]
+        bilevelrouting = bilevelrouting_fixture["bilevelrouting"]
+
+        # Record intermediate values
+        intermediates = {}
+
+        # Monkey patch methods to capture intermediates
+        original_qkv = bilevelrouting.qkv.forward
+        original_router = bilevelrouting.router.forward
+        original_kv_gather = bilevelrouting.kv_gather.forward
+
+        def capture_qkv(self_module, x_input):
+            intermediates["qkv_input"] = x_input.clone()
+            q, kv = original_qkv(x_input)
+            intermediates["q"] = q.clone()
+            intermediates["kv"] = kv.clone()
+            return q, kv
+
+        def capture_router(self_module, q_win, k_win):
+            intermediates["q_win"] = q_win.clone()
+            intermediates["k_win"] = k_win.clone()
+            r_weight, r_idx = original_router(q_win, k_win)
+            intermediates["r_weight"] = r_weight.clone()
+            intermediates["r_idx"] = r_idx.clone()
+            return r_weight, r_idx
+
+        def capture_kv_gather(self_module, r_idx, r_weight, kv):
+            intermediates["kv_gather_input"] = kv.clone()
+            kv_sel = original_kv_gather(r_idx, r_weight, kv)
+            intermediates["kv_sel"] = kv_sel.clone()
+            return kv_sel
+
+        try:
+            # Install capturing methods
+            bilevelrouting.qkv.forward = lambda x_input: capture_qkv(bilevelrouting.qkv, x_input)
+            bilevelrouting.router.forward = lambda q_win, k_win: capture_router(bilevelrouting.router, q_win, k_win)
+            bilevelrouting.kv_gather.forward = lambda r_idx, r_weight, kv: capture_kv_gather(
+                bilevelrouting.kv_gather, r_idx, r_weight, kv
+            )
+
+            # Run forward pass
+            output = bilevelrouting(x)
+
+            # Check output is not None
+            assert output is not None, "BiLevelRoutingAttention returned None output"
+
+            # Check we have captured all expected intermediate values
+            expected_keys = ["qkv_input", "q", "kv", "q_win", "k_win", "r_weight", "r_idx", "kv_gather_input", "kv_sel"]
+            for key in expected_keys:
+                assert key in intermediates, f"Missing intermediate value: {key}"
+
+            # Verify dimensions of key intermediates
+            batch_size = bilevelrouting_fixture["batch_size"]
+            n_win = bilevelrouting_fixture["n_win"]
+            topk = bilevelrouting_fixture["topk"]
+
+            assert intermediates["q_win"].shape[0] == batch_size, "Batch dimension mismatch in q_win"
+            assert intermediates["q_win"].shape[1] == n_win * n_win, "Window count mismatch in q_win"
+            assert intermediates["r_idx"].shape[2] == topk, "Topk dimension mismatch in r_idx"
+
+        finally:
+            # Restore original methods
+            bilevelrouting.qkv.forward = original_qkv
+            bilevelrouting.router.forward = original_router
+            bilevelrouting.kv_gather.forward = original_kv_gather
+
+    def test_gradients_flow(self, bilevelrouting_fixture):
+        """Test that gradients flow correctly through BiLevelRoutingAttention."""
+        x = bilevelrouting_fixture["input"].clone().requires_grad_(True)
+        bilevelrouting = bilevelrouting_fixture["bilevelrouting"]
+
+        # Forward pass
+        output = bilevelrouting(x)
+
+        # Create a dummy loss and do backward pass
+        loss = output.mean()
+        loss.backward()
+
+        # Check that gradients have been computed for the input
+        assert x.grad is not None, "Input gradient is None"
+        assert not torch.allclose(x.grad, torch.zeros_like(x.grad)), "Input gradient is all zeros"
+
+        # For parameters, check that at least some have non-zero gradients
+        param_grads = []
+        for name, param in bilevelrouting.named_parameters():
+            assert param.grad is not None, f"Parameter {name} gradient is None"
+            # Add to list for checking
+            param_grads.append(param.grad.abs().sum().item())
+
+        # At least some parameters should have substantial gradients
+        assert sum(param_grads) > 0, "All parameter gradients are effectively zero"
