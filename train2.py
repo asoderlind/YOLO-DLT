@@ -323,15 +323,16 @@ if __name__ == "__main__":
     #     model="dlt-models/yolo11n-SPDConv-3.yaml",
     #     iou_type="thiou",
     # )
-    train_model(
-        name="bdd100k_night-yolo11n-spdconv-mpdiou",
-        model="runs/detect/bdd100k_night-yolo11n-spdconv-mpdiou/weights/last.pt",
-        resume=True,
-        iou_type="mpdiou",
-    )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-spdconv-mpdiou",
+    #     model="runs/detect/bdd100k_night-yolo11n-spdconv-mpdiou/weights/last.pt",
+    #     resume=True,
+    #     iou_type="mpdiou",
+    # )
     train_model(
         name="carla_yolo-yolo11n-spdconv",
-        model="dlt-models/yolo11n-SPDConv-3.yaml",
+        model="runs/detect/carla_yolo-yolo11n-spdconv/weights/last.pt",
+        resume=True,
         data="carla-yolo.yaml",
     )
     train_model(
