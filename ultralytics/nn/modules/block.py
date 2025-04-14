@@ -2030,3 +2030,81 @@ class BiFormer(nn.Module):
         x_out: torch.Tensor = x_nl.permute(0, 3, 1, 2)  # [B, H, W, C] -> [B, C, H, W]
 
         return x_out
+
+
+class BottleneckBiFormer(nn.Module):
+    """
+    BiFormerBlock with channel reduction bottleneck to reduce computational cost.
+
+    This module:
+    1. Projects input channels to a lower dimension with Conv+BN+SiLU
+    2. Applies BiFormerBlock attention on the reduced channels
+    3. Projects back to the original dimension with Conv+BN
+    4. Optionally adds a skip connection
+    """
+
+    def __init__(
+        self,
+        dim: int,
+        reduction_factor: int = 4,
+        use_skip: bool = False,
+        num_heads: int = 8,
+        n_win: int = 16,
+        topk: int = 4,
+        drop_path: float = 0.0,
+    ) -> None:
+        """
+        Args:
+            dim: Input/output channel dimension
+            reduction_factor: Factor by which to reduce channel dimension in bottleneck
+            use_skip: Whether to use a skip connection
+            norm_layer: Normalization layer type
+            act_layer: Activation layer type
+            num_heads: Number of attention heads for BiFormerBlock
+            n_win: Number of windows for BiFormerBlock
+            topk: Top-k connections for routing in BiFormerBlock
+            drop_path: Drop path rate for BiFormerBlock
+        """
+        super().__init__()
+
+        self.use_skip = use_skip
+        hidden_dim = max(dim // reduction_factor, 32)  # Ensure minimum channels
+
+        # Dimension reduction
+        self.down_block = Conv(c1=dim, c2=hidden_dim, k=1, s=1)
+
+        # BiFormer Block operating on reduced dimensions
+        self.biformer = BiFormer(dim=hidden_dim, num_heads=num_heads, n_win=n_win, topk=topk, drop_path=drop_path)
+
+        # Dimension expansion
+        self.up_block = Conv(c1=hidden_dim, c2=dim, k=1, s=1)
+
+        # Skip connection scaling if needed
+        if use_skip:
+            self.gamma = nn.Parameter(torch.ones(1), requires_grad=True)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x: Input tensor of shape [B, C, H, W]
+
+        Returns:
+            Output tensor of shape [B, C, H, W]
+        """
+        # Save input for skip connection
+        identity = x
+
+        # Down-projection to lower dimension with BN and activation
+        x = self.down_block(x)
+
+        # Apply BiFormer block
+        x = self.biformer(x)
+
+        # Up-projection to original dimension with BN
+        x = self.up_block(x)
+
+        # Apply skip connection if enabled
+        if self.use_skip:
+            x = identity + self.gamma * x
+
+        return x

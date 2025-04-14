@@ -44,6 +44,7 @@ from .block import (
     BiLevelRoutingAttention,
     BNContrastiveHead,
     Bottleneck,
+    BottleneckBiFormer,
     BottleneckCSP,
     C2f,
     C2fAttn,
@@ -226,4 +227,5 @@ __all__ = (
     "TopkRouting",
     "KVGather",
     "QKVLinear",
+    "BottleneckBiFormer",
 )
