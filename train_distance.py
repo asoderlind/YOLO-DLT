@@ -21,7 +21,7 @@ def train_with_distance(
     **kwargs,
 ):
     model = YOLO(model_path)
-    name = f"{data_path}-{model_path}-{EPOCHS}e-{OPTIMIZER}-{'dist' if use_dist else 'noDist'}-scale{scale}-mosaic{mosaic}-noDontCare-d{d}_"
+    name = f"world06{data_path}-{model_path}-{EPOCHS}e-{OPTIMIZER}-{'dist' if use_dist else 'noDist'}-scale{scale}-mosaic{mosaic}-noDontCare-d{d}_"
     name = name.replace("/", "-")
 
     model.train(
@@ -48,10 +48,13 @@ def train_with_distance(
 
 # Augmentation ablations
 # train_with_distance(data_path="carla.yaml", use_dist=True, d=0.05, classes=[0, 1, 2, 3, 4, 5])
-# train_with_distance(data_path="kitti.yaml", use_dist=True, d=0.05, classes=KITTI_CLASSES)
-train_with_distance(data_path="carla.yaml", use_dist=True, d=0.05, classes=[0, 1, 2, 3, 4, 5])
 train_with_distance(data_path="carla.yaml", use_dist=True, d=0.0, classes=[0, 1, 2, 3, 4, 5])
-""" 2025-04-09 16:33
+train_with_distance(data_path="carla.yaml", use_dist=True, d=0.01, classes=[0, 1, 2, 3, 4, 5])
+train_with_distance(data_path="carla.yaml", use_dist=True, d=0.04, classes=[0, 1, 2, 3, 4, 5])
+train_with_distance(data_path="carla.yaml", use_dist=True, d=0.06, classes=[0, 1, 2, 3, 4, 5])
+train_with_distance(data_path="carla.yaml", use_dist=True, d=0.10, classes=[0, 1, 2, 3, 4, 5])
+
+"""
 train_with_distance(
     data_path="kitti.yaml",
     model_path="runs/detect/kitti.yaml-yolo11n.pt-100e-SGD-noDist-scale0.0-mosaic1.0-noDontCare-d0_/weights/best.pt",
@@ -60,7 +63,6 @@ train_with_distance(
     classes=KITTI_CLASSES,
     freeze=23,
 )
-"""
 train_with_distance(
     data_path="kitti.yaml",
     model_path="runs/detect/kitti.yaml-yolo11n.pt-100e-SGD-noDist-scale0.0-mosaic1.0-noDontCare-d0_/weights/best.pt",
@@ -77,5 +79,4 @@ train_with_distance(
     classes=KITTI_CLASSES,
     freeze=23,
 )
-# train_with_distance(data_path="carla.yaml", use_dist=True, d=0.05, classes=[0, 1, 2, 3, 4, 5])
-# train_with_distance(data_path="carla.yaml", use_dist=True, d=0.0, classes=[0, 1, 2, 3, 4, 5])
+"""
