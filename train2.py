@@ -277,10 +277,16 @@ if __name__ == "__main__":
     #     resume=True,
     #     iou_type="mpdiou",
     # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-bic-reduced-channel-sppfcsp",
+    #     model="dlt-models/yolo11n-bic-reduced-channel-sppfcsp.yaml",
+    # )
+
     train_model(
-        name="bdd100k_night-yolo11n-bic-reduced-channel-sppfcsp",
-        model="dlt-models/yolo11n-bic-reduced-channel-sppfcsp.yaml",
+        name="bdd100k_night-yolo11s",
+        model="yolo11s.yaml",
     )
+
     # train_model(
     #     name="carla_yolo-yolo11n-spdconv",
     #     model="runs/detect/carla_yolo-yolo11n-spdconv/weights/last.pt",
