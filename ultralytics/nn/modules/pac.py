@@ -716,12 +716,13 @@ class PacConv2d(_PacConvNd):
         shared_filters=False,
         filler="uniform",
         native_impl=False,
+        projection_channels=8,
     ):
         kernel_size = _pair(kernel_size)
         stride = _pair(stride)
         padding = _pair(padding)
         dilation = _pair(dilation)
-        super(PacConv2d, self).__init__(
+        super().__init__(
             in_channels,
             out_channels,
             kernel_size,
@@ -741,6 +742,9 @@ class PacConv2d(_PacConvNd):
         )
 
         self.native_impl = native_impl
+
+        # Add a projection layer to create lower-dimensional features for kernel generation
+        self.feature_proj = nn.Conv2d(in_channels, projection_channels, kernel_size=1, bias=False)
 
     def compute_kernel(self, input_for_kernel, input_mask=None):
         return packernel2d(
@@ -781,4 +785,5 @@ class PacConv2d(_PacConvNd):
         return output if output_mask is None else (output, output_mask)
 
     def forward(self, x):
-        return self._forward(x, x, kernel=None, mask=None)
+        input_for_kernel = self.feature_proj(x)
+        return self._forward(x, input_for_kernel, kernel=None, mask=None)
