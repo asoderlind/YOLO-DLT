@@ -6,7 +6,6 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from einops import rearrange
 
 from ultralytics.utils.torch_utils import fuse_conv_and_bn
 
@@ -1815,130 +1814,182 @@ class KVGather(nn.Module):
         return kv_sel
 
 
-class BiLevelRoutingAttention(nn.Module):
-    """Bi-level Routing Attention block"""
+def _grid2seq(x: torch.Tensor, region_size: tuple[int, int], num_heads: int) -> tuple[torch.Tensor, int, int]:
+    """
+    Convert grid features to sequence format for attention computation
 
-    def __init__(self, dim: int, num_heads: int = 8, n_win: int = 16, qk_dim: int = 64, topk: int = 4) -> None:
+    Args:
+        x: BCHW tensor
+        region size: (region_h, region_w)
+        num_heads: number of attention heads
+    Return:
+        out: rearranged x, has a shape of (bs, nhead, nregion, reg_size, head_dim)
+        region_h, region_w: number of regions per col/row
+    """
+    B, C, H, W = x.size()
+    region_h, region_w = H // region_size[0], W // region_size[1]
+    x = x.view(B, num_heads, C // num_heads, region_h, region_size[0], region_w, region_size[1])
+    x = torch.einsum("bmdhpwq->bmhwpqd", x).flatten(2, 3).flatten(-3, -2)  # (bs, nhead, nregion, reg_size, head_dim)
+    return x, region_h, region_w
+
+
+def _seq2grid(x: torch.Tensor, region_h: int, region_w: int, region_size: tuple[int, int]) -> torch.Tensor:
+    """
+    Convert sequence format back to grid format
+
+    Args:
+        x: (bs, nhead, nregion, reg_size, head_dim)
+    Return:
+        x: (bs, C, H, W)
+    """
+    bs, nhead, nregion, reg_size_square, head_dim = x.size()
+    x = x.view(bs, nhead, region_h, region_w, region_size[0], region_size[1], head_dim)
+    x = torch.einsum("bmhwpqd->bmdhpwq", x).reshape(
+        bs, nhead * head_dim, region_h * region_size[0], region_w * region_size[1]
+    )
+    return x
+
+
+def regional_routing_attention_torch(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    scale: float,
+    region_graph: torch.LongTensor,
+    region_size: tuple[int, int],
+    kv_region_size: tuple[int, int] | None = None,
+    auto_pad=True,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """
+    Efficient implementation of regional routing attention
+
+    Args:
+        query, key, value: (B, C, H, W) tensor
+        scale: the scale/temperature for dot product attention
+        region_graph: (B, nhead, h_q*w_q, topk) tensor, topk <= h_k*w_k
+        region_size: region/window size for queries, (rh, rw)
+        key_region_size: optional, if None, key_region_size=region_size
+        auto_pad: required to be true if the input sizes are not divisible by the region_size
+    Return:
+        output: (B, C, H, W) tensor
+        attn: (bs, nhead, q_nregion, reg_size, topk*kv_region_size) attention matrix
+    """
+    kv_region_size = kv_region_size or region_size
+    bs, nhead, q_nregion, topk = region_graph.size()
+
+    # Auto pad to deal with any input size
+    q_pad_b, q_pad_r, kv_pad_b, kv_pad_r = 0, 0, 0, 0
+    _, _, Hq, Wq = query.size()
+    _, _, Hk, Wk = key.size()
+
+    if auto_pad:
+        q_pad_b = (region_size[0] - Hq % region_size[0]) % region_size[0]
+        q_pad_r = (region_size[1] - Wq % region_size[1]) % region_size[1]
+        if q_pad_b > 0 or q_pad_r > 0:
+            query = F.pad(query, (0, q_pad_r, 0, q_pad_b))  # zero padding
+
+        kv_pad_b = (kv_region_size[0] - Hk % kv_region_size[0]) % kv_region_size[0]
+        kv_pad_r = (kv_region_size[1] - Wk % kv_region_size[1]) % kv_region_size[1]
+        if kv_pad_r > 0 or kv_pad_b > 0:
+            key = F.pad(key, (0, kv_pad_r, 0, kv_pad_b))  # zero padding
+            value = F.pad(value, (0, kv_pad_r, 0, kv_pad_b))  # zero padding
+
+    # to sequence format, i.e. (bs, nhead, nregion, reg_size, head_dim)
+    query, q_region_h, q_region_w = _grid2seq(query, region_size=region_size, num_heads=nhead)
+    key, _, _ = _grid2seq(key, region_size=kv_region_size, num_heads=nhead)
+    value, _, _ = _grid2seq(value, region_size=kv_region_size, num_heads=nhead)
+
+    # gather key and values with efficient broadcasting approach
+    bs, nhead, kv_nregion, kv_region_size, head_dim = key.size()
+    broadcasted_region_graph = region_graph.view(bs, nhead, q_nregion, topk, 1, 1).expand(
+        -1, -1, -1, -1, kv_region_size, head_dim
+    )
+    key_g = torch.gather(
+        key.view(bs, nhead, 1, kv_nregion, kv_region_size, head_dim).expand(-1, -1, query.size(2), -1, -1, -1),
+        dim=3,
+        index=broadcasted_region_graph,
+    )  # (bs, nhead, q_nregion, topk, kv_region_size, head_dim)
+    value_g = torch.gather(
+        value.view(bs, nhead, 1, kv_nregion, kv_region_size, head_dim).expand(-1, -1, query.size(2), -1, -1, -1),
+        dim=3,
+        index=broadcasted_region_graph,
+    )  # (bs, nhead, q_nregion, topk, kv_region_size, head_dim)
+
+    # token-to-token attention
+    # (bs, nhead, q_nregion, reg_size, head_dim) @ (bs, nhead, q_nregion, head_dim, topk*kv_region_size)
+    # -> (bs, nhead, q_nregion, reg_size, topk*kv_region_size)
+    attn = (query * scale) @ key_g.flatten(-3, -2).transpose(-1, -2)
+    attn = torch.softmax(attn, dim=-1)
+
+    # (bs, nhead, q_nregion, reg_size, topk*kv_region_size) @ (bs, nhead, q_nregion, topk*kv_region_size, head_dim)
+    # -> (bs, nhead, q_nregion, reg_size, head_dim)
+    output = attn @ value_g.flatten(-3, -2)
+
+    # to BCHW format
+    output = _seq2grid(output, region_h=q_region_h, region_w=q_region_w, region_size=region_size)
+
+    # remove paddings if needed
+    if auto_pad and (q_pad_b > 0 or q_pad_r > 0):
+        output = output[:, :, :Hq, :Wq]
+
+    return output, attn
+
+
+class BiLevelRoutingAttention(nn.Module):
+    """Bi-Level Routing Attention with NCHW input format (efficient implementation)"""
+
+    def __init__(self, dim, num_heads=8, n_win=7, topk=4, side_dwconv=5):
         super().__init__()
         self.dim = dim
         self.num_heads = num_heads
-        self.n_win = n_win
-        self.qk_dim = qk_dim
-        self.scale = qk_dim**-0.5
+        assert self.dim % num_heads == 0, "dim must be divisible by num_heads!"
+        self.head_dim = self.dim // num_heads
+        self.scale = self.dim**-0.5
+
+        # Local enhancement (LEPE)
+        self.lepe = nn.Conv2d(dim, dim, kernel_size=side_dwconv, padding=side_dwconv // 2, groups=dim)
+
+        # Regional routing settings
         self.topk = topk
+        self.n_win = n_win
 
-        # LEPE kernel size
-        self.lepe_kernel_size = 5
+        # Projections
+        self.qkv_linear = nn.Conv2d(self.dim, 3 * self.dim, kernel_size=1)
+        self.output_linear = nn.Conv2d(self.dim, self.dim, kernel_size=1)
 
-        self.qkv = QKVLinear(dim, self.qk_dim)
-        self.wo = nn.Linear(dim, dim)  # output projection
-
-        # Routing modules
-        self.router = TopkRouting(self.qk_dim, topk=self.topk, qk_scale=self.scale)
-        self.kv_gather = KVGather()
-
-        # Local Enhancement via Positional Encoding (LEPE)
-        # Done via depthwise convolution
-        self.lepe = nn.Conv2d(
-            in_channels=dim,
-            out_channels=dim,
-            kernel_size=self.lepe_kernel_size,
-            stride=1,
-            padding=autopad(k=self.lepe_kernel_size),
-            groups=dim,
-        )
-
-        # For final attention weights
-        self.attn_act = nn.Softmax(dim=-1)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x):
         """
         Args:
-            x: Input tensor in BHWC format (batch, height, width, channels)
-
-        Returns:
-            Output tensor in BHWC format
+            x: NCHW tensor
+        Return:
+            NCHW tensor
         """
+        N, C, H, W = x.size()
+        region_size = (H // self.n_win, W // self.n_win)
 
-        B, H, W, C = x.shape
+        # Linear projection
+        qkv = self.qkv_linear(x)
+        q, k, v = qkv.chunk(3, dim=1)
 
-        # Handle non-divisible input sizes with padding
-        pad_l = pad_t = 0
-        pad_r = (self.n_win - W % self.n_win) % self.n_win
-        pad_b = (self.n_win - H % self.n_win) % self.n_win
+        # Region-to-region routing
+        q_r = F.avg_pool2d(q.detach(), kernel_size=region_size, ceil_mode=True, count_include_pad=False)
+        k_r = F.avg_pool2d(k.detach(), kernel_size=region_size, ceil_mode=True, count_include_pad=False)
+        q_r = q_r.permute(0, 2, 3, 1).flatten(1, 2)  # n(hw)c
+        k_r = k_r.flatten(2, 3)  # nc(hw)
+        a_r = q_r @ k_r  # n(hw)(hw)
+        _, idx_r = torch.topk(a_r, k=self.topk, dim=-1)  # n(hw)k
+        idx_r = idx_r.unsqueeze(1).expand(-1, self.num_heads, -1, -1)
 
-        if pad_r > 0 or pad_b > 0:
-            x = F.pad(x, (0, 0, pad_l, pad_r, pad_t, pad_b))
-            _, H, W, _ = x.shape  # Padded size
-
-        # Patchify: Divide image into n_win x n_win patches of windows
-        # Resulting shape: [B, n_win^2, h, w, C]
-        # h = H // n_win, w = W // n_win, n_win^2 = number of patches
-        x = rearrange(x, "b (j h) (i w) c -> b (j i) h w c", j=self.n_win, i=self.n_win)
-
-        # QKV projection
-        q, kv = self.qkv(x)  # [B, n_win^2, h, w, qk_dim], [B, n_win^2, h, w, qk_dim + C]
-
-        # Convert to pixel and window representations
-        # q_pix = pixel-level query, (B, n_win^2, h*w, qk_dim)
-        # kv_pix = pixel-level key/value, (n, n_win^2, h*w, qk_dim + C)
-        q_pix = rearrange(q, "n p2 h w c -> n p2 (h w) c")
-        kv_pix = rearrange(kv, "n p2 h w c -> n p2 (h w) c")
-
-        # Window-level query/key for routing
-        # q_win: [B, n_win^2, qk_dim], k_win: [B, n_win^2, qk_dim]
-        q_win, k_win = q.mean([2, 3]), kv[..., 0 : self.qk_dim].mean([2, 3])
-
-        # Local enhancement with LEPE - applied to values
-        lepe = self.lepe(
-            rearrange(kv[..., self.qk_dim :], "n (j i) h w c -> n c (j h) (i w)", j=self.n_win, i=self.n_win)
-        )
-        lepe = rearrange(lepe, "n c (j h) (i w) -> n (j h) (i w) c", j=self.n_win, i=self.n_win)
-
-        # Compute routing weights and gather relevant key/value pairs
-        # r_weight: [B, n_win^2, topk], r_idx: [B, n_win^2, topk]
-        # kv_pix_sel: [B, n_win^2, topk, h*w, qk_dim + C]
-        r_weight, r_idx = self.router(q_win, k_win)
-        kv_pix_sel = self.kv_gather(r_idx=r_idx, r_weight=r_weight, kv=kv_pix)
-
-        # Split gathered key/value pairs
-        # k_pix_sel: [B, n_win^2, topk, h*w, qk_dim], v_pix_sel: [B, n_win^2, topk, h*w, C]
-        k_pix_sel, v_pix_sel = kv_pix_sel.split([self.qk_dim, self.dim], dim=-1)
-
-        # Reshape for multi-head attention
-        # k_pix_sel: [B * n_win², num_heads, c', topk * h * w] where c'=qk_dim/num_heads
-        # v_pix_sel: [B * n_win², num_heads, topk * h * w, c''] where c''=C/num_heads
-        # q_pix: [B * n_win², num_heads, h * w, c'] where c'=qk_dim/num_heads
-        k_pix_sel = rearrange(k_pix_sel, "n p2 k w2 (m c) -> (n p2) m c (k w2)", m=self.num_heads)
-        v_pix_sel = rearrange(v_pix_sel, "n p2 k w2 (m c) -> (n p2) m (k w2) c", m=self.num_heads)
-        q_pix = rearrange(q_pix, "n p2 w2 (m c) -> (n p2) m w2 c", m=self.num_heads)
-
-        # Multi-head attention
-        # attn_weight: [B * n_win², num_heads, h * w, topk * h * w]
-        attn_weight = (q_pix * self.scale) @ k_pix_sel
-        attn_weight = self.attn_act(attn_weight)
-        out = attn_weight @ v_pix_sel
-
-        # Reshape back to original dimensions
-        # out: [B, H, W, C]
-        out = rearrange(
-            out,
-            "(n j i) m (h w) c -> n (j h) (i w) (m c)",
-            j=self.n_win,
-            i=self.n_win,
-            h=H // self.n_win,
-            w=W // self.n_win,
+        # Token-to-token attention
+        output, _ = regional_routing_attention_torch(
+            query=q, key=k, value=v, scale=self.scale, region_graph=idx_r, region_size=region_size
         )
 
         # Add local enhancement and apply output projection
-        out = out + lepe
-        out = self.wo(out)
+        output = output + self.lepe(v)
+        output = self.output_linear(output)
 
-        # Crop padding if necessary
-        if pad_r > 0 or pad_b > 0:
-            out = out[:, : H - pad_b, : W - pad_r, :]
-
-        return out
+        return output
 
 
 class MLP(nn.Module):
@@ -1974,62 +2025,58 @@ class DropPath(nn.Module):
         return output
 
 
-class BiFormer(nn.Module):
-    """BiFormer block"""
+class LayerNorm2d(nn.Module):
+    """Layer normalization in 2D for attention"""
 
-    def __init__(
-        self, dim: int, num_heads: int = 8, n_win: int = 16, topk: int = 4, mlp_ratio: int = 3, drop_path: float = 0.0
-    ) -> None:
+    def __init__(self, dim):
         super().__init__()
+        self.norm = nn.LayerNorm(dim)
 
-        self.dim = dim
-        self.num_heads = num_heads
-        self.n_win = n_win
+    def forward(self, x):
+        """
+        x: NCHW tensor
+        """
+        x = x.permute(0, 2, 3, 1)  # NHWC
+        x = self.norm(x)
+        x = x.permute(0, 3, 1, 2)  # NCHW
+        return x
 
-        # Position embedding via depthwise convolution
-        self.pos_embed = nn.Conv2d(dim, dim, kernel_size=3, padding=autopad(k=3), groups=dim)
 
-        # Layer normalizations
-        self.norm1 = nn.LayerNorm(dim, eps=1e-6)
-        self.norm2 = nn.LayerNorm(dim, eps=1e-6)
+class BiFormer(nn.Module):
+    """BiFormer block with pre-normalization"""
 
-        # Bi-level Routing Attention
+    def __init__(self, dim, num_heads=8, n_win=7, topk=4, mlp_ratio=4, side_dwconv=5, drop_path=0.0):
+        super().__init__()
+        # Normalization layers
+        self.norm1 = LayerNorm2d(dim)
+        self.norm2 = LayerNorm2d(dim)
+
+        # Bi-Level Routing Attention
         self.attn = BiLevelRoutingAttention(
-            dim=dim,
-            num_heads=num_heads,
-            n_win=n_win,
-            qk_dim=dim,
-            topk=topk,
+            dim=dim, num_heads=num_heads, n_win=n_win, topk=topk, side_dwconv=side_dwconv
         )
 
-        self.mlp = MLP(dim, mlp_ratio=mlp_ratio)
+        # MLP block
+        self.mlp = nn.Sequential(
+            nn.Conv2d(dim, int(mlp_ratio * dim), kernel_size=1),
+            nn.GELU(),
+            nn.Conv2d(int(mlp_ratio * dim), dim, kernel_size=1),
+        )
+
+        # Drop path for regularization
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x):
         """
         Args:
-            x: Input tensor of shape [B, C, H, W]
-
-        Returns:
-            Output tensor of shape [B, C, H, W]
+            x: NCHW tensor
+        Return:
+            NCHW tensor
         """
-
-        # Add positional embedding
-        x_pos: torch.Tensor = x + self.pos_embed(x)
-
-        # Convert to NHWC format for attention & MLP
-        x_nl: torch.Tensor = x_pos.permute(0, 2, 3, 1)  # [B, C, H, W] -> [B, H, W, C]
-
-        # Pre-norm + attention with residual connection
-        x_nl = x_nl + self.drop_path(self.attn(self.norm1(x_nl)))
-
-        # Pre-norm + MLP with residual connection
-        x_nl = x_nl + self.drop_path(self.mlp(self.norm2(x_nl)))
-
-        # Convert back to NCHW format
-        x_out: torch.Tensor = x_nl.permute(0, 3, 1, 2)  # [B, H, W, C] -> [B, C, H, W]
-
-        return x_out
+        # Attention & MLP with pre-norm
+        x = x + self.drop_path(self.attn(self.norm1(x)))
+        x = x + self.drop_path(self.mlp(self.norm2(x)))
+        return x
 
 
 class BottleneckBiFormer(nn.Module):
