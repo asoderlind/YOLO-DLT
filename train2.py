@@ -289,7 +289,7 @@ if __name__ == "__main__":
 
     train_model(
         name="bdd100k_night-yolo11n-bic-reduced-channel-pac",
-        model="dldt-models/yolo11n-bic-reduced-channel-pac.yaml",
+        model="dlt-models/yolo11n-bic-reduced-channel-pac.yaml",
     )
 
     train_model(
