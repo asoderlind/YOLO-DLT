@@ -1730,6 +1730,34 @@ class BiC(nn.Module):
         return self.cv3(torch.cat((x0, x1, x2), dim=1))
 
 
+class BiC_AFR(nn.Module):
+    def __init__(self, c1: list[int], c2: int, channel_reduction: int = 1):
+        super().__init__()
+        hidden_ch = c2 // channel_reduction
+        self.cv1 = Conv(c1[1], hidden_ch, k=1)  # left
+        self.cv2 = Conv(c1[2], hidden_ch, k=1)  # above
+        self.upsample = Transpose(c1[0], hidden_ch)
+        self.downsample = Conv(hidden_ch, hidden_ch, k=3, s=2)
+
+        # AFR additions
+        self.afr = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(hidden_ch * 3, hidden_ch // 4, 1),
+            nn.ReLU(),
+            nn.Conv2d(hidden_ch // 4, hidden_ch * 3, 1),
+            nn.Sigmoid(),  # per-channel weights
+        )
+        self.cv3 = Conv(hidden_ch * 3, c2, k=1)
+
+    def forward(self, x: list[torch.Tensor]) -> torch.Tensor:
+        x0 = self.upsample(x[0])
+        x1 = self.cv1(x[1])
+        x2 = self.downsample(self.cv2(x[2]))
+        concat = torch.cat((x0, x1, x2), dim=1)
+        weights = self.afr(concat)  # learned weights
+        return self.cv3(concat * weights)  # weighted fusion
+
+
 class QKVLinear(nn.Module):
     """Linear projections for query, key, value"""
 

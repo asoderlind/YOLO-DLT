@@ -39,6 +39,7 @@ from .block import (
     ADown,
     Attention,
     BiC,
+    BiC_AFR,
     BiFormer,
     BiFPNAdd,
     BiLevelRoutingAttention,
@@ -228,4 +229,5 @@ __all__ = (
     "KVGather",
     "QKVLinear",
     "BottleneckBiFormer",
+    "BiC_AFR",
 )

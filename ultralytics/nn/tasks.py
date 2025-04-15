@@ -33,6 +33,7 @@ from ultralytics.nn.modules import (
     AConv,
     ADown,
     BiC,
+    BiC_AFR,
     BiFormer,
     BiFPNAdd,
     Bottleneck,
@@ -1109,7 +1110,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [c1, *args]
         elif m is SimAM:
             c2 = ch[f]
-        elif m is BiC:
+        elif m is BiC or m is BiC_AFR:
             c1 = [ch[f_i] for f_i in f]
             c2 = args[0]
             if c2 != nc:
