@@ -755,7 +755,17 @@ class HybridConv(nn.Module):
         return self.forward(x)
 
 
-class PAC(Conv):
+class PAC(nn.Module):
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, act=True):
-        super().__init__(c1, c2, k, s, p, g, act)
+        super().__init__()
         self.conv = PacConv2d(in_channels=c1, out_channels=c2, kernel_size=k, stride=s, padding=autopad(k, p))
+        self.bn = nn.BatchNorm2d(c2)
+        self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
+
+    def forward(self, x):
+        """Apply convolution, batch normalization and activation to input tensor."""
+        return self.act(self.bn(self.conv(x)))
+
+    def forward_fuse(self, x):
+        """Apply convolution and activation without batch normalization."""
+        return self.act(self.conv(x))
