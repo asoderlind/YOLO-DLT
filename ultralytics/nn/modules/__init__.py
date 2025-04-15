@@ -98,6 +98,7 @@ from .conv import (
     Focus,
     GhostConv,
     GhostFocus,
+    GSConv,
     HybridConv,
     Index,
     LDConv,
@@ -230,4 +231,5 @@ __all__ = (
     "QKVLinear",
     "BottleneckBiFormer",
     "BiC_AFR",
+    "GSConv",
 )

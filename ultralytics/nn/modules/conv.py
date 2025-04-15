@@ -751,3 +751,20 @@ class HybridConv(nn.Module):
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         return self.forward(x)
+
+
+class GSConv(nn.Module):
+    # GSConv https://github.com/AlanLi1997/slim-neck-by-gsconv
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
+        super().__init__()
+        c_ = c2 // 2
+        self.cv1 = Conv(c1, c_, k, s, p, g, d, act)
+        self.cv2 = Conv(c_, c_, 5, 1, 2, c_, d, act)
+
+    def forward(self, x):
+        x1 = self.cv1(x)
+        x2 = torch.cat((x1, self.cv2(x1)), 1)
+        # shuffle
+        y = x2.reshape(x2.shape[0], 2, x2.shape[1] // 2, x2.shape[2], x2.shape[3])
+        y = y.permute(0, 2, 1, 3, 4)
+        return y.reshape(y.shape[0], -1, y.shape[3], y.shape[4])
