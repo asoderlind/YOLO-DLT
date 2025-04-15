@@ -756,6 +756,8 @@ class HybridConv(nn.Module):
 
 
 class PAC(nn.Module):
+    default_act = nn.SiLU()
+
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, act=True):
         super().__init__()
         self.conv = PacConv2d(in_channels=c1, out_channels=c2, kernel_size=k, stride=s, padding=autopad(k, p))
