@@ -11,6 +11,96 @@ from torch.nn.modules.utils import _pair
 from torch.nn.parameter import Parameter
 
 
+def safe_einsum(equation, *operands):
+    """
+    A half-precision compatible replacement for einsum operations used in PAC.
+    Implements specific patterns without using torch.einsum directly.
+    """
+    # Forward patterns
+    if equation == "ijklmn,zykl->ijmn":  # shared_filters forward
+        in_mul_k, weight = operands
+        i, j, k, l, m, n = in_mul_k.shape
+
+        # Reshape for matrix multiplication
+        in_mul_k_reshaped = in_mul_k.reshape(i * j, k * l, m * n)
+        weight_reshaped = weight.reshape(1, k * l, 1)
+
+        # Multiply and reshape
+        result = torch.matmul(in_mul_k_reshaped, weight_reshaped)
+        return result.reshape(i, j, m, n)
+
+    elif equation == "ijklmn,ojkl->iomn":  # non-shared_filters forward
+        in_mul_k, weight = operands
+        i, j, k, l, m, n = in_mul_k.shape
+        o, j2, k2, l2 = weight.shape
+
+        # Verify shapes are compatible
+        assert j == j2 and k == k2 and l == l2, "Incompatible shapes for einsum"
+
+        # Reshape for batch matrix multiplication
+        in_mul_k_reshaped = in_mul_k.reshape(i, j * k * l, m * n)
+        weight_reshaped = weight.reshape(o, j * k * l)
+
+        # Matrix multiplication
+        result = torch.matmul(weight_reshaped, in_mul_k_reshaped)
+        return result.reshape(o, i, m, n).permute(1, 0, 2, 3)
+
+    # Backward patterns
+    elif equation == "iomn,ojkl->ijklmn":  # gradient for input
+        grad_output, weight = operands
+        i, o, m, n = grad_output.shape
+        o2, j, k, l = weight.shape
+
+        # Verify shapes are compatible
+        assert o == o2, "Incompatible shapes for einsum"
+
+        # Reshape grad_output for broadcasting
+        grad_output_expanded = grad_output.view(i, o, 1, 1, 1, m, n)
+        weight_expanded = weight.view(1, o, j, k, l, 1, 1)
+
+        # Multiply and reshape
+        result = grad_output_expanded * weight_expanded
+        return result.sum(dim=1).view(i, j, k, l, m, n)
+
+    elif equation == "ijmn,ijklmn->kl":  # gradient for weight (shared_filters)
+        grad_output, in_mul_k = operands
+        i, j, m, n = grad_output.shape
+        i2, j2, k, l, m2, n2 = in_mul_k.shape
+
+        # Verify shapes are compatible
+        assert i == i2 and j == j2 and m == m2 and n == n2, "Incompatible shapes for einsum"
+
+        # Reshape for multiplication
+        grad_output_expanded = grad_output.view(i, j, 1, 1, m, n)
+
+        # Multiply and sum over dimensions except k,l
+        result = (grad_output_expanded * in_mul_k).sum(dim=(0, 1, 4, 5))
+        return result
+
+    elif equation == "iomn,ijklmn->ojkl":  # gradient for weight (non-shared_filters)
+        grad_output, in_mul_k = operands
+        i, o, m, n = grad_output.shape
+        i2, j, k, l, m2, n2 = in_mul_k.shape
+
+        # Verify shapes are compatible
+        assert i == i2 and m == m2 and n == n2, "Incompatible shapes for einsum"
+
+        # Reshape for broadcasting
+        grad_output_expanded = grad_output.view(i, o, 1, 1, 1, m, n)
+        in_mul_k_expanded = in_mul_k.view(i, 1, j, k, l, m, n)
+
+        # Multiply and sum over dimensions i,m,n
+        result = (grad_output_expanded * in_mul_k_expanded).sum(dim=(0, 5, 6))
+        return result
+
+    elif equation == "iomn->o":  # gradient for bias
+        grad_output = operands[0]
+        return grad_output.sum(dim=(0, 2, 3))
+
+    else:
+        raise ValueError(f"Unsupported einsum pattern: {equation}")
+
+
 def _neg_idx(idx):
     return None if idx == 0 else -idx
 
@@ -56,9 +146,9 @@ class PacConv2dFn(Function):
 
         # Matrix multiplication via einsum
         if shared_filters:
-            output = torch.einsum("ijklmn,zykl->ijmn", (in_mul_k, weight))
+            output = safe_einsum("ijklmn,zykl->ijmn", in_mul_k, weight)
         else:
-            output = torch.einsum("ijklmn,ojkl->iomn", (in_mul_k, weight))
+            output = safe_einsum("ijklmn,ojkl->iomn", in_mul_k, weight)
 
         # Add bias if provided
         if bias is not None:
@@ -81,7 +171,7 @@ class PacConv2dFn(Function):
                     ctx.kernel_size[0], ctx.kernel_size[1], 1, 1
                 )
             else:
-                grad_in_mul_k = torch.einsum("iomn,ojkl->ijklmn", (grad_output, weight))
+                grad_in_mul_k = safe_einsum("iomn,ojkl->ijklmn", grad_output, weight)
 
             # Multiply with kernel
             grad_in_mul_k = grad_in_mul_k * kernel
@@ -111,7 +201,7 @@ class PacConv2dFn(Function):
                         ctx.kernel_size[0], ctx.kernel_size[1], 1, 1
                     )
                 else:
-                    grad_in_mul_k = torch.einsum("iomn,ojkl->ijklmn", (grad_output, weight))
+                    grad_in_mul_k = safe_einsum("iomn,ojkl->ijklmn", grad_output, weight)
 
                 grad_kernel = in_cols * grad_in_mul_k
                 grad_kernel = grad_kernel.sum(dim=1, keepdim=True)
@@ -120,14 +210,17 @@ class PacConv2dFn(Function):
             if ctx.needs_input_grad[2] and weight is not None:
                 in_mul_k = in_cols * kernel
                 if ctx.shared_filters:
-                    grad_weight = torch.einsum("ijmn,ijklmn->kl", (grad_output, in_mul_k))
+                    grad_weight = safe_einsum("ijmn,ijklmn->kl", grad_output, in_mul_k)
                     grad_weight = grad_weight.view(1, 1, ctx.kernel_size[0], ctx.kernel_size[1]).contiguous()
                 else:
-                    grad_weight = torch.einsum("iomn,ijklmn->ojkl", (grad_output, in_mul_k))
+                    grad_weight = safe_einsum("iomn,ijklmn->ojkl", grad_output, in_mul_k)
 
         # Calculate gradient for bias
         if ctx.needs_input_grad[3]:
-            grad_bias = torch.einsum("iomn->o", (grad_output,))
+            grad_bias = safe_einsum(
+                "iomn->o",
+                grad_output,
+            )
 
         return grad_input, grad_kernel, grad_weight, grad_bias, None, None, None, None
 
@@ -271,9 +364,9 @@ def pacconv2d(
 
         # main computation
         if shared_filters:
-            output = torch.einsum("ijklmn,zykl->ijmn", (im_cols * kernel, weight))
+            output = safe_einsum("ijklmn,zykl->ijmn", im_cols * kernel, weight)
         else:
-            output = torch.einsum("ijklmn,ojkl->iomn", (im_cols * kernel, weight))
+            output = safe_einsum("ijklmn,ojkl->iomn", im_cols * kernel, weight)
 
         if bias is not None:
             output += bias.view(1, -1, 1, 1)
