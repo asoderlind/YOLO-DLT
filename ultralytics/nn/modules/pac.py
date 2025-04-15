@@ -765,6 +765,12 @@ class PacConv2d(_PacConvNd):
             native_impl=self.native_impl,
         )
 
+    def create_position_features(self, x):
+        B, C, H, W = x.shape
+        y_coords = torch.linspace(-1, 1, H).view(1, 1, H, 1).expand(B, 1, H, W).to(x.device)
+        x_coords = torch.linspace(-1, 1, W).view(1, 1, 1, W).expand(B, 1, H, W).to(x.device)
+        return torch.cat([y_coords, x_coords], dim=1)
+
     def _forward(self, input_2d, input_for_kernel, kernel=None, mask=None):
         output_mask = None
         if kernel is None:
@@ -785,5 +791,5 @@ class PacConv2d(_PacConvNd):
         return output if output_mask is None else (output, output_mask)
 
     def forward(self, x):
-        input_for_kernel = self.feature_proj(x)
+        input_for_kernel = self.create_position_features(x)
         return self._forward(x, input_for_kernel, kernel=None, mask=None)
