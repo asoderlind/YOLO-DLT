@@ -1965,7 +1965,7 @@ class BiLevelRoutingAttention(nn.Module):
             NCHW tensor
         """
         N, C, H, W = x.size()
-        region_size = (H // self.n_win, W // self.n_win)
+        region_size = (max(1, H // self.n_win), max(1, W // self.n_win))
 
         # Linear projection
         qkv = self.qkv_linear(x)
