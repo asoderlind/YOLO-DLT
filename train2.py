@@ -288,8 +288,14 @@ if __name__ == "__main__":
     # )
 
     train_model(
+        name="bdd100k_night-yolo11n-bic-reduced-channel-pac",
+        model="dldt-models/yolo11n-bic-reduced-channel-pac.yaml",
+    )
+
+    train_model(
         name="bdd100k_night-yolo11n-bic-afr-reduced-channel",
-        model="dlt-models/yolo11n-bic-afr-reduced-channel.yaml",
+        model="runs/detect/bdd100k_night-yolo11n-bic-afr-reduced-channel/weights/last.pt",
+        resume=True,
     )
 
     train_model(

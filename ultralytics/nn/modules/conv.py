@@ -8,6 +8,8 @@ import torch
 import torch.nn as nn
 from einops import rearrange
 
+from .pac import PacConv2d
+
 __all__ = (
     "Conv",
     "Conv2",
@@ -751,3 +753,9 @@ class HybridConv(nn.Module):
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         return self.forward(x)
+
+
+class PAC(Conv):
+    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, act=True):
+        super().__init__(c1, c2, k, s, p, g, act)
+        self.conv = PacConv2d(in_channels=c1, out_channels=c2, kernel_size=k, stride=s, padding=autopad(k, p))

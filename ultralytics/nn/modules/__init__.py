@@ -86,6 +86,7 @@ from .conv import (
     CBAM,
     CBM,
     GC,
+    PAC,
     ChannelAttention,
     Concat,
     Conv,
@@ -230,4 +231,5 @@ __all__ = (
     "QKVLinear",
     "BottleneckBiFormer",
     "BiC_AFR",
+    "PAC",
 )
