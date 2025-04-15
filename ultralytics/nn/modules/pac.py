@@ -716,7 +716,7 @@ class PacConv2d(_PacConvNd):
         shared_filters=False,
         filler="uniform",
         native_impl=False,
-        projection_channels=8,
+        projection_channels=4,
     ):
         kernel_size = _pair(kernel_size)
         stride = _pair(stride)
