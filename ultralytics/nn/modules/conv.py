@@ -8,8 +8,6 @@ import torch
 import torch.nn as nn
 from einops import rearrange
 
-from .pac import PacConv2d
-
 __all__ = (
     "Conv",
     "Conv2",
@@ -753,21 +751,3 @@ class HybridConv(nn.Module):
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         return self.forward(x)
-
-
-class PAC(nn.Module):
-    default_act = nn.SiLU()
-
-    def __init__(self, c1, c2, k=1, s=1, p=None, g=1, act=True):
-        super().__init__()
-        self.conv = PacConv2d(in_channels=c1, out_channels=c2, kernel_size=k, stride=s, padding=autopad(k, p))
-        self.bn = nn.BatchNorm2d(c2)
-        self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
-
-    def forward(self, x):
-        """Apply convolution, batch normalization and activation to input tensor."""
-        return self.act(self.bn(self.conv(x)))
-
-    def forward_fuse(self, x):
-        """Apply convolution and activation without batch normalization."""
-        return self.act(self.conv(x))
