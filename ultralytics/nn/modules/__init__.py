@@ -58,6 +58,7 @@ from .block import (
     CBLinear,
     ContrastiveHead,
     EfficientFEM,
+    EnhancedC3k2,
     GhostBottleneck,
     HGBlock,
     HGStem,
@@ -232,4 +233,5 @@ __all__ = (
     "BottleneckBiFormer",
     "BiC_AFR",
     "GSConv",
+    "EnhancedC3k2",
 )
