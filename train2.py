@@ -282,14 +282,14 @@ if __name__ == "__main__":
     #     model="dlt-models/yolo11n-bic-reduced-channel-sppfcsp.yaml",
     # )
 
+    # train_model(
+    #     name="bdd100k_night-yolo11n-bic-reduced-channel-simam",
+    #     model="dlt-models/yolo11n-bic-reduced-channel-simam.yaml",
+    # )
+
     train_model(
-        name="bdd100k_night-yolo11n-bic-reduced-channel-simam",
-        model="dlt-models/yolo11n-bic-reduced-channel-simam.yaml",
-    )
-    train_model(
-        name="bdd100k_night-yolo11s",
-        model="runs/detect/bdd100k_night-yolo11s/weights/last.pt",
-        resume=True,
+        name="bdd100k_night-yolo11n-biformer",
+        model="dlt-models/yolo11n-biformer.yaml",
     )
 
     # train_model(
