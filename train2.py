@@ -286,14 +286,6 @@ if __name__ == "__main__":
     #     name="bdd100k_night-yolo11n-bic-reduced-channel-simam",
     #     model="dlt-models/yolo11n-bic-reduced-channel-simam.yaml",
     # )
-    # train_model(
-    #     name="bdd100k_night-yolo11n-pac-test",
-    #     model="dlt-models/yolo11n-pac.yaml",
-    # )
-    train_model(
-        name="bdd100k_night-yolo11n-bic-reduced-channel-pac",
-        model="dlt-models/yolo11n-bic-reduced-channel-pac.yaml",
-    )
 
     train_model(
         name="bdd100k_night-yolo11n-bic-afr-reduced-channel",
