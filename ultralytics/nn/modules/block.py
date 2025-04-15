@@ -769,6 +769,26 @@ class RFAC3k2(C3k2):
         )
 
 
+class EnhancedC3k2(C2f):
+    def __init__(self, c1, c2, n=1, e=0.5):
+        super().__init__(c1, c2, n, e=e)
+        # Add parallel illumination-aware branch
+        self.light_attn = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(c1, c1 // 4, 1),
+            nn.ReLU(),
+            nn.Conv2d(c1 // 4, c2, 1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        # Original path
+        y = super().forward(x)
+        # Enhanced path - emphasizes bright regions
+        light_mask = self.light_attn(x)
+        return y * (1 + light_mask)  # Soft feature boosting
+
+
 class C3k(C3):
     """C3k is a CSP bottleneck module with customizable kernel sizes for feature extraction in neural networks."""
 
