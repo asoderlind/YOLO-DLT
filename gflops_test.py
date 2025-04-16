@@ -99,3 +99,5 @@ profile_model_with_dummy_conv("dlt-models/yolo11n-bic-reduced-channel-simam.yaml
 profile_model_with_dummy_conv("dlt-models/yolo11n-bic-afr-reduced-channel.yaml")
 profile_model_with_dummy_conv("dlt-models/yolo11n-bic-reduced-channel-gsconv.yaml")
 profile_model_with_dummy_conv("dlt-models/yolo11n-bic-reduced-channel-enhancedc3k2.yaml")
+profile_model_with_dummy_conv("dlt-models/yolo11n-bic-reduced-channel-rfac3k2.yaml")
+profile_model_with_dummy_conv("dlt-models/yolo11n-bic-reduced-channel-repc3k2.yaml")
