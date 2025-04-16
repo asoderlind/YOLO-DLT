@@ -297,14 +297,15 @@ if __name__ == "__main__":
     #     model="dlt-models/yolo11n-bic-reduced-channel-gsconv.yaml",
     # )
 
-    # train_model(
-    #     name="bdd100k_night-yolo11n-bic-reduced-channel-rfac3k2",
-    #     model="dlt-models/yolo11n-bic-reduced-channel-rfac3k2.yaml",
-    # )
+    train_model(
+        name="bdd100k_night-yolo11n-bic-reduced-channel-rfac3k2",
+        model="dlt-models/yolo11n-bic-reduced-channel-rfac3k2.yaml",
+    )
 
     train_model(
         name="bdd100k_night-yolo11n-bic-reduced-channel-repc3k2",
-        model="dlt-models/yolo11n-bic-reduced-channel-repc3k2.yaml",
+        model="runs/detect/bdd100k_night-yolo11n-bic-reduced-channel-repc3k2/weights/last.pt",
+        resume=True,
     )
 
     train_model(
