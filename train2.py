@@ -320,6 +320,11 @@ if __name__ == "__main__":
     )
 
     train_model(
+        name="bdd100k_night-yolo11n-bic-reduced-channel-repc3k2-carafeconv",
+        model="dlt-models/yolo11n-bic-reduced-channel-repc3k2-carafeconv.yaml",
+    )
+
+    train_model(
         name="bdd100k_night-yolo11n-bic-afr-reduced-channel",
         model="runs/detect/bdd100k_night-yolo11n-bic-afr-reduced-channel/weights/last.pt",
         resume=True,
