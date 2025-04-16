@@ -769,9 +769,9 @@ class RFAC3k2(C3k2):
         )
 
 
-class EnhancedC3k2(C2f):
-    def __init__(self, c1, c2, n=1, e=0.5):
-        super().__init__(c1, c2, n, e=e)
+class EnhancedC3k2(C3k2):
+    def __init__(self, c1, c2, n=1, c3k=False, e=0.5, g=1, shortcut=True):
+        super().__init__(c1, c2, n, c3k, e, g, shortcut)
         # Add parallel illumination-aware branch
         self.light_attn = nn.Sequential(
             nn.AdaptiveAvgPool2d(1),
