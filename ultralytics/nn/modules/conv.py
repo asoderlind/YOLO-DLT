@@ -6,6 +6,7 @@ import math
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from einops import rearrange
 from torch.nn import PixelShuffle
 
@@ -773,3 +774,337 @@ class GSConv(nn.Module):
         y = x2.reshape(x2.shape[0], 2, x2.shape[1] // 2, x2.shape[2], x2.shape[3])
         y = y.permute(0, 2, 1, 3, 4)
         return y.reshape(y.shape[0], -1, y.shape[3], y.shape[4])
+
+
+class OnTheFlySlicing(nn.Module):
+    """
+    Efficient operator to apply spatially-varying kernels.
+    Implements bilateral_slice_apply from the MalleConv paper.
+    """
+
+    def __init__(self, has_offset=True):
+        super().__init__()
+        self.has_offset = has_offset
+
+    def forward(self, grid, guide, input_features):
+        """
+        Args:
+            grid: Kernels [B, C, k², n_out, H_grid, W_grid]
+            guide: Guide image [B, C, H, W]
+            input_features: Input features [B, C, H, W]
+        """
+        B, C, H, W = input_features.shape
+        _, _, k2, n_out, H_grid, W_grid = grid.shape
+        k = int(k2**0.5)  # Extract kernel size from k²
+
+        # Prepare indices for the upsampling operation
+        y_ratio, x_ratio = H_grid / H, W_grid / W
+
+        # Pad input for valid convolution
+        pad = k // 2
+        padded_input = F.pad(input_features, (pad, pad, pad, pad), mode="reflect")
+
+        # Unfold input - this creates a single tensor with all k×k neighborhoods
+        patches = F.unfold(padded_input, kernel_size=k, padding=0, stride=1)
+        patches = patches.view(B, C, k2, H * W)
+
+        # Reshape and permute for efficient processing
+        # We'll process all channels at once for better parallelism
+
+        # Calculate grid sample coordinates
+        y_grid = torch.arange(H, device=input_features.device, dtype=torch.float32)
+        x_grid = torch.arange(W, device=input_features.device, dtype=torch.float32)
+        y_grid = (y_grid + 0.5) * y_ratio
+        x_grid = (x_grid + 0.5) * x_ratio
+
+        # Convert to normalized [-1, 1] coordinates for grid_sample
+        y_grid = (y_grid / H_grid) * 2 - 1
+        x_grid = (x_grid / W_grid) * 2 - 1
+
+        # Create grid for sampling
+        grid_y, grid_x = torch.meshgrid(y_grid, x_grid, indexing="ij")
+        sampling_grid = torch.stack([grid_x, grid_y], dim=-1).unsqueeze(0).expand(B, -1, -1, -1)
+
+        # Reshape grid for efficient sampling
+        # We'll sample all kernels for all positions at once
+        grid_reshaped = grid.permute(0, 1, 3, 4, 5, 2).contiguous()  # [B, C, n_out, H_grid, W_grid, k²]
+        grid_reshaped = grid_reshaped.view(B, C * n_out, H_grid, W_grid)
+
+        # Sample all kernels at once using grid_sample
+        # This is much more efficient than per-channel processing
+        sampled_kernels = F.grid_sample(
+            grid_reshaped, sampling_grid, mode="bilinear", align_corners=False
+        )  # [B, C*n_out, H, W]
+
+        # Reshape to separate channels, n_out, and kernel positions
+        sampled_kernels = sampled_kernels.view(B, C, n_out, H, W)
+
+        # Split weight and offset if needed
+        if self.has_offset:
+            weights = sampled_kernels[:, :, 0]  # [B, C, H, W]
+            offset = sampled_kernels[:, :, 1]  # [B, C, H, W]
+        else:
+            weights = sampled_kernels[:, :, 0]
+            offset = torch.zeros_like(weights)
+
+        # Apply to all channels at once
+        # This is a much more efficient matrix multiplication approach
+        weights = weights.view(B, C, 1, H * W)  # Reshape for broadcasting
+        result = (patches * weights).sum(dim=2)  # Sum over k²
+        result = result.view(B, C, H, W)
+
+        # Add offset if needed
+        if self.has_offset:
+            result = result + offset
+
+        return result
+
+
+class ResBlock(nn.Module):
+    """Simple residual block for the predictor network."""
+
+    def __init__(self, channels):
+        super().__init__()
+        self.conv = nn.Sequential(Conv(channels, channels, k=3, s=1), Conv(channels, channels, k=3, s=1, act=False))
+        self.act = nn.SiLU()
+
+    def forward(self, x):
+        return self.act(x + self.conv(x))
+
+
+class MalleConv(nn.Module):
+    """
+    Malleable Convolution block with support for changing channel dimensions.
+
+    Implements the MalleConv approach:
+    1. Downsampling the input feature map
+    2. Generating spatially-varying kernels
+    3. Applying these kernels (depthwise)
+    4. Using a 1x1 conv to change channel dimensions
+    """
+
+    def __init__(
+        self, in_channels, out_channels, kernel_size=3, downsample_factor=4, predictor_depth=2, has_offset=True
+    ):
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.k = kernel_size
+        self.k2 = kernel_size * kernel_size
+        self.downsample_factor = downsample_factor
+        self.has_offset = has_offset
+        self.n_out = 2 if has_offset else 1  # Number of output coefficients per position
+
+        # Predictor network to generate kernels
+        layers = [Conv(in_channels, in_channels, k=3)]
+        for _ in range(predictor_depth):
+            layers.append(ResBlock(in_channels))
+
+        # Final layer outputs in_channels * k² * n_out values
+        final_channels = in_channels * self.k2 * self.n_out
+        layers.append(Conv(in_channels, final_channels, k=1))
+        self.predictor = nn.Sequential(*layers)
+
+        # On-the-fly slicing operator
+        self.slicer = OnTheFlySlicing(has_offset=has_offset)
+
+        # Pointwise (1x1) convolution to change channel dimensions
+        self.channel_mixer = Conv(in_channels, out_channels, k=1)
+
+        # Normalization and activation
+        self.norm = nn.BatchNorm2d(out_channels)
+        self.act = nn.SiLU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of MalleConv.
+
+        Args:
+            x: Input feature map [B, C_in, H, W]
+
+        Returns:
+            output: Processed feature map [B, C_out, H, W]
+        """
+        B, C, _, _ = x.shape
+
+        # Downsample input for the predictor network
+        x_down = F.avg_pool2d(x, self.downsample_factor)
+        H_down, W_down = x_down.shape[2:]
+
+        # Generate kernels
+        grid_flat: torch.Tensor = self.predictor(x_down)  # [B, C*k²*n_out, H_down, W_down]
+
+        # Reshape to the format expected by the slicer
+        # [B, C, k², n_out, H_down, W_down]
+        grid = grid_flat.view(B, C, self.k2, self.n_out, H_down, W_down)
+
+        # Use the feature map itself as the guide
+        guide = x
+
+        # Apply the on-the-fly slicing operation (depthwise)
+        sliced = self.slicer(grid, guide, x)
+
+        # Change channel dimensions with pointwise (1x1) convolution
+        output = self.channel_mixer(sliced)
+
+        # Apply normalization and activation
+        output = self.act(self.norm(output))
+
+        return output
+
+
+class CARAFEPlusPlusUpsample(nn.Module):
+    def __init__(self, channels, compressed_channels=64, kernel_size=5, encoder_kernel_size=3, scale_factor=2):
+        super(CARAFEPlusPlusUpsample, self).__init__()
+        self.channels = channels
+        self.kernel_size = kernel_size
+        self.scale_factor = scale_factor
+
+        # Channel compressor: 1x1 conv to reduce channels
+        self.channel_compressor = nn.Conv2d(channels, compressed_channels, kernel_size=1, bias=False)
+
+        # Content encoder: 3x3 conv to predict reassembly kernels
+        self.content_encoder = nn.Conv2d(
+            compressed_channels,
+            (scale_factor**2) * (kernel_size**2),
+            kernel_size=encoder_kernel_size,
+            padding=encoder_kernel_size // 2,
+            bias=False,
+        )
+
+        # PixelShuffle for efficient upscaling of kernel weights
+        self.pixel_shuffle = nn.PixelShuffle(scale_factor)
+
+    def forward(self, x):
+        b, c, h, w = x.shape
+        k = self.kernel_size
+        h_up = h * self.scale_factor
+        w_up = w * self.scale_factor
+
+        # 1. Predict reassembly kernels
+        compressed = self.channel_compressor(x)
+        kernels = self.content_encoder(compressed)
+        kernels = self.pixel_shuffle(kernels)  # [b, k*k, h_up, w_up]
+
+        # 2. Normalize kernels with softmax
+        kernels = kernels.view(b, k * k, -1)  # [b, k*k, h_up*w_up]
+        kernels = F.softmax(kernels, dim=1)
+        kernels = kernels.view(b, k * k, h_up, w_up)
+
+        # 3. Upsample input using nearest neighbor
+        x_up = F.interpolate(x, scale_factor=self.scale_factor, mode="nearest")
+
+        # 4. Extract neighborhoods and apply reassembly
+        # Extract k×k neighborhoods around each pixel
+        x_unfold = F.unfold(x_up, kernel_size=k, padding=k // 2)
+        x_unfold = x_unfold.view(b, c, k * k, h_up * w_up)
+
+        # Reshape kernels for batch matrix multiplication
+        kernels = kernels.view(b, k * k, h_up * w_up)
+
+        # Apply reassembly: weighted sum over the neighborhood
+        out = torch.bmm(x_unfold.transpose(1, 2).flatten(0, 1), kernels.transpose(1, 2).flatten(0, 1).unsqueeze(-1))
+        out = out.view(b, h_up * w_up, c).transpose(1, 2)
+        out = out.view(b, c, h_up, w_up)
+
+        return out
+
+
+class CARAFEPlusPlusDownsample(nn.Module):
+    def __init__(
+        self,
+        channels: int,
+        compressed_channels: int = 16,
+        kernel_size: int = 5,
+        encoder_kernel_size: int = 3,
+        scale_factor: int = 2,
+    ) -> None:
+        super().__init__()
+        self.channels = channels
+        self.kernel_size = kernel_size
+        self.scale_factor = scale_factor
+
+        # Channel compressor: 1x1 conv to reduce channels
+        self.channel_compressor = nn.Conv2d(channels, compressed_channels, kernel_size=1, bias=False)
+
+        # Content encoder: 3x3 conv with stride to predict reassembly kernels at lower resolution
+        self.content_encoder = nn.Conv2d(
+            compressed_channels,
+            kernel_size**2,
+            kernel_size=encoder_kernel_size,
+            stride=scale_factor,  # Key difference for downsampling
+            padding=encoder_kernel_size // 2,
+            bias=False,
+        )
+
+    def kernel_prediciton(self, x: torch.Tensor) -> torch.Tensor:
+        # 1. Predict reassembly kernels (at target resolution)
+        compressed = self.channel_compressor(x)  # [b, compressed_channels, h, w]
+        kernels: torch.Tensor = self.content_encoder(compressed)  # [b, k*k, h / scale, w / scale]
+
+        b, _, h_down, w_down = kernels.shape
+        # 2. Normalize kernels with softmax
+        kernels = kernels.view(b, self.kernel_size * self.kernel_size, -1)  # [b, k*k, h_down*w_down]
+        kernels = F.softmax(kernels, dim=1)
+        kernels = kernels.view(b, self.kernel_size * self.kernel_size, h_down, w_down)  # [b, k*k, h_down, w_down]
+        return kernels
+
+    def content_aware_reassembly(self, x: torch.Tensor, kernels: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            x (torch.Tensor): Input feature map of shape [B, C, H, W]
+            kernels (torch.Tensor): Reassembly kernels of shape [B, k*k, H_down, W_down]
+        """
+        b, c, h, w = x.shape
+        h_down = h // self.scale_factor
+        w_down = w // self.scale_factor
+        c_r = self.kernel_size * self.kernel_size
+        # 3. Extract neighborhoods and apply reassembly
+        # Extract k×k neighborhoods around each pixel
+        x_unfold = F.unfold(
+            x, kernel_size=self.kernel_size, stride=self.scale_factor, padding=self.kernel_size // 2
+        )  # [b, c*k*k, h_down*w_down]
+        x_unfold = x_unfold.view(b, c, c_r, h_down * w_down)  # [b, c, k*k, h_down*w_down]
+
+        # Reshape kernels for batch matrix multiplication
+        kernels = kernels.view(b, c_r, h_down * w_down)  # [b, k*k, h_down*w_down]
+
+        # Apply reassembly: weighted sum over the neighborhood
+        # The dimensions work with broadcasting
+        out = (x_unfold * kernels.unsqueeze(1)).sum(dim=2)  # [b, c, h_down*w_down]
+        out = out.view(b, c, h_down, w_down)  # [b, c, h_down, w_down]
+        return out
+
+    def forward(self, x):
+        # 1. Predict reassembly kernels
+        kernels = self.kernel_prediciton(x)
+        # Reassemble
+        out = self.content_aware_reassembly(x, kernels)
+
+        return out
+
+
+class CARAFEConv(nn.Module):
+    def __init__(
+        self, in_channels: int, out_channels: int, kernel_size=3, scale_factor: int = 2, compressed_channels: int = 16
+    ) -> None:
+        super().__init__()
+        self.carafe = CARAFEPlusPlusDownsample(
+            channels=in_channels,
+            scale_factor=scale_factor,
+        )
+        self.conv = Conv(c1=in_channels, c2=out_channels, k=kernel_size, s=1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Forward pass of CARAFEConv.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape [B, C_in, H, W]
+
+        Returns:
+            out (torch.Tensor): Output tensor of shape [B, C_out, H, W]
+        """
+        x = self.carafe(x)
+        x = self.conv(x)
+        return x

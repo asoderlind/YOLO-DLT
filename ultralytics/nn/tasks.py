@@ -46,6 +46,7 @@ from ultralytics.nn.modules import (
     C3Ghost,
     C3k2,
     C3x,
+    CARAFEConv,
     CBFuse,
     CBLinear,
     Classify,
@@ -1028,6 +1029,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             Transpose,
             GSConv,
             EnhancedC3k2,
+            CARAFEConv,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
