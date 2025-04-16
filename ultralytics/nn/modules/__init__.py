@@ -87,6 +87,7 @@ from .conv import (
     CBAM,
     CBM,
     GC,
+    CARAFEConv,
     ChannelAttention,
     Concat,
     Conv,
@@ -234,4 +235,5 @@ __all__ = (
     "BiC_AFR",
     "GSConv",
     "EnhancedC3k2",
+    "CARAFEConv",
 )
