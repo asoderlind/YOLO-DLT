@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from einops import rearrange
+from torch.nn import PixelShuffle
 
 __all__ = (
     "Conv",
@@ -524,6 +525,8 @@ class RFAConv(nn.Module):  # RFAConv implemented based on Group Conv
             act=nn.ReLU(),
         )
 
+        self.pixel_shuffle = PixelShuffle(kernel_size)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass of RFAConv (Receptive-Field Attention Convolution).
@@ -556,12 +559,14 @@ class RFAConv(nn.Module):  # RFAConv implemented based on Group Conv
             b, c, self.kernel_size**2, h, w
         )  # [b, c*kernel**2,h,w] ->  [b, c, k**2, h, w]   obtain receptive field spatial features
         weighted_data = feature * weighted
-        conv_data = rearrange(
-            weighted_data,
-            "b c (n1 n2) h w -> b c (h n1) (w n2)",
-            n1=self.kernel_size,  # [b, c, k**2, h, w] ->  [b, c, h*k, w*k]
-            n2=self.kernel_size,
-        )  # [b, c, h*k, w*k]
+        # conv_data = rearrange(
+        #     weighted_data,
+        #     "b c (n1 n2) h w -> b c (h n1) (w n2)",
+        #     n1=self.kernel_size,  # [b, c, k**2, h, w] ->  [b, c, h*k, w*k]
+        #     n2=self.kernel_size,
+        # )  # [b, c, h*k, w*k]
+
+        conv_data = self.pixel_shuffle(weighted_data.view(b, c * self.kernel_size**2, h, w))
 
         return self.conv(conv_data)  # [b, c, h*k, w*k] -> [b, c_out, h, w]
 
