@@ -314,21 +314,21 @@ if __name__ == "__main__":
     #     resume=True,
     # )
 
-    train_model(
-        name="bdd100k_night-yolo11n-bic-reduced-channel-carafeconv",
-        model="runs/detect/bdd100k_night-yolo11n-bic-reduced-channel-carafeconv/weights/last.pt",
-        resume=True,
-    )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-bic-reduced-channel-carafeconv",
+    #     model="runs/detect/bdd100k_night-yolo11n-bic-reduced-channel-carafeconv/weights/last.pt",
+    #     resume=True,
+    # )
 
     train_model(
         name="bdd100k_night-yolo11n-carafebic-reduced-channel",
         model="dlt-models/yolo11n-carafebic-reduced-channel.yaml",
     )
 
-    train_model(
-        name="bdd100k_night-yolo11n-bic-reduced-channel-repc3k2-carafeconv",
-        model="dlt-models/yolo11n-bic-reduced-channel-repc3k2-carafeconv.yaml",
-    )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-bic-reduced-channel-repc3k2-carafeconv",
+    #     model="dlt-models/yolo11n-bic-reduced-channel-repc3k2-carafeconv.yaml",
+    # )
 
     train_model(
         name="bdd100k_night-yolo11n-bic-afr-reduced-channel",
