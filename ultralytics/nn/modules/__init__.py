@@ -54,6 +54,7 @@ from .block import (
     C3Ghost,
     C3k2,
     C3x,
+    CARAFEBiC,
     CBFuse,
     CBLinear,
     ContrastiveHead,
@@ -88,6 +89,7 @@ from .conv import (
     CBM,
     GC,
     CARAFEConv,
+    CARAFEPlusPlusUpsample,
     ChannelAttention,
     Concat,
     Conv,
@@ -236,4 +238,5 @@ __all__ = (
     "GSConv",
     "EnhancedC3k2",
     "CARAFEConv",
+    "CARAFEBiC",
 )

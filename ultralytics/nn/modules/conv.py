@@ -954,8 +954,15 @@ class MalleConv(nn.Module):
 
 
 class CARAFEPlusPlusUpsample(nn.Module):
-    def __init__(self, channels, compressed_channels=64, kernel_size=5, encoder_kernel_size=3, scale_factor=2):
-        super(CARAFEPlusPlusUpsample, self).__init__()
+    def __init__(
+        self,
+        channels: int,
+        compressed_channels: int = 64,
+        kernel_size: int = 5,
+        encoder_kernel_size: int = 3,
+        scale_factor: int = 2,
+    ) -> None:
+        super().__init__()
         self.channels = channels
         self.kernel_size = kernel_size
         self.scale_factor = scale_factor
@@ -963,49 +970,106 @@ class CARAFEPlusPlusUpsample(nn.Module):
         # Channel compressor: 1x1 conv to reduce channels
         self.channel_compressor = nn.Conv2d(channels, compressed_channels, kernel_size=1, bias=False)
 
-        # Content encoder: 3x3 conv to predict reassembly kernels
+        # Content encoder: predicts kernel weights
         self.content_encoder = nn.Conv2d(
             compressed_channels,
-            (scale_factor**2) * (kernel_size**2),
+            kernel_size**2 * scale_factor**2,  # Kernels for each upsampled position
             kernel_size=encoder_kernel_size,
             padding=encoder_kernel_size // 2,
             bias=False,
         )
 
-        # PixelShuffle for efficient upscaling of kernel weights
-        self.pixel_shuffle = nn.PixelShuffle(scale_factor)
+        # Initialize weights
+        nn.init.xavier_uniform_(self.channel_compressor.weight)
+        nn.init.normal_(self.content_encoder.weight, mean=0.0, std=0.001)
 
-    def forward(self, x):
+    def kernel_prediction(self, x: torch.Tensor) -> torch.Tensor:
         b, c, h, w = x.shape
-        k = self.kernel_size
         h_up = h * self.scale_factor
         w_up = w * self.scale_factor
 
         # 1. Predict reassembly kernels
-        compressed = self.channel_compressor(x)
-        kernels = self.content_encoder(compressed)
-        kernels = self.pixel_shuffle(kernels)  # [b, k*k, h_up, w_up]
+        compressed = self.channel_compressor(x)  # [b, compressed_channels, h, w]
+        kernels = self.content_encoder(compressed)  # [b, k²*scale_factor², h, w]
 
-        # 2. Normalize kernels with softmax
-        kernels = kernels.view(b, k * k, -1)  # [b, k*k, h_up*w_up]
+        # 2. Rearrange kernel weights to upsampled resolution
+        kernels = F.pixel_shuffle(kernels, self.scale_factor)  # [b, k², h_up, w_up]
+
+        # 3. Normalize kernels with softmax
+        b, k2, h_up, w_up = kernels.shape
+        kernels = kernels.view(b, k2, -1)  # [b, k², h_up*w_up]
         kernels = F.softmax(kernels, dim=1)
-        kernels = kernels.view(b, k * k, h_up, w_up)
+        kernels = kernels.view(b, k2, h_up, w_up)  # [b, k², h_up, w_up]
 
-        # 3. Upsample input using nearest neighbor
-        x_up = F.interpolate(x, scale_factor=self.scale_factor, mode="nearest")
+        return kernels
 
-        # 4. Extract neighborhoods and apply reassembly
-        # Extract k×k neighborhoods around each pixel
-        x_unfold = F.unfold(x_up, kernel_size=k, padding=k // 2)
-        x_unfold = x_unfold.view(b, c, k * k, h_up * w_up)
+    def content_aware_reassembly(self, x: torch.Tensor, kernels: torch.Tensor) -> torch.Tensor:
+        b, c, h, w = x.shape
+        h_up = h * self.scale_factor
+        w_up = w * self.scale_factor
 
-        # Reshape kernels for batch matrix multiplication
-        kernels = kernels.view(b, k * k, h_up * w_up)
+        # Extract neighborhoods
+        x_unfold = F.unfold(x, kernel_size=self.kernel_size, padding=self.kernel_size // 2)  # [b, c*k*k, h*w]
+        x_unfold = x_unfold.view(b, c, self.kernel_size**2, h * w)  # [b, c, k*k, h*w]
 
-        # Apply reassembly: weighted sum over the neighborhood
-        out = torch.bmm(x_unfold.transpose(1, 2).flatten(0, 1), kernels.transpose(1, 2).flatten(0, 1).unsqueeze(-1))
-        out = out.view(b, h_up * w_up, c).transpose(1, 2)
+        # Prepare output container
+        out = torch.zeros(b, c, h_up, w_up, device=x.device)
+
+        # Apply reassembly - map each input position to scale_factor² output positions
+        for i in range(h):
+            for j in range(w):
+                # Get input neighborhood
+                idx_in = i * w + j
+                neighborhood = x_unfold[:, :, :, idx_in]  # [b, c, k*k]
+
+                # For each corresponding output position
+                for di in range(self.scale_factor):
+                    for dj in range(self.scale_factor):
+                        i_out = i * self.scale_factor + di
+                        j_out = j * self.scale_factor + dj
+
+                        # Apply corresponding kernel
+                        kernel = kernels[:, :, i_out, j_out].unsqueeze(1)  # [b, 1, k*k]
+                        out[:, :, i_out, j_out] = (neighborhood * kernel).sum(dim=2)
+
+        return out
+
+    def efficient_content_aware_reassembly(self, x: torch.Tensor, kernels: torch.Tensor) -> torch.Tensor:
+        """
+        Vectorized implementation without loops
+        """
+        b, c, h, w = x.shape
+        h_up = h * self.scale_factor
+        w_up = w * self.scale_factor
+
+        # Extract neighborhoods
+        x_unfold = F.unfold(x, kernel_size=self.kernel_size, padding=self.kernel_size // 2)  # [b, c*k*k, h*w]
+        x_unfold = x_unfold.view(b, c, self.kernel_size**2, h * w)  # [b, c, k*k, h*w]
+
+        # Reshape for efficient computation
+        # For each output position, we need the corresponding input neighborhood
+        # and the corresponding kernel weights
+
+        # Reshape x_unfold to prepare for broadcasting with kernels
+        # We repeat each neighborhood scale_factor² times
+        x_unfold = x_unfold.repeat_interleave(self.scale_factor**2, dim=3)  # [b, c, k*k, h*w*scale_factor²]
+
+        # Reshape kernels to align with x_unfold
+        kernels = kernels.view(b, self.kernel_size**2, -1)  # [b, k*k, h_up*w_up]
+
+        # Apply kernels: multiply and sum over kernel dimension
+        out = (x_unfold * kernels.unsqueeze(1)).sum(dim=2)  # [b, c, h_up*w_up]
         out = out.view(b, c, h_up, w_up)
+
+        return out
+
+    def forward(self, x):
+        # 1. Predict reassembly kernels
+        kernels = self.kernel_prediction(x)
+
+        # 2. Apply content-aware reassembly
+        # Using the vectorized implementation
+        out = self.efficient_content_aware_reassembly(x, kernels)
 
         return out
 
