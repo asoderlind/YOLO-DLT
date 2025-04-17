@@ -46,6 +46,7 @@ from ultralytics.nn.modules import (
     C3Ghost,
     C3k2,
     C3x,
+    CARAFEBiC,
     CARAFEConv,
     CBFuse,
     CBLinear,
@@ -1119,7 +1120,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             args = [c1, *args]
         elif m is SimAM:
             c2 = ch[f]
-        elif m is BiC or m is BiC_AFR:
+        elif m is BiC or m is BiC_AFR or m is CARAFEBiC:
             c1 = [ch[f_i] for f_i in f]
             c2 = args[0]
             if c2 != nc:

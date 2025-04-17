@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 from ultralytics.utils.torch_utils import fuse_conv_and_bn
 
-from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, RFAConv, autopad
+from .conv import CARAFEPlusPlusUpsample, Conv, DWConv, GhostConv, LightConv, RepConv, RFAConv, autopad
 from .transformer import TransformerBlock
 
 __all__ = (
@@ -1777,6 +1777,37 @@ class BiC_AFR(nn.Module):
         concat = torch.cat((x0, x1, x2), dim=1)
         weights = self.afr(concat)  # learned weights
         return self.cv3(concat * weights + concat) if self.skip else self.cv3(concat * weights)  # weighted fusion
+
+
+class CARAFEBiC(nn.Module):
+    """Bi Concat Block in PAN"""
+
+    def __init__(self, c1: list[int], c2: int, channel_reduction: int = 1, adaptive_upsample: bool = True) -> None:
+        """
+        0: left -> below
+        1: above -> left
+        2: below -> above
+        """
+        super().__init__()
+        hidden_ch = c2 // channel_reduction
+        self.cv1 = Conv(c1[1], hidden_ch, k=1, s=1)  # left
+        self.cv2 = Conv(c1[2], hidden_ch, k=1, s=1)  # above
+        self.cv3 = Conv(hidden_ch * 3, c2, k=1, s=1)  # output
+
+        if adaptive_upsample:
+            # self.upsample = Transpose(c1=c1[0], c2=hidden_ch)
+            self.upsample = nn.Sequential(
+                Conv(c1=c1[0], c2=hidden_ch), CARAFEPlusPlusUpsample(channels=hidden_ch, scale_factor=2)
+            )
+        else:
+            self.upsample = nn.Sequential(Conv(c1=c1[0], c2=hidden_ch), nn.Upsample(scale_factor=2, mode="nearest"))  # type: ignore[assignment]
+        self.downsample = Conv(c1=hidden_ch, c2=hidden_ch, k=3, s=2)
+
+    def forward(self, x: list[torch.Tensor]) -> torch.Tensor:
+        x0 = self.upsample(x[0])
+        x1 = self.cv1(x[1])
+        x2 = self.downsample(self.cv2(x[2]))
+        return self.cv3(torch.cat((x0, x1, x2), dim=1))
 
 
 class QKVLinear(nn.Module):
