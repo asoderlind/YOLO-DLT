@@ -776,181 +776,111 @@ class GSConv(nn.Module):
         return y.reshape(y.shape[0], -1, y.shape[3], y.shape[4])
 
 
-class OnTheFlySlicing(nn.Module):
-    """
-    Efficient operator to apply spatially-varying kernels.
-    Implements bilateral_slice_apply from the MalleConv paper.
-    """
-
-    def __init__(self, has_offset=True):
+class BilateralSliceApply(nn.Module):
+    def __init__(self):
         super().__init__()
-        self.has_offset = has_offset
 
-    def forward(self, grid, guide, input_features):
+    def forward(self, grid, guide, input):
         """
-        Args:
-            grid: Kernels [B, C, k², n_out, H_grid, W_grid]
-            guide: Guide image [B, C, H, W]
-            input_features: Input features [B, C, H, W]
+        grid: (B, C_out, 2, D, H, W) - coefficients (weight and bias)
+        guide: (B, C_in, H, W) - normalized feature values [0, 1]
+        input: (B, C_in, H, W) - input feature map
         """
-        B, C, H, W = input_features.shape
-        _, _, k2, n_out, H_grid, W_grid = grid.shape
-        k = int(k2**0.5)  # Extract kernel size from k²
+        B, C_out, _, D, Gh, Gw = grid.shape
+        _, C_in, H, W = input.shape
 
-        # Prepare indices for the upsampling operation
-        y_ratio, x_ratio = H_grid / H, W_grid / W
+        # Normalize guide to [-1, 1] for grid sampling
+        guide = guide.unsqueeze(2)  # (B, C_in, 1, H, W)
 
-        # Pad input for valid convolution
-        pad = k // 2
-        padded_input = F.pad(input_features, (pad, pad, pad, pad), mode="reflect")
+        # Create normalized grid coordinates
+        x_norm = torch.linspace(-1, 1, W, device=grid.device).view(1, 1, 1, W).expand(B, C_in, H, W)
+        y_norm = torch.linspace(-1, 1, H, device=grid.device).view(1, 1, H, 1).expand(B, C_in, H, W)
+        z_norm = (guide * 2 - 1).permute(0, 1, 3, 4, 2)  # (B, C_in, H, W, 1)
 
-        # Unfold input - this creates a single tensor with all k×k neighborhoods
-        patches = F.unfold(padded_input, kernel_size=k, padding=0, stride=1)
-        patches = patches.view(B, C, k2, H * W)
+        # Combine coordinates (trilinear interpolation)
+        sample_grid = torch.stack((x_norm, y_norm, z_norm.squeeze(-1)), dim=-1).unsqueeze(1)  # (B, 1, C_in, H, W, 3)
 
-        # Reshape and permute for efficient processing
-        # We'll process all channels at once for better parallelism
+        # Sample grid coefficients for each input channel
+        # We need to reshape grid to (B*C_out, 2, D, Gh, Gw) for batch processing
+        grid_reshaped = grid.view(B * C_out, 2, D, Gh, Gw)
+        sample_grid = sample_grid.expand(-1, C_out, -1, -1, -1, -1).reshape(B * C_out, C_in, H, W, 3)
 
-        # Calculate grid sample coordinates
-        y_grid = torch.arange(H, device=input_features.device, dtype=torch.float32)
-        x_grid = torch.arange(W, device=input_features.device, dtype=torch.float32)
-        y_grid = (y_grid + 0.5) * y_ratio
-        x_grid = (x_grid + 0.5) * x_ratio
+        coefficients = F.grid_sample(
+            grid_reshaped, sample_grid, mode="bilinear", padding_mode="border", align_corners=True
+        )  # (B*C_out, 2, C_in, H, W)
 
-        # Convert to normalized [-1, 1] coordinates for grid_sample
-        y_grid = (y_grid / H_grid) * 2 - 1
-        x_grid = (x_grid / W_grid) * 2 - 1
+        # Reshape back and split into weight and bias
+        coefficients = coefficients.view(B, C_out, 2, C_in, H, W)
+        weight = coefficients[:, :, 0]  # (B, C_out, C_in, H, W)
+        bias = coefficients[:, :, 1]  # (B, C_out, C_in, H, W)
 
-        # Create grid for sampling
-        grid_y, grid_x = torch.meshgrid(y_grid, x_grid, indexing="ij")
-        sampling_grid = torch.stack([grid_x, grid_y], dim=-1).unsqueeze(0).expand(B, -1, -1, -1)
-
-        # Reshape grid for efficient sampling
-        # We'll sample all kernels for all positions at once
-        grid_reshaped = grid.permute(0, 1, 3, 4, 5, 2).contiguous()  # [B, C, n_out, H_grid, W_grid, k²]
-        grid_reshaped = grid_reshaped.view(B, C * n_out, H_grid, W_grid)
-
-        # Sample all kernels at once using grid_sample
-        # This is much more efficient than per-channel processing
-        sampled_kernels = F.grid_sample(
-            grid_reshaped, sampling_grid, mode="bilinear", align_corners=False
-        )  # [B, C*n_out, H, W]
-
-        # Reshape to separate channels, n_out, and kernel positions
-        sampled_kernels = sampled_kernels.view(B, C, n_out, H, W)
-
-        # Split weight and offset if needed
-        if self.has_offset:
-            weights = sampled_kernels[:, :, 0]  # [B, C, H, W]
-            offset = sampled_kernels[:, :, 1]  # [B, C, H, W]
-        else:
-            weights = sampled_kernels[:, :, 0]
-            offset = torch.zeros_like(weights)
-
-        # Apply to all channels at once
-        # This is a much more efficient matrix multiplication approach
-        weights = weights.view(B, C, 1, H * W)  # Reshape for broadcasting
-        result = (patches * weights).sum(dim=2)  # Sum over k²
-        result = result.view(B, C, H, W)
-
-        # Add offset if needed
-        if self.has_offset:
-            result = result + offset
-
-        return result
+        # Apply: sum over input channels (input * weight) + bias
+        input_expanded = input.unsqueeze(1)  # (B, 1, C_in, H, W)
+        output = (input_expanded * weight).sum(dim=2) + bias.mean(dim=2)
+        return output
 
 
-class ResBlock(nn.Module):
-    """Simple residual block for the predictor network."""
-
+class ResConvBlock(nn.Module):
     def __init__(self, channels):
         super().__init__()
-        self.conv = nn.Sequential(Conv(channels, channels, k=3, s=1), Conv(channels, channels, k=3, s=1, act=False))
-        self.act = nn.SiLU()
+        self.conv = nn.Sequential(
+            nn.Conv2d(channels, channels * 5, 1),
+            nn.BatchNorm2d(channels * 5),
+            nn.PReLU(),
+            nn.Conv2d(channels * 5, channels * 5, 3, padding=1, groups=channels * 5),
+            nn.BatchNorm2d(channels * 5),
+            nn.PReLU(),
+            nn.Conv2d(channels * 5, channels, 1),
+            nn.BatchNorm2d(channels),
+            nn.PReLU(),
+        )
 
     def forward(self, x):
-        return self.act(x + self.conv(x))
+        return x + self.conv(x)
 
 
 class MalleConv(nn.Module):
-    """
-    Malleable Convolution block with support for changing channel dimensions.
-
-    Implements the MalleConv approach:
-    1. Downsampling the input feature map
-    2. Generating spatially-varying kernels
-    3. Applying these kernels (depthwise)
-    4. Using a 1x1 conv to change channel dimensions
-    """
-
-    def __init__(
-        self, in_channels, out_channels, kernel_size=3, downsample_factor=4, predictor_depth=2, has_offset=True
-    ):
+    def __init__(self, in_channels, out_channels, kernel_size=3, downsample_factor=4, hidden_channels=64, num_blocks=3):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.k = kernel_size
-        self.k2 = kernel_size * kernel_size
         self.downsample_factor = downsample_factor
-        self.has_offset = has_offset
-        self.n_out = 2 if has_offset else 1  # Number of output coefficients per position
 
-        # Predictor network to generate kernels
-        layers = [Conv(in_channels, in_channels, k=3)]
-        for _ in range(predictor_depth):
-            layers.append(ResBlock(in_channels))
+        # Downsample layer
+        self.downsample = nn.AvgPool2d(downsample_factor)
 
-        # Final layer outputs in_channels * k² * n_out values
-        final_channels = in_channels * self.k2 * self.n_out
-        layers.append(Conv(in_channels, final_channels, k=1))
-        self.predictor = nn.Sequential(*layers)
+        # Coefficient predictor network
+        self.predictor = nn.Sequential(
+            nn.Conv2d(in_channels, hidden_channels, 3, padding=1),
+            nn.PReLU(),
+            *[ResConvBlock(hidden_channels) for _ in range(num_blocks)],
+            nn.Conv2d(hidden_channels, 2 * out_channels * in_channels, 1),
+        )
 
-        # On-the-fly slicing operator
-        self.slicer = OnTheFlySlicing(has_offset=has_offset)
+        # Coefficient applier
+        self.apply_coeffs = BilateralSliceApply()
 
-        # Pointwise (1x1) convolution to change channel dimensions
-        self.channel_mixer = Conv(in_channels, out_channels, k=1)
-
-        # Normalization and activation
-        self.norm = nn.BatchNorm2d(out_channels)
+        self.bn = nn.BatchNorm2d(out_channels)
         self.act = nn.SiLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass of MalleConv.
+        B, C_in, H, W = x.shape
 
-        Args:
-            x: Input feature map [B, C_in, H, W]
+        # 1. Downsample input
+        x_down: torch.Tensor = self.downsample(x)  # (B, C_in, H//ds, W//ds)
 
-        Returns:
-            output: Processed feature map [B, C_out, H, W]
-        """
-        B, C, _, _ = x.shape
+        # 2. Predict coefficients grid (weight and bias per output channel)
+        grid = self.predictor(x_down)  # (B, 2*C_out*C_in, H//ds, W//ds)
+        grid = grid.view(
+            B, self.out_channels, self.in_channels, 2, H // self.downsample_factor, W // self.downsample_factor
+        )
+        grid = grid.permute(0, 1, 3, 4, 5, 2)  # (B, C_out, 2, D, H, W, C_in)
 
-        # Downsample input for the predictor network
-        x_down = F.avg_pool2d(x, self.downsample_factor)
-        H_down, W_down = x_down.shape[2:]
+        # 3. Apply coefficients to all channels simultaneously
+        guide = torch.clamp(x, 0, 1)  # (B, C_in, H, W)
+        output = self.apply_coeffs(grid, guide, x)  # (B, C_out, H, W)
 
-        # Generate kernels
-        grid_flat: torch.Tensor = self.predictor(x_down)  # [B, C*k²*n_out, H_down, W_down]
-
-        # Reshape to the format expected by the slicer
-        # [B, C, k², n_out, H_down, W_down]
-        grid = grid_flat.view(B, C, self.k2, self.n_out, H_down, W_down)
-
-        # Use the feature map itself as the guide
-        guide = x
-
-        # Apply the on-the-fly slicing operation (depthwise)
-        sliced = self.slicer(grid, guide, x)
-
-        # Change channel dimensions with pointwise (1x1) convolution
-        output = self.channel_mixer(sliced)
-
-        # Apply normalization and activation
-        output = self.act(self.norm(output))
-
-        return output
+        return self.act(self.bn(output))  # (B, C_out, H, W)
 
 
 class CARAFEPlusPlusUpsample(nn.Module):
