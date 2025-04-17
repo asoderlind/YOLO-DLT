@@ -73,6 +73,8 @@ from ultralytics.nn.modules import (
     ImagePoolingAttn,
     Index,
     LDConv,
+    MalleC3k2,
+    MalleConv,
     NewConv,
     Pose,
     ProgressiveFocus,
@@ -1031,6 +1033,8 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             GSConv,
             EnhancedC3k2,
             CARAFEConv,
+            MalleConv,
+            MalleC3k2,
         }
     )
     repeat_modules = frozenset(  # modules with 'repeat' arguments
@@ -1052,6 +1056,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             RepC3k2,
             RFAC3k2,
             EnhancedC3k2,
+            MalleC3k2,
         }
     )
     for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
