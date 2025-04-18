@@ -48,11 +48,19 @@ def train_with_distance(
 
 # Augmentation ablations
 # train_with_distance(data_path="carla.yaml", use_dist=True, d=0.05, classes=[0, 1, 2, 3, 4, 5])
+<<<<<<< HEAD
 train_with_distance(data_path="carla.yaml", use_dist=True, d=0.0, classes=[0, 1, 2, 3, 4, 5])
 train_with_distance(data_path="carla.yaml", use_dist=True, d=0.01, classes=[0, 1, 2, 3, 4, 5])
 train_with_distance(data_path="carla.yaml", use_dist=True, d=0.04, classes=[0, 1, 2, 3, 4, 5])
 train_with_distance(data_path="carla.yaml", use_dist=True, d=0.06, classes=[0, 1, 2, 3, 4, 5])
 train_with_distance(data_path="carla.yaml", use_dist=True, d=0.10, classes=[0, 1, 2, 3, 4, 5])
+=======
+train_with_distance(data_path="carla.yaml", max_dist=100, use_dist=True, d=0.0, classes=[0, 1, 2, 3, 4, 5])
+train_with_distance(data_path="carla.yaml", max_dist=100, use_dist=True, d=0.01, classes=[0, 1, 2, 3, 4, 5])
+train_with_distance(data_path="carla.yaml", max_dist=100, use_dist=True, d=0.04, classes=[0, 1, 2, 3, 4, 5])
+train_with_distance(data_path="carla.yaml", max_dist=100, use_dist=True, d=0.06, classes=[0, 1, 2, 3, 4, 5])
+train_with_distance(data_path="carla.yaml", max_dist=100, use_dist=True, d=0.10, classes=[0, 1, 2, 3, 4, 5])
+>>>>>>> f499d156 (minor updates, remove unused file)
 
 """
 train_with_distance(
