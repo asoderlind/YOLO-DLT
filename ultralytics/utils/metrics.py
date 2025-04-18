@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 import matplotlib.pyplot as plt
+from scipy.stats import norm
 import numpy as np
 import torch
 
@@ -1447,6 +1448,10 @@ class DistMetrics(SimpleClass):
         return 1.0 / (1.0 + total_error)
 
 
+def plot_distance_error_distribution():
+    pass
+
+
 def get_distance_errors_per_class(
     pred2gt_dist: np.ndarray,
     pred2gt_cls: np.ndarray,
@@ -1455,7 +1460,9 @@ def get_distance_errors_per_class(
     nc: int,
     max_dist: int = 150,
     iou_level: int = 0,
-) -> tuple[list, list]:
+    plot: bool = False,
+    save_dir: Path = Path(),
+) -> tuple[list, list, list, list, list]:
     """
     Compute the mean absolute and relative distance errors for a set of predictions.
 
@@ -1465,6 +1472,10 @@ def get_distance_errors_per_class(
         target_cls: Ground truth class labels.
         pred2gt: Mapping of predictions to ground truth indices for a specific IoU level.
         nc: Number of classes.
+        max_dist: Maximum distance value for normalization.
+        iou_level: IoU level for filtering predictions.
+        plot: Whether to plot the distance error distribution.
+        save_dir: Directory to save the plot.
 
     Returns:
         e_A: Mean absolute distance error for each class. (nc,)
@@ -1487,6 +1498,8 @@ def get_distance_errors_per_class(
     e_min = [np.zeros((1, 1)) for _ in range(nc)]
     e_mean = [np.zeros((1, 1)) for _ in range(nc)]
     e_max = [np.zeros((1, 1)) for _ in range(nc)]
+    e_std = [np.zeros((1, 1)) for _ in range(nc)]
+    errors_per_class = [np.zeros((1, 1)) for _ in range(nc)]
 
     # de-normalize the distances
     dist_gt_cls[:, 0] = dist_gt_cls[:, 0] * max_dist
@@ -1497,16 +1510,51 @@ def get_distance_errors_per_class(
         # Filter out pairs of predictions and ground truth with a certain class
         pred_gt = dist_gt_cls[dist_gt_cls[:, 2] == idx]
         if len(pred_gt) > 0:
+            errors_per_class[idx] = pred_gt[:, 0] - pred_gt[:, 1]
             errors = pred_gt[:, 0] - pred_gt[:, 1]
             # Calculate min, mean, and max errors
             e_min[idx] = np.min(errors)
             e_mean[idx] = np.mean(errors)
             e_max[idx] = np.max(errors)
+            e_std[idx] = np.std(errors)
             # Calculate mean absolute and relative errors
             absolute_errors = np.abs(errors)
             relative_errors = absolute_errors / np.maximum(pred_gt[:, 1], 1)
             e_A[idx] = np.mean(absolute_errors)
             e_R[idx] = np.mean(relative_errors)
+
+    if plot:
+        flat_errors = [e.ravel() for e in errors_per_class]
+        errors_all_classes = np.concatenate(flat_errors)
+        mean_all_classes = np.mean(errors_all_classes)
+        std_all_classes = np.std(errors_all_classes)
+
+        fig, ax1 = plt.subplots()
+
+        # Plot histogram on left y-axis
+        counts, bins, _ = ax1.hist(errors_all_classes, bins=50, alpha=0.5, label="All Classes", color="tab:blue")
+        ax1.set_xlabel("Distance Error")
+        ax1.set_ylabel("Frequency", color="tab:blue")
+        ax1.tick_params(axis="y", labelcolor="tab:blue")
+
+        # Plot normal distribution on right y-axis
+        ax2 = ax1.twinx()
+        x = np.linspace(min(errors_all_classes), max(errors_all_classes), 1000)
+        p = norm.pdf(x, mean_all_classes, std_all_classes)
+        ax2.plot(x, p, "r-", label="Normal Distribution")
+        ax2.set_ylabel("Probability Density", color="tab:red")
+        ax2.tick_params(axis="y", labelcolor="tab:red")
+        ax2.set_ylim(bottom=0)
+
+        # Add legends from both axes
+        lines, labels = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines + lines2, labels + labels2, loc="upper right")
+
+        plt.title("Distance Error Distribution")
+        plt.tight_layout()
+        plt.savefig(save_dir / "distance_error_distribution.png")
+        plt.close()
 
     return e_A, e_R, e_min, e_mean, e_max
 
@@ -1571,7 +1619,14 @@ class DetMetrics(SimpleClass):
         self.box.nc = nc
         self.box.update(results)
         results = get_distance_errors_per_class(
-            pred2gt_dist, pred2gt_cls, pred_dist, target_cls, nc, max_dist=self.max_dist
+            pred2gt_dist,
+            pred2gt_cls,
+            pred_dist,
+            target_cls,
+            nc,
+            max_dist=self.max_dist,
+            plot=self.plot,
+            save_dir=self.save_dir,
         )
         self.dist.update(results)
 
