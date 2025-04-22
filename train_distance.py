@@ -14,7 +14,6 @@ def train_with_distance(
     data_path: str = "kitti.yaml",
     d: float = 0.05,
     use_dist: bool = True,
-    classes=KITTI_CLASSES,
     scale: float = 0.0,
     mosaic: float = 1.0,
     device: str = DEVICE,
@@ -40,15 +39,14 @@ def train_with_distance(
         scale=scale,
         use_dist=use_dist,
         dist=d,
-        classes=classes,
         **kwargs,
     )
 
 
 # Augmentation ablations
-train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=0.05, max_dist=85, classes=[0,1,2])
-train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=0.00, max_dist=85, classes=[0,1,2])
-train_with_distance(data_path="waymo-noConf.yaml", use_dist=False, d=0.00, max_dist=85, classes=[0,1,2])
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=0.05, max_dist=85)
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=0.00, max_dist=85)
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=False, d=0.00, max_dist=85)
 
 """
 train_with_distance(data_path="carla.yaml", max_dist=100, use_dist=True, d=0.0, classes=[0, 1, 2, 3, 4, 5])

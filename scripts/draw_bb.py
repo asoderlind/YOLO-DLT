@@ -3,7 +3,7 @@ import glob
 import os
 import PIL
 import argparse
-from notebooks.utils import draw_yolo_bboxes
+from utils import draw_yolo_bboxes
 
 path = "../../yolo-testing/datasets/"
 
@@ -36,11 +36,9 @@ BDD100K = {
 }
 
 WAYMO = {
-    "unknown": 0,
-    "vehicle": 1,
-    "pedestrian": 2,
-    "sign": 3,
-    "cyclist": 4,
+    "vehicle": 0,
+    "pedestrian": 1,
+    "cyclist": 2,
 }
 
 CARLA = {
@@ -84,7 +82,7 @@ def main(dataset: str, img_name: str | None = None):
         max_dist = -1.0
     elif dataset == "waymo-noConf":
         dataset_path = os.path.join(path, "waymo-noConf")
-        classes = [1, 2, 3, 4]
+        classes = [0, 1, 2]
         id2cls = get_id2cls(dataset)
         max_dist = 85.0
     elif dataset == "carla-yolo" or dataset == "carla-town06-yolo-v3":
