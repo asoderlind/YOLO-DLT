@@ -121,8 +121,75 @@ def train_model(
     return results
 
 
+grid_sgd = {
+    "epochs": [50, 100, 150, 200],
+    "lr0": [0.001, 0.005, 0.01],
+    "lrf": [0.01, 0.005, 0.001],
+    "freeze": [0, 10, 22],
+    "optinmizer": "SGD",
+}
+
+grid_adamw = {
+    "epochs": [50, 100, 150, 200],
+    "lr0": [0.001, 0.0005, 0.0001],
+    "lrf": [0.01, 0.005, 0.001],
+    "freeze": [0, 10, 22],
+    "optimizer": "AdamW",
+}
 # Example usage
+
+
+def run_grid_search():
+    # Phase 1: Quick Exploration
+    configurations = [
+        # SGD configurations
+        {"optimizer": "SGD", "freeze": 10, "epochs": 50, "lr0": 0.005, "lrf": 0.01},
+        {"optimizer": "SGD", "freeze": 22, "epochs": 50, "lr0": 0.01, "lrf": 0.01},
+        {"optimizer": "SGD", "freeze": 0, "epochs": 50, "lr0": 0.001, "lrf": 0.01},
+        # AdamW configurations
+        {"optimizer": "AdamW", "freeze": 10, "epochs": 50, "lr0": 0.0005, "lrf": 0.01},
+        {"optimizer": "AdamW", "freeze": 22, "epochs": 50, "lr0": 0.001, "lrf": 0.01},
+        {"optimizer": "AdamW", "freeze": 0, "epochs": 50, "lr0": 0.0001, "lrf": 0.01},
+    ]
+
+    results = []
+    for i, config in enumerate(configurations):
+        print(f"Running configuration {i + 1}/{len(configurations)}: {config}")
+
+        name = f"waymo-yolo11n-bdd100k_night-{config['epochs']}e-lr{config['lr0']}-lrf{config['lrf']}-freeze{config['freeze']}-{config['optimizer']}"
+
+        result = train_model(
+            name=name,
+            model="runs/detect/bdd100k_night-yolo11n-seed-test-0/weights/last.pt",
+            data="waymo-noConf-noDist-vid.yaml",
+            epochs=config["epochs"],
+            lr0=config["lr0"],
+            lrf=config["lrf"],
+            freeze=config["freeze"],
+            optimizer=config["optimizer"],
+        )
+
+        results.append((config, result))
+
+        # Save intermediate results to analyze
+        with open("grid_search_results_phase1.txt", "a") as f:
+            f.write(f"Config: {config}\n")
+            f.write(f"Results: {result.results_dict}\n\n")
+
+    # Analyze phase 1 results and continue with phase 2
+    # This would typically involve checking metrics and selecting best configurations
+
+    # Phase 2 and 3 would follow similar patterns
+
+
 if __name__ == "__main__":
+    run_grid_search()
+    ## perform grid test here
+    ## we should use:
+    #  data="waymo-noConf-noDist-vid.yaml",
+    # model="runs/detect/bdd100k_night-yolo11n-seed-test-0/weights/last.pt",
+    # name = f"waymo-noConf-noDist-vid-yolo11n-bdd100k_night-{epoch}e-{lr0}lr0-lrf{lrf}-freeze{freeze}-optimizer{optimizer}"
+
     # train_model(
     #     name="waymo-noConf-noDist-vid-yolo11n-bdd100k_night",
     #     model="runs/detect/bdd100k_night-yolo11n-seed-test-0/weights/last.pt",
@@ -330,28 +397,28 @@ if __name__ == "__main__":
     #     model="dlt-models/yolo11n-bic-reduced-channel-mallec3k2.yaml",
     # )
 
-    train_model(
-        name="bdd100k_night-yolo11n-bic-afr-reduced-channel",
-        model="runs/detect/bdd100k_night-yolo11n-bic-afr-reduced-channel/weights/last.pt",
-        resume=True,
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-bic-afr-skip-reduced-channel-full-mosaic",
-        model="dlt-models/yolo11n-bic-afr-skip-reduced-channel.yaml",
-        close_mosaic=0,
-    )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-bic-afr-reduced-channel",
+    #     model="runs/detect/bdd100k_night-yolo11n-bic-afr-reduced-channel/weights/last.pt",
+    #     resume=True,
+    # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-bic-afr-skip-reduced-channel-full-mosaic",
+    #     model="dlt-models/yolo11n-bic-afr-skip-reduced-channel.yaml",
+    #     close_mosaic=0,
+    # )
 
-    train_model(
-        name="bdd100k_night-yolo11n-carafebic-reduced-channel",
-        model="runs/detect/bdd100k_night-yolo11n-carafebic-reduced-channel/weights/last.pt",
-        resume=True,
-    )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-carafebic-reduced-channel",
+    #     model="runs/detect/bdd100k_night-yolo11n-carafebic-reduced-channel/weights/last.pt",
+    #     resume=True,
+    # )
 
-    train_model(
-        name="bdd100k_night-yolo11n-biformer",
-        model="runs/detect/bdd100k_night-yolo11n-biformer/weights/last.pt",
-        resume=True,
-    )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-biformer",
+    #     model="runs/detect/bdd100k_night-yolo11n-biformer/weights/last.pt",
+    #     resume=True,
+    # )
 
     # train_model(
     #     name="carla_yolo-yolo11n-spdconv",
