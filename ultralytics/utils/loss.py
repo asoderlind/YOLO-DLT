@@ -209,6 +209,46 @@ class KeypointLoss(nn.Module):
         return (kpt_loss_factor.view(-1, 1) * ((1 - torch.exp(-e)) * kpt_mask)).mean()
 
 
+class DistanceLoss(nn.Module):
+    def __init__(self) -> None:
+        """Initialize the DistanceLoss class."""
+        super().__init__()
+
+    def forward(self, pred_dist, target_distance, fg_mask):
+        """
+        Calculate the squared difference loss between predicted and target distances.
+        Ignore distance if it is set as 0.0, and also where fg_mask is False.
+
+        Args:
+            pred_dist (torch.Tensor): Predicted distance tensor.
+            target_distance (torch.Tensor): Target distance tensor.
+            fg_mask (torch.Tensor): Foreground mask tensor.
+
+        Returns:
+            torch.Tensor: The calculated distance loss.
+        """
+        # MSE loss for distance
+        if target_distance is None:
+            return torch.tensor(0.0).to(pred_dist.device)
+        if pred_dist.shape != target_distance.shape:
+            print(
+                f"WARNING: pred_dist shape ({pred_dist.shape}) and target_distance shape ({target_distance.shape}) do not match."
+            )
+            return torch.tensor(0.0).to(pred_dist.device)
+
+        # Create a mask for valid distances (i.e. not equal to 0) and also where fg_mask is True
+        valid_mask = (target_distance != 0.0) & (fg_mask.unsqueeze(-1))
+        valid_mask = valid_mask.squeeze(-1)
+
+        # If no valid distances remain, return 0 loss.
+        if valid_mask.sum() == 0:
+            return torch.tensor(0.0).to(pred_dist.device)
+
+        pred_dist = pred_dist[valid_mask]
+        target_distance = target_distance[valid_mask]
+        return ((pred_dist - target_distance) ** 2).sum()
+
+
 class v8DetectionLoss:
     """Criterion class for computing training losses."""
 
@@ -223,16 +263,24 @@ class v8DetectionLoss:
         self.hyp = h
         self.stride = m.stride  # model strides
         self.nc = m.nc  # number of classes
-        self.no = m.nc + m.reg_max * 4
+        ndo = 1  # number of distance outputs
+        self.no = m.nc + m.reg_max * 4 + ndo
         self.reg_max = m.reg_max
         self.device = device
+        self.use_dist = h.use_dist
 
         self.use_dfl = m.reg_max > 1
         self.assigner = TaskAlignedAssigner(
-            topk=tal_topk, num_classes=self.nc, alpha=0.5, beta=6.0, iou_type=self.hyp.iou_type
+            topk=tal_topk,
+            num_classes=self.nc,
+            alpha=0.5,
+            beta=6.0,
+            iou_type=self.hyp.iou_type,
+            use_dist=self.use_dist,
         )
         self.bbox_loss = BboxLoss(m.reg_max, self.hyp.iou_type).to(device)
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
+        self.distance_loss = DistanceLoss().to(device)
 
         self.dln = DLN()
         self.dln = torch.nn.DataParallel(self.dln)
@@ -270,14 +318,17 @@ class v8DetectionLoss:
 
     def __call__(self, preds, batch, **kwargs):
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
-        loss = torch.zeros(4, device=self.device)  # box, cls, dfl, con
-        feats = preds[1] if isinstance(preds, tuple) else preds
-        pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
-            (self.reg_max * 4, self.nc), 1
-        )
+        loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, dist
+
+        feats = preds[1] if isinstance(preds, tuple) else preds  # tuple during validation, otherwise list
+
+        pred_distri, pred_scores, pred_distance = torch.cat(
+            [xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2
+        ).split((self.reg_max * 4, self.nc, 1), 1)
 
         pred_scores = pred_scores.permute(0, 2, 1).contiguous()
         pred_distri = pred_distri.permute(0, 2, 1).contiguous()
+        pred_distance = pred_distance.permute(0, 2, 1).contiguous()
 
         dtype = pred_scores.dtype
         batch_size = pred_scores.shape[0]
@@ -285,9 +336,22 @@ class v8DetectionLoss:
         anchor_points, stride_tensor = make_anchors(feats, self.stride, 0.5)
 
         # Targets
-        targets = torch.cat((batch["batch_idx"].view(-1, 1), batch["cls"].view(-1, 1), batch["bboxes"]), 1)
-        targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
-        gt_labels, gt_bboxes = targets.split((1, 4), 2)  # cls, xyxy
+        if not self.use_dist:
+            targets = torch.cat((batch["batch_idx"].view(-1, 1), batch["cls"].view(-1, 1), batch["bboxes"]), 1)
+            targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
+            gt_labels, gt_bboxes = targets.split((1, 4), 2)  # cls, xyxy
+        else:
+            targets = torch.cat(
+                (
+                    batch["batch_idx"].view(-1, 1),
+                    batch["cls"].view(-1, 1),
+                    batch["bboxes"],
+                    batch["distances"].view(-1, 1),
+                ),
+                1,
+            )
+            targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
+            gt_labels, gt_bboxes, gt_distances = targets.split((1, 4, 1), 2)  # cls, xyxy, dist
         mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0.0)
 
         # Pboxes
@@ -295,7 +359,7 @@ class v8DetectionLoss:
         # dfl_conf = pred_distri.view(batch_size, -1, 4, self.reg_max).detach().softmax(-1)
         # dfl_conf = (dfl_conf.amax(-1).mean(-1) + dfl_conf.amax(-1).amin(-1)) / 2
 
-        _, target_bboxes, target_scores, fg_mask, _ = self.assigner(
+        _, target_bboxes, target_scores, fg_mask, _, target_distance = self.assigner(
             # pred_scores.detach().sigmoid() * 0.8 + dfl_conf.unsqueeze(-1) * 0.2,
             pred_scores.detach().sigmoid(),
             (pred_bboxes.detach() * stride_tensor).type(gt_bboxes.dtype),
@@ -303,6 +367,7 @@ class v8DetectionLoss:
             gt_labels,
             gt_bboxes,
             mask_gt,
+            gt_distances if self.use_dist else None,
         )
 
         target_scores_sum = max(target_scores.sum(), 1)
@@ -324,6 +389,10 @@ class v8DetectionLoss:
                 fg_mask,
                 **kwargs,
             )
+
+        # Distance loss
+        if self.use_dist:
+            loss[4] = self.distance_loss(pred_distance.sigmoid(), target_distance, fg_mask)
 
         # Consistency loss
         if self.hyp.use_fe:
@@ -365,6 +434,7 @@ class v8DetectionLoss:
         loss[1] *= self.hyp.cls  # cls gain
         loss[2] *= self.hyp.dfl  # dfl gain
         loss[3] *= self.hyp.lambda_c  # consistency gain
+        loss[4] *= self.hyp.dist  # distance gain
 
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
 

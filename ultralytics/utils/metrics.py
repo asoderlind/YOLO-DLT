@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 import matplotlib.pyplot as plt
+from scipy.stats import norm
 import numpy as np
 import torch
 
@@ -1406,6 +1407,240 @@ class Metric(SimpleClass):
         ]
 
 
+class DistMetrics(SimpleClass):
+    """
+    Utility class for computing distance metrics for YOLO.
+
+    Attributes:
+        e_A (list): Absolute distance error values.
+        e_R (list): Relative distance error values.
+
+    Methods:
+        mean_results(): Returns [mean_absolute_error, mean_relative_error].
+        update(results): Updates the metrics with a new results tuple.
+        fitness(): Returns a fitness score based on the current error values.
+    """
+
+    def __init__(self) -> None:
+        self.e_A: list[np.ndarray] = []  # list storing absolute distance errors (nc,)
+        self.e_R: list[np.ndarray] = []  # list storing relative distance errors (nc,)
+        self.e_min: list[np.ndarray] = []  # list storing min distance errors (nc,)
+        self.e_mean: list[np.ndarray] = []  # list storing mean distance errors (nc,)
+        self.e_max: list[np.ndarray] = []  # list storing max distance errors (nc,)
+        self.e_std: list[np.ndarray] = []  # list storing std distance errors (nc,)
+
+    @property
+    def mean_absolute_error(self) -> float:
+        """Mean absolute distance error."""
+        return sum(self.e_A) / len(self.e_A) if len(self.e_A) else 0.0
+
+    @property
+    def mean_relative_error(self) -> float:
+        """Mean relative distance error."""
+        return sum(self.e_R) / len(self.e_R) if len(self.e_R) else 0.0
+
+    @property
+    def mean_min_error(self) -> float:
+        """Mean min error."""
+        return sum(self.e_min) / len(self.e_min) if len(self.e_min) else 0.0
+
+    @property
+    def mean_mean_error(self) -> float:
+        """Mean mean error."""
+        return sum(self.e_mean) / len(self.e_mean) if len(self.e_mean) else 0.0
+
+    @property
+    def mean_max_error(self) -> float:
+        """Mean max error."""
+        return sum(self.e_max) / len(self.e_max) if len(self.e_max) else 0.0
+
+    @property
+    def mean_std_error(self) -> float:
+        """Mean std error."""
+        return sum(self.e_std) / len(self.e_std) if len(self.e_std) else 0.0
+
+    def mean_results(self):
+        """Returns [mean_absolute_error, mean_relative_error]."""
+        return [
+            self.mean_absolute_error,
+            self.mean_relative_error,
+            self.mean_min_error,
+            self.mean_mean_error,
+            self.mean_max_error,
+            self.mean_std_error,
+        ]
+
+    def class_result(self, i):
+        """Returns [absolute_error, relative_error, min_error, mean_error, max_error, std_error]."""
+        return self.e_A[i], self.e_R[i], self.e_min[i], self.e_mean[i], self.e_max[i], self.e_std[i]
+
+    def update(self, results):
+        """
+        Updates the distance metrics.
+
+        Args:
+            results (tuple): A tuple containing:
+                - e_A (list): List of absolute distance error values.
+                - e_R (list): List of relative distance error values.
+        """
+        self.e_A, self.e_R, self.e_min, self.e_mean, self.e_max, self.e_std = results
+
+    def fitness(self):
+        """
+        Computes a fitness score based on the distance errors.
+        For example, lower errors yield higher fitness. Adjust the combination as needed.
+
+        Returns:
+            float: A fitness score.
+        """
+        # Here we define fitness such that lower errors yield higher fitness.
+        total_error = self.mean_absolute_error + self.mean_relative_error
+        return 1.0 / (1.0 + total_error)
+
+
+def plot_distance_error_distribution(
+    errors: np.ndarray, mean: np.floating, std: np.floating, class_name: str, save_dir: Path
+):
+    """
+    Plot the distribution of distance errors along with a curve
+    based on the mean and standard deviation and save the figure.
+
+    Args:
+        errors (list): List of distance errors.
+        mean (float): Mean of the distance errors.
+        std (float): Standard deviation of the distance errors.
+        save_path (str): Path to save the plot.
+
+    Returns:
+        None
+    """
+    fig, ax1 = plt.subplots()
+
+    save_path = save_dir / f"distance_error_distribution_{class_name}.png"
+
+    # Plot histogram on left y-axis
+    counts, bins, _ = ax1.hist(errors, bins=50, label=class_name, color="#6C8EBF")
+    ax1.set_xlabel("Distance Error")
+    ax1.set_ylabel("Frequency", color="#6C8EBF")
+    ax1.tick_params(axis="y", labelcolor="#6C8EBF")
+
+    # Plot normal distribution on right y-axis
+    ax2 = ax1.twinx()
+    x = np.linspace(min(errors), max(errors), 1000)
+    p = norm.pdf(x, mean, std)
+    ax2.plot(x, p, "-", label="\u03bc=%.2f, \u03c3=%.2f" % (mean, std), color="#B85450")
+    ax2.set_ylabel("Probability Density", color="#B85450")
+    ax2.tick_params(axis="y", labelcolor="#B85450")
+    ax2.set_ylim(bottom=0)
+
+    # Add legends from both axes
+    lines, labels = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines + lines2, labels + labels2, loc="upper right")
+
+    plt.title("Distance Error Distribution")
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=250)
+    plt.close()
+
+
+def get_distance_errors_per_class(
+    pred2gt_dist: np.ndarray,
+    pred2gt_cls: np.ndarray,
+    pred_dist: np.ndarray,
+    target_cls: np.ndarray,
+    nc: int,
+    max_dist: int = 150,
+    iou_level: int = 0,
+    plot: bool = False,
+    save_dir: Path = Path(),
+    names={},
+) -> tuple[list, list, list, list, list, list]:
+    """
+    Compute the mean absolute and relative distance errors for a set of predictions.
+
+    Args:
+        pred_dist: Predicted distance values.
+        target_dist: Ground truth distance values.
+        target_cls: Ground truth class labels.
+        pred2gt: Mapping of predictions to ground truth indices for a specific IoU level.
+        nc: Number of classes.
+        max_dist: Maximum distance value for normalization.
+        iou_level: IoU level for filtering predictions.
+        plot: Whether to plot the distance error distribution.
+        save_dir: Directory to save the plot.
+
+    Returns:
+        e_A: Mean absolute distance error for each class. (nc,)
+        e_R: Mean relative distance error for each class. (nc,)
+        e_min: Minimum distance error for each class. (nc,)
+        e_mean: Mean distance error for each class. (nc,)
+        e_max: Maximum distance error for each class. (nc,)
+        e_std: Standard deviation of distance errors for each class. (nc,)
+    """
+    unique_classes, _ = np.unique(target_cls, return_counts=True)
+
+    # map predictions to ground truth for a specific IoU level
+    pred2gt_dist_iou = pred2gt_dist[:, iou_level]
+    pred2gt_cls_iou = pred2gt_cls[:, iou_level]
+
+    num_preds = len(pred_dist)
+    dist_gt_cls = np.full((num_preds, 3), -1, dtype=np.float32)  # holding pred_dist, target_dist, target_cls
+    for pred_id, (gt_dist, gt_cls) in enumerate(zip(pred2gt_dist_iou, pred2gt_cls_iou)):
+        if gt_dist > 0:
+            dist_gt_cls[pred_id] = (pred_dist[pred_id], gt_dist, gt_cls)
+
+    e_A = [np.zeros((1, 1)) for _ in range(nc)]
+    e_R = [np.zeros((1, 1)) for _ in range(nc)]
+    e_min = [np.zeros((1, 1)) for _ in range(nc)]
+    e_mean = [np.zeros((1, 1)) for _ in range(nc)]
+    e_max = [np.zeros((1, 1)) for _ in range(nc)]
+    e_std = [np.zeros((1, 1)) for _ in range(nc)]
+    errors_per_class = [np.zeros((1, 1)) for _ in range(nc)]
+
+    # de-normalize the distances
+    dist_gt_cls[:, 0] = dist_gt_cls[:, 0] * max_dist
+    dist_gt_cls[:, 1] = dist_gt_cls[:, 1] * max_dist
+
+    for i in unique_classes:
+        idx = int(i)
+        # Filter out pairs of predictions and ground truth with a certain class
+        pred_gt = dist_gt_cls[dist_gt_cls[:, 2] == idx]
+        if len(pred_gt) > 0:
+            errors_per_class[idx] = pred_gt[:, 0] - pred_gt[:, 1]
+            _errors = pred_gt[:, 0] - pred_gt[:, 1]
+            # Calculate min, mean, and max errors
+            e_min[idx] = np.min(_errors)
+            e_mean[idx] = np.mean(_errors)
+            e_max[idx] = np.max(_errors)
+            e_std[idx] = np.std(_errors)
+            # Calculate mean absolute and relative errors
+            absolute_errors = np.abs(_errors)
+            relative_errors = absolute_errors / np.maximum(pred_gt[:, 1], 1)
+            e_A[idx] = np.mean(absolute_errors)
+            e_R[idx] = np.mean(relative_errors)
+
+    # Class names
+    names = [v for k, v in names.items() if k in unique_classes]  # list: only classes that have data
+    names = dict(enumerate(names))  # to dict
+
+    if plot:
+        flat_errors = [e.ravel() for e in errors_per_class]
+        errors_all_classes = np.concatenate(flat_errors)
+        mean_all_classes = np.mean(errors_all_classes)
+        std_all_classes = np.std(errors_all_classes)
+        class_name = "All"
+        plot_distance_error_distribution(errors_all_classes, mean_all_classes, std_all_classes, class_name, save_dir)
+        for i, e in enumerate(errors_per_class):
+            if len(e) > 0 and i in unique_classes:  # plot only for classes with data
+                mean = np.mean(e)
+                std = np.std(e)
+                class_name = names.get(i, f"Class {i}")
+                plot_distance_error_distribution(e, mean, std, class_name, save_dir)
+
+    return e_A, e_R, e_min, e_mean, e_max, e_std
+
+
 class DetMetrics(SimpleClass):
     """
     Utility class for computing detection metrics such as precision, recall, and mean average precision (mAP) of an
@@ -1438,17 +1673,19 @@ class DetMetrics(SimpleClass):
         curves_results: TODO
     """
 
-    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names={}) -> None:
+    def __init__(self, save_dir=Path("."), plot=False, on_plot=None, names={}, max_dist=150) -> None:
         """Initialize a DetMetrics instance with a save directory, plot flag, callback function, and class names."""
         self.save_dir = save_dir
         self.plot = plot
         self.on_plot = on_plot
         self.names = names
+        self.max_dist = max_dist
         self.box = Metric()
+        self.dist = DistMetrics()
         self.speed = {"preprocess": 0.0, "inference": 0.0, "loss": 0.0, "postprocess": 0.0}
         self.task = "detect"
 
-    def process(self, tp, conf, pred_cls, target_cls):
+    def process(self, tp, conf, pred_cls, target_cls, pred_dist, pred2gt_dist, pred2gt_cls):
         """Process predicted results for object detection and update metrics."""
         results = ap_per_class(
             tp,
@@ -1460,21 +1697,53 @@ class DetMetrics(SimpleClass):
             names=self.names,
             on_plot=self.on_plot,
         )[2:]
-        self.box.nc = len(self.names)
+        nc = len(self.names)
+        self.box.nc = nc
         self.box.update(results)
+        results = get_distance_errors_per_class(
+            pred2gt_dist,
+            pred2gt_cls,
+            pred_dist,
+            target_cls,
+            nc,
+            max_dist=self.max_dist,
+            plot=self.plot,
+            save_dir=self.save_dir,
+            names=self.names,
+        )
+        self.dist.update(results)
 
     @property
     def keys(self):
         """Returns a list of keys for accessing specific metrics."""
-        return ["metrics/precision(B)", "metrics/recall(B)", "metrics/mAP50(B)", "metrics/mAP50-95(B)"]
+        return [
+            "metrics/precision(B)",
+            "metrics/recall(B)",
+            "metrics/mAP50(B)",
+            "metrics/mAP50-95(B)",
+            "metrics/e_A(D)",
+            "metrics/e_R(D)",
+            "metrics/e_min(D)",
+            "metrics/e_mean(D)",
+            "metrics/e_max(D)",
+            "metrics/e_std(D)",
+        ]
 
     def mean_results(self):
-        """Calculate mean of detected objects & return precision, recall, mAP50, and mAP50-95."""
-        return self.box.mean_results()
+        """Calculate mean of detected objects & return precision, recall, mAP50, and mAP50-95, mean absolute and relative distance errors."""
+        return self.box.mean_results() + self.dist.mean_results()
 
     def class_result(self, i):
         """Return the result of evaluating the performance of an object detection model on a specific class."""
-        return self.box.class_result(i)
+        return self.box.class_result(i) + self.dist.class_result(i)
+
+    def distance_results(self):
+        """Returns the mean absolute and relative distance errors."""
+        return self.dist.mean_results()
+
+    def distance_class_result(self, i):
+        """Returns the mean absolute and relative distance errors for a specific class."""
+        return self.dist.class_result(i)
 
     @property
     def maps(self):
