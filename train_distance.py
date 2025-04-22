@@ -44,7 +44,7 @@ def train_with_distance(
 
 
 # Augmentation ablations
-train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=0.05, max_dist=85)
+#train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=0.05, max_dist=85)
 train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=0.00, max_dist=85)
 train_with_distance(data_path="waymo-noConf.yaml", use_dist=False, d=0.00, max_dist=85)
 
