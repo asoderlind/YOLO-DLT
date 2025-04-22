@@ -138,4 +138,5 @@ if __name__ == "__main__":
         epochs=109,
         cosine_lr=True,
         data="waymo-noConf-noDist-vid.yaml",
+        mosaic=0.0,
     )
