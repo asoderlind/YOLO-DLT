@@ -1608,14 +1608,14 @@ def get_distance_errors_per_class(
         pred_gt = dist_gt_cls[dist_gt_cls[:, 2] == idx]
         if len(pred_gt) > 0:
             errors_per_class[idx] = pred_gt[:, 0] - pred_gt[:, 1]
-            errors = pred_gt[:, 0] - pred_gt[:, 1]
+            _errors = pred_gt[:, 0] - pred_gt[:, 1]
             # Calculate min, mean, and max errors
-            e_min[idx] = np.min(errors)
-            e_mean[idx] = np.mean(errors)
-            e_max[idx] = np.max(errors)
-            e_std[idx] = np.std(errors)
+            e_min[idx] = np.min(_errors)
+            e_mean[idx] = np.mean(_errors)
+            e_max[idx] = np.max(_errors)
+            e_std[idx] = np.std(_errors)
             # Calculate mean absolute and relative errors
-            absolute_errors = np.abs(errors)
+            absolute_errors = np.abs(_errors)
             relative_errors = absolute_errors / np.maximum(pred_gt[:, 1], 1)
             e_A[idx] = np.mean(absolute_errors)
             e_R[idx] = np.mean(relative_errors)

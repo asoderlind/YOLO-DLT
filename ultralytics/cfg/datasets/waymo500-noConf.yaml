@@ -15,10 +15,8 @@ val: images/val # val images (relative to 'path') 10000 images
 #test: images/test
 
 names:
-  0: unknown
-  1: vehicle
-  2: pedestrian
-  3: sign
-  4: cyclist
+  0: vehicle
+  1: pedestrian
+  2: cyclist
 # Download script/URL (optional)
 #download: https://files.soderlind.dev/bdd1k.zip

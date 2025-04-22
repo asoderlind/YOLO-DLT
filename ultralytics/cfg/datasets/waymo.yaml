@@ -16,9 +16,7 @@ val: images/val # val images (relative to 'path') 10000 images
 
 # Classes
 nc: 5
-names: 
-  0: unknown
-  1: vehicle
-  2: pedestrian
-  3: sign
-  4: cyclist
+names:
+  0: vehicle
+  1: pedestrian
+  2: cyclist
