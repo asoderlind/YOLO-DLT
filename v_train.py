@@ -136,7 +136,7 @@ if __name__ == "__main__":
         model_load_path="runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt",
         temporal_freeze=True,
         epochs=109,
-        cosine_lr=True,
+        cos_lr=True,
         data="waymo-noConf-noDist-vid.yaml",
         mosaic=0.0,
     )
