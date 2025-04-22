@@ -1384,6 +1384,7 @@ class DistMetrics(SimpleClass):
         self.e_min: list[np.ndarray] = []  # list storing min distance errors (nc,)
         self.e_mean: list[np.ndarray] = []  # list storing mean distance errors (nc,)
         self.e_max: list[np.ndarray] = []  # list storing max distance errors (nc,)
+        self.e_std: list[np.ndarray] = []  # list storing std distance errors (nc,)
 
     @property
     def mean_absolute_error(self) -> float:
@@ -1410,6 +1411,11 @@ class DistMetrics(SimpleClass):
         """Mean max error."""
         return sum(self.e_max) / len(self.e_max) if len(self.e_max) else 0.0
 
+    @property
+    def mean_std_error(self) -> float:
+        """Mean std error."""
+        return sum(self.e_std) / len(self.e_std) if len(self.e_std) else 0.0
+
     def mean_results(self):
         """Returns [mean_absolute_error, mean_relative_error]."""
         return [
@@ -1418,11 +1424,12 @@ class DistMetrics(SimpleClass):
             self.mean_min_error,
             self.mean_mean_error,
             self.mean_max_error,
+            self.mean_std_error,
         ]
 
     def class_result(self, i):
-        """Returns [absolute_error, relative_error] for a specific class."""
-        return self.e_A[i], self.e_R[i], self.e_min[i], self.e_mean[i], self.e_max[i]
+        """Returns [absolute_error, relative_error, min_error, mean_error, max_error, std_error]."""
+        return self.e_A[i], self.e_R[i], self.e_min[i], self.e_mean[i], self.e_max[i], self.e_std[i]
 
     def update(self, results):
         """
@@ -1433,7 +1440,7 @@ class DistMetrics(SimpleClass):
                 - e_A (list): List of absolute distance error values.
                 - e_R (list): List of relative distance error values.
         """
-        self.e_A, self.e_R, self.e_min, self.e_mean, self.e_max = results
+        self.e_A, self.e_R, self.e_min, self.e_mean, self.e_max, self.e_std = results
 
     def fitness(self):
         """
@@ -1448,8 +1455,50 @@ class DistMetrics(SimpleClass):
         return 1.0 / (1.0 + total_error)
 
 
-def plot_distance_error_distribution():
-    pass
+def plot_distance_error_distribution(
+    errors: np.ndarray, mean: np.floating, std: np.floating, class_name: str, save_dir: Path
+):
+    """
+    Plot the distribution of distance errors along with a curve
+    based on the mean and standard deviation and save the figure.
+
+    Args:
+        errors (list): List of distance errors.
+        mean (float): Mean of the distance errors.
+        std (float): Standard deviation of the distance errors.
+        save_path (str): Path to save the plot.
+
+    Returns:
+        None
+    """
+    fig, ax1 = plt.subplots()
+
+    save_path = save_dir / f"distance_error_distribution_{class_name}.png"
+
+    # Plot histogram on left y-axis
+    counts, bins, _ = ax1.hist(errors, bins=50, label=class_name, color="#6C8EBF")
+    ax1.set_xlabel("Distance Error")
+    ax1.set_ylabel("Frequency", color="#6C8EBF")
+    ax1.tick_params(axis="y", labelcolor="#6C8EBF")
+
+    # Plot normal distribution on right y-axis
+    ax2 = ax1.twinx()
+    x = np.linspace(min(errors), max(errors), 1000)
+    p = norm.pdf(x, mean, std)
+    ax2.plot(x, p, "-", label="\u03bc=%.2f, \u03c3=%.2f" % (mean, std), color="#B85450")
+    ax2.set_ylabel("Probability Density", color="#B85450")
+    ax2.tick_params(axis="y", labelcolor="#B85450")
+    ax2.set_ylim(bottom=0)
+
+    # Add legends from both axes
+    lines, labels = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines + lines2, labels + labels2, loc="upper right")
+
+    plt.title("Distance Error Distribution")
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=250)
+    plt.close()
 
 
 def get_distance_errors_per_class(
@@ -1462,7 +1511,8 @@ def get_distance_errors_per_class(
     iou_level: int = 0,
     plot: bool = False,
     save_dir: Path = Path(),
-) -> tuple[list, list, list, list, list]:
+    names={},
+) -> tuple[list, list, list, list, list, list]:
     """
     Compute the mean absolute and relative distance errors for a set of predictions.
 
@@ -1480,6 +1530,10 @@ def get_distance_errors_per_class(
     Returns:
         e_A: Mean absolute distance error for each class. (nc,)
         e_R: Mean relative distance error for each class. (nc,)
+        e_min: Minimum distance error for each class. (nc,)
+        e_mean: Mean distance error for each class. (nc,)
+        e_max: Maximum distance error for each class. (nc,)
+        e_std: Standard deviation of distance errors for each class. (nc,)
     """
     unique_classes, _ = np.unique(target_cls, return_counts=True)
 
@@ -1523,40 +1577,25 @@ def get_distance_errors_per_class(
             e_A[idx] = np.mean(absolute_errors)
             e_R[idx] = np.mean(relative_errors)
 
+    # Class names
+    names = [v for k, v in names.items() if k in unique_classes]  # list: only classes that have data
+    names = dict(enumerate(names))  # to dict
+
     if plot:
         flat_errors = [e.ravel() for e in errors_per_class]
         errors_all_classes = np.concatenate(flat_errors)
         mean_all_classes = np.mean(errors_all_classes)
         std_all_classes = np.std(errors_all_classes)
+        class_name = "All"
+        plot_distance_error_distribution(errors_all_classes, mean_all_classes, std_all_classes, class_name, save_dir)
+        for i, e in enumerate(errors_per_class):
+            if len(e) > 0 and i in unique_classes:  # plot only for classes with data
+                mean = np.mean(e)
+                std = np.std(e)
+                class_name = names.get(i, f"Class {i}")
+                plot_distance_error_distribution(e, mean, std, class_name, save_dir)
 
-        fig, ax1 = plt.subplots()
-
-        # Plot histogram on left y-axis
-        counts, bins, _ = ax1.hist(errors_all_classes, bins=50, alpha=0.5, label="All Classes", color="tab:blue")
-        ax1.set_xlabel("Distance Error")
-        ax1.set_ylabel("Frequency", color="tab:blue")
-        ax1.tick_params(axis="y", labelcolor="tab:blue")
-
-        # Plot normal distribution on right y-axis
-        ax2 = ax1.twinx()
-        x = np.linspace(min(errors_all_classes), max(errors_all_classes), 1000)
-        p = norm.pdf(x, mean_all_classes, std_all_classes)
-        ax2.plot(x, p, "r-", label="Normal Distribution")
-        ax2.set_ylabel("Probability Density", color="tab:red")
-        ax2.tick_params(axis="y", labelcolor="tab:red")
-        ax2.set_ylim(bottom=0)
-
-        # Add legends from both axes
-        lines, labels = ax1.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax1.legend(lines + lines2, labels + labels2, loc="upper right")
-
-        plt.title("Distance Error Distribution")
-        plt.tight_layout()
-        plt.savefig(save_dir / "distance_error_distribution.png")
-        plt.close()
-
-    return e_A, e_R, e_min, e_mean, e_max
+    return e_A, e_R, e_min, e_mean, e_max, e_std
 
 
 class DetMetrics(SimpleClass):
@@ -1627,6 +1666,7 @@ class DetMetrics(SimpleClass):
             max_dist=self.max_dist,
             plot=self.plot,
             save_dir=self.save_dir,
+            names=self.names,
         )
         self.dist.update(results)
 
@@ -1643,6 +1683,7 @@ class DetMetrics(SimpleClass):
             "metrics/e_min(D)",
             "metrics/e_mean(D)",
             "metrics/e_max(D)",
+            "metrics/e_std(D)",
         ]
 
     def mean_results(self):
