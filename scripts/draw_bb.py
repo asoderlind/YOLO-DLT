@@ -3,7 +3,7 @@ import glob
 import os
 import PIL
 import argparse
-from utils import draw_yolo_bboxes
+from notebooks.utils import draw_yolo_bboxes
 
 path = "../../yolo-testing/datasets/"
 
