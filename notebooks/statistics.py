@@ -15,6 +15,7 @@ def get_statistics(dataset_path, image_formats=["jpg", "jpeg", "png", "JPG", "JP
         "bg_training": -1,
         "bg_validation": -1,
         "num_classes": -1,
+        "num_of_each_class": {},
     }
     training_images = []
     for image_format in image_formats:
@@ -59,11 +60,32 @@ def get_statistics(dataset_path, image_formats=["jpg", "jpeg", "png", "JPG", "JP
     if len(training_images) == 0:
         raise Exception("No training images found")
 
+    ######
+    # Count the number of ocurrences of each class
+    ######
+
+    num_of_each_class = {}
+
     for label in training_labels:
-        # Count the number of classes
         with open(label, "r") as f:
             for line in f:
                 class_id = line.split()[0]
+                if class_id not in num_of_each_class:
+                    num_of_each_class[class_id] = 1
+                else:
+                    num_of_each_class[class_id] += 1
+                if int(class_id) > statistics["num_classes"]:
+                    statistics["num_classes"] = int(class_id)
+
+    for label in validation_labels:
+        # Count the number of each class
+        with open(label, "r") as f:
+            for line in f:
+                class_id = line.split()[0]
+                if class_id not in num_of_each_class:
+                    num_of_each_class[class_id] = 1
+                else:
+                    num_of_each_class[class_id] += 1
                 if int(class_id) > statistics["num_classes"]:
                     statistics["num_classes"] = int(class_id)
 
@@ -78,6 +100,7 @@ def get_statistics(dataset_path, image_formats=["jpg", "jpeg", "png", "JPG", "JP
     statistics["bg_training"] = total_empty_training_labels
     statistics["bg_validation"] = total_empty_validation_labels
     statistics["bg_test"] = total_empty_test_labels
+    statistics["num_of_each_class"] = num_of_each_class
     if "Australia" in dataset_path or "China" in dataset_path:
         statistics["num_classes"] += 0
     else:
