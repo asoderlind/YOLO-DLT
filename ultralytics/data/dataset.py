@@ -319,13 +319,13 @@ class TemporalYOLODataset(YOLODataset):
         # Split over '/' to get the filename, then split over '_' to get the video and frame IDs
         parts = path.split("/")[-1].split("_")
         if len(parts) < 3:
-            raise ValueError(f"Invalid image filename: {path}, expected format: `vidx_framey_image_z`")
-        vid_str = parts[0]  # vidx
-        frame_str = parts[1]  # framey
+            raise ValueError(f"Invalid image filename: {path}, expected format: `vid_x_frame_y_image_z`")
+        vid_str = parts[1]  # vid_x
+        frame_str = parts[3]  # frame_y
 
         # Extract video and frame IDs
-        vid_id = int(vid_str[3:])  # remove 'vid' prefix
-        frame_id = int(frame_str[5:])
+        vid_id = int(vid_str)
+        frame_id = int(frame_str)
         return vid_id, frame_id
 
     def get_valid_index(self, index: int) -> int:
