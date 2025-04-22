@@ -142,12 +142,12 @@ grid_adamw = {
 def run_grid_search():
     # Phase 1: Quick Exploration
     configurations = [
-        # SGD configurations
-        {"optimizer": "SGD", "freeze": 10, "epochs": 50, "lr0": 0.005, "lrf": 0.01},
-        {"optimizer": "SGD", "freeze": 22, "epochs": 50, "lr0": 0.01, "lrf": 0.01},
-        {"optimizer": "SGD", "freeze": 0, "epochs": 50, "lr0": 0.001, "lrf": 0.01},
+        # # SGD configurations
+        # {"optimizer": "SGD", "freeze": 10, "epochs": 50, "lr0": 0.005, "lrf": 0.01},
+        # {"optimizer": "SGD", "freeze": 22, "epochs": 50, "lr0": 0.01, "lrf": 0.01},
+        # {"optimizer": "SGD", "freeze": 0, "epochs": 50, "lr0": 0.001, "lrf": 0.01},
         # AdamW configurations
-        {"optimizer": "AdamW", "freeze": 10, "epochs": 50, "lr0": 0.0005, "lrf": 0.01},
+        # {"optimizer": "AdamW", "freeze": 10, "epochs": 50, "lr0": 0.0005, "lrf": 0.01},
         {"optimizer": "AdamW", "freeze": 22, "epochs": 50, "lr0": 0.001, "lrf": 0.01},
         {"optimizer": "AdamW", "freeze": 0, "epochs": 50, "lr0": 0.0001, "lrf": 0.01},
     ]
@@ -418,16 +418,4 @@ if __name__ == "__main__":
     #     name="bdd100k_night-yolo11n-biformer",
     #     model="runs/detect/bdd100k_night-yolo11n-biformer/weights/last.pt",
     #     resume=True,
-    # )
-
-    # train_model(
-    #     name="carla_yolo-yolo11n-spdconv",
-    #     model="runs/detect/carla_yolo-yolo11n-spdconv/weights/last.pt",
-    #     resume=True,
-    #     data="carla-yolo.yaml",
-    # )
-    # train_model(
-    #     name="carla_yolo-yolo11n",
-    #     model="yolo11n.yaml",
-    #     data="carla-yolo.yaml",
     # )
