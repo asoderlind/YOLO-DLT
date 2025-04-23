@@ -2040,10 +2040,14 @@ class FeatureSelectionModule(nn.Module):
         device = raw_preds.device
 
         # Initialize tensors
-        selected_cls_features = torch.zeros(batch_size, self.target_count, vid_features.shape[-1], device=device)
-        selected_reg_features = torch.zeros(batch_size, self.target_count, reg_features.shape[-1], device=device)
-        selected_boxes = torch.zeros(batch_size, self.target_count, 4, device=device)
-        selected_scores = torch.zeros(batch_size, self.target_count, device=device)
+        selected_cls_features = torch.zeros(
+            batch_size, self.target_count, vid_features.shape[-1], device=device, dtype=raw_preds.dtype
+        )
+        selected_reg_features = torch.zeros(
+            batch_size, self.target_count, reg_features.shape[-1], device=device, dtype=raw_preds.dtype
+        )
+        selected_boxes = torch.zeros(batch_size, self.target_count, 4, device=device, dtype=raw_preds.dtype)
+        selected_scores = torch.zeros(batch_size, self.target_count, device=device, dtype=raw_preds.dtype)
         selected_indices = torch.zeros(batch_size, self.target_count, dtype=torch.long, device=device)
 
         # Process each batch
