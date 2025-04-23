@@ -137,6 +137,7 @@ if __name__ == "__main__":
         temporal_freeze=True,
         epochs=109,
         cos_lr=True,
-        data="waymo-noConf-noDist-vid.yaml",
+        data="waymo16.yaml",
         mosaic=0.0,
+        batch=4,
     )
