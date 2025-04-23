@@ -256,6 +256,7 @@ class BaseTrainer:
         self.set_model_attributes()
 
         if self.args.temporal_freeze:
+            breakpoint()
             assert not self.args.freeze, "Cannot use temporal freeze with regular freeze"
             self.args.freeze = len(self.model.model) - 2  # freeze all but last layer
             self.model.model[-1].freeze_base_detector()
