@@ -2144,7 +2144,9 @@ class FeatureSelectionModule(nn.Module):
         selected_boxes = torch.zeros(batch_size, self.topk_post, 4, device=device)
         selected_scores = torch.zeros(batch_size, self.topk_post, device=device)
         selected_indices = torch.zeros(batch_size, self.topk_post, dtype=torch.long, device=device)
-
+        if not self.training and batch_size > 1:
+            breakpoint()
+        # Process each batch
         for b in range(batch_size):
             boxes = predictions[b, :, :4]
             scores = predictions[b, :, 4:]
@@ -2202,6 +2204,9 @@ class FeatureSelectionModule(nn.Module):
             selected_boxes[b] = boxes[final_indices]
             selected_scores[b] = max_scores[final_indices]
             selected_indices[b] = final_indices
+
+            if not self.training and batch_size > 1:
+                breakpoint()
 
         return (
             selected_cls_features,  # [batch_size, topk_post, cls_ch]

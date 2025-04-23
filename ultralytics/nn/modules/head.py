@@ -297,8 +297,6 @@ class TemporalDetect(Detect):
         # selected_scores: [batch_size, topk_post]
         # selected_indices: [batch_size, topk_post]
 
-        if not self.training and x[0].shape[0] > 0:
-            breakpoint()  # debugger
         selected_cls_feats, selected_reg_feats, selected_boxes, selected_scores, selected_indices = self.fsm(
             raw_predictions, flat_vid_features, flat_reg_features
         )
