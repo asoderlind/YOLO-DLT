@@ -128,19 +128,19 @@ def train_model_v(
 
 # Example usage
 if __name__ == "__main__":
-    train_model_v(
-        name="waymo-yolo11nv-4tw-1s",
-        model="runs/detect/waymo-yolo11nv-4tw-1s6/weights/last.pt",
-        resume=True,
-        temporal_window=4,
-        temporal_stride=1,
-        model_load_path="",
-        temporal_freeze=True,
-        epochs=109,
-        cos_lr=True,
-        data="waymo-noConf-noDist-vid.yaml",
-        mosaic=0.0,
-    )
+    # train_model_v(
+    #     name="waymo-yolo11nv-4tw-1s",
+    #     model="runs/detect/waymo-yolo11nv-4tw-1s6/weights/last.pt",
+    #     resume=True,
+    #     temporal_window=4,
+    #     temporal_stride=1,
+    #     model_load_path="",
+    #     temporal_freeze=True,
+    #     epochs=109,
+    #     cos_lr=True,
+    #     data="waymo-noConf-noDist-vid.yaml",
+    #     mosaic=0.0,
+    # )
 
     train_model_v(
         name="waymo-yolo11nv-4tw-1s-0.0005lr0",
@@ -154,6 +154,7 @@ if __name__ == "__main__":
         data="waymo-noConf-noDist-vid.yaml",
         mosaic=0.0,
         lr0=0.0005,
+        batch=4,
         workers=2,
     )
 
