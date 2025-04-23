@@ -1,77 +1,63 @@
 from ultralytics import YOLO
-import torch
-
-
-# Defaults
-DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu"
-KITTI_CLASSES = [0, 1, 2, 3, 4, 5, 6, 7]
-EPOCHS = 100
-OPTIMIZER = "SGD"
+from train_conf import DEVICE, KITTI_CLASSES, OPTIMIZER, MOMENTUM, BATCH, IOU_TYPE, LR0, WARMUP_BIAS_LR
 
 
 def train_with_distance(
     model_path: str = "yolo11n.pt",
     data_path: str = "kitti.yaml",
-    d: float = 0.05,
+    dist: float = 0.05,
     use_dist: bool = True,
     scale: float = 0.0,
     mosaic: float = 1.0,
-    device: str = DEVICE,
     **kwargs,
 ):
     classes = kwargs.get("classes", [])
     class_string = "".join([str(c) for c in classes])
 
+    epochs = 100
+
     model = YOLO(model_path)
-    name = f"{data_path}-{model_path}-{EPOCHS}e-{OPTIMIZER}-{'dist' if use_dist else 'noDist'}-scale{scale}-mosaic{mosaic}-c{class_string}-d{d}_"
+    name = f"{data_path}-{model_path}-{epochs}e-{OPTIMIZER}-{'dist' if use_dist else 'noDist'}-scale{scale}-mosaic{mosaic}-c{class_string}-d{dist}_"
 
     model.train(
-        pretrained=True,
-        data=data_path,
-        epochs=EPOCHS,
-        device=device,
-        optimizer=OPTIMIZER,
-        batch=16,
-        momentum=0.9,
-        lr0=0.01,
-        warmup_bias_lr=0.0,
         name=name,
-        iou_type="ciou",
+        data=data_path,
+        pretrained=True,
+        use_dist=use_dist,
+        dist=dist,
         mosaic=mosaic,
         scale=scale,
-        use_dist=use_dist,
-        dist=d,
+        epochs=epochs,
+        device=DEVICE,
+        batch=BATCH,
+        momentum=MOMENTUM,
+        lr0=LR0,
+        iou_type=IOU_TYPE,
+        warmup_bias_lr=WARMUP_BIAS_LR,
+        optimizer=OPTIMIZER,
         **kwargs,
     )
 
 
-# Augmentation ablations
-"""
-train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=0.05, max_dist=85)
-train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=0.00, max_dist=85)
-train_with_distance(data_path="waymo-noConf.yaml", use_dist=False, d=0.00, max_dist=85)
-"""
+#########
+# KITTI #
+#########
 
 train_with_distance(
     data_path="kitti.yaml",
     use_dist=True,
-    d=0.01,
+    dist=0.01,
     classes=KITTI_CLASSES,
 )
 train_with_distance(
     data_path="kitti.yaml",
     use_dist=True,
-    d=0.10,
+    dist=0.10,
     classes=KITTI_CLASSES,
 )
 
+# finetune only the distance head on pretrained models
 """
-train_with_distance(data_path="carla.yaml", max_dist=100, use_dist=True, d=0.0, classes=[0, 1, 2, 3, 4, 5])
-train_with_distance(data_path="carla.yaml", max_dist=100, use_dist=True, d=0.01, classes=[0, 1, 2, 3, 4, 5])
-train_with_distance(data_path="carla.yaml", max_dist=100, use_dist=True, d=0.04, classes=[0, 1, 2, 3, 4, 5])
-train_with_distance(data_path="carla.yaml", max_dist=100, use_dist=True, d=0.06, classes=[0, 1, 2, 3, 4, 5])
-train_with_distance(data_path="carla.yaml", max_dist=100, use_dist=True, d=0.10, classes=[0, 1, 2, 3, 4, 5])
-
 train_with_distance(
     data_path="kitti.yaml",
     model_path="runs/detect/kitti.yaml-yolo11n.pt-100e-SGD-noDist-scale0.0-mosaic1.0-noDontCare-d0_/weights/best.pt",
@@ -96,4 +82,29 @@ train_with_distance(
     classes=KITTI_CLASSES,
     freeze=23,
 )
+"""
+
+#########
+# WAYMO #
+#########
+
+"""
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=0.05, max_dist=85)
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=0.00, max_dist=85)
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=False, d=0.00, max_dist=85)
+"""
+
+#########
+# CARLA #
+#########
+
+"""
+train_with_distance(data_path="carla-town06-night.yaml", max_dist=100, use_dist=True, dist=0.05)
+train_with_distance(data_path="carla-town06-night.yaml", max_dist=100, use_dist=True, dist=0.00)
+
+train_with_distance(data_path="carla-town06-sunset.yaml", max_dist=100, use_dist=True, dist=0.05)
+train_with_distance(data_path="carla-town06-sunset.yaml", max_dist=100, use_dist=True, dist=0.00)
+
+train_with_distance(data_path="carla-town06-day.yaml", max_dist=100, use_dist=True, dist=0.05)
+train_with_distance(data_path="carla-town06-day.yaml", max_dist=100, use_dist=True, dist=0.00)
 """
