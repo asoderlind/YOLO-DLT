@@ -256,7 +256,6 @@ class BaseTrainer:
         self.set_model_attributes()
 
         if self.args.temporal_freeze:
-            breakpoint()
             if self.args.freeze and not self.args.resume:
                 # freeze is active and it's not because of resume
                 raise ValueError("You cannot use freeze with temporal_freeze. Use temporal_freeze only.")
