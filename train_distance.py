@@ -19,9 +19,11 @@ def train_with_distance(
     device: str = DEVICE,
     **kwargs,
 ):
+    classes = kwargs.get("classes", [])
+    class_string = "".join([str(c) for c in classes])
+
     model = YOLO(model_path)
-    name = f"{data_path}-{model_path}-{EPOCHS}e-{OPTIMIZER}-{'dist' if use_dist else 'noDist'}-scale{scale}-mosaic{mosaic}-noDontCare-d{d}_"
-    name = name.replace("/", "-")
+    name = f"{data_path}-{model_path}-{EPOCHS}e-{OPTIMIZER}-{'dist' if use_dist else 'noDist'}-scale{scale}-mosaic{mosaic}-c{class_string}-d{d}_"
 
     model.train(
         pretrained=True,
@@ -44,9 +46,24 @@ def train_with_distance(
 
 
 # Augmentation ablations
+"""
 train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=0.05, max_dist=85)
 train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=0.00, max_dist=85)
 train_with_distance(data_path="waymo-noConf.yaml", use_dist=False, d=0.00, max_dist=85)
+"""
+
+train_with_distance(
+    data_path="kitti.yaml",
+    use_dist=True,
+    d=0.01,
+    classes=KITTI_CLASSES,
+)
+train_with_distance(
+    data_path="kitti.yaml",
+    use_dist=True,
+    d=0.10,
+    classes=KITTI_CLASSES,
+)
 
 """
 train_with_distance(data_path="carla.yaml", max_dist=100, use_dist=True, d=0.0, classes=[0, 1, 2, 3, 4, 5])
