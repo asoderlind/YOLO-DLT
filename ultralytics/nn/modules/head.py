@@ -266,6 +266,9 @@ class TemporalDetect(Detect):
         before_nms_vid_feats: list[torch.Tensor] = []
         before_nms_reg_feats: list[torch.Tensor] = []
 
+        if not self.training and x[0].shape[0] > 0:
+            breakpoint()  # debugger
+
         for i in range(self.nl):
             reg_feat = self.vid_reg[i](x[i]) if self.vid_reg else self.cv2[i](x[i])
             vid_cls_feat = self.vid_cls[i](x[i]) if self.vid_cls else self.cv3[i](x[i])
