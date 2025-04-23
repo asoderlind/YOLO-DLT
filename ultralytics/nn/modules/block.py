@@ -1717,8 +1717,8 @@ class TemporalAttention(nn.Module):
 
         # PART 1: PREPARATION - Create Q, K, V matrices
         # Transform features to query, key, value representations
-        if B > 1:
-            breakpoint()  # Debugging point
+        if not self.training:
+            breakpoint()
         qkv_cls = (
             self.qkv_cls(x_cls).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         )  # [3, B, num_heads, N, C // num_heads]
