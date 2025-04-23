@@ -294,6 +294,7 @@ class BaseModel(torch.nn.Module):
             for key in list(csd.keys()):
                 if key not in TEMPORAL_MAPPING:
                     continue
+                LOGGER.info(f"Transferring {key} to {TEMPORAL_MAPPING[key]}")
                 csd[TEMPORAL_MAPPING[key]] = csd.pop(key)
         csd = intersect_dicts(csd, self.state_dict())  # intersect
         self.load_state_dict(csd, strict=False)  # load
