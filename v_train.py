@@ -130,13 +130,44 @@ def train_model_v(
 if __name__ == "__main__":
     train_model_v(
         name="waymo-yolo11nv-4tw-1s",
-        model="dlt-models/yolo11n-temporal.yaml",
+        model="runs/detect/waymo-yolo11nv-4tw-1s6/weights/last.pt",
+        resume=True,
         temporal_window=4,
         temporal_stride=1,
-        model_load_path="runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt",
+        model_load_path="",
         temporal_freeze=True,
         epochs=109,
         cos_lr=True,
         data="waymo-noConf-noDist-vid.yaml",
         mosaic=0.0,
+    )
+
+    train_model_v(
+        name="waymo-yolo11nv-4tw-1s-0.0005lr0",
+        model="dlt-models/yolo11n-temporal.yaml",
+        temporal_window=4,
+        temporal_stride=1,
+        model_load_path="runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt",
+        temporal_freeze=True,
+        epochs=15,
+        cos_lr=True,
+        data="waymo-noConf-noDist-vid.yaml",
+        mosaic=0.0,
+        lr0=0.0005,
+        workers=2,
+    )
+
+    train_model_v(
+        name="waymo-yolo11nv-4tw-1s-0.0005lr0",
+        model="dlt-models/yolo11n-temporal.yaml",
+        temporal_window=4,
+        temporal_stride=1,
+        model_load_path="runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt",
+        temporal_freeze=True,
+        epochs=15,
+        cos_lr=True,
+        data="waymo-noConf-noDist-vid.yaml",
+        mosaic=0.0,
+        lr0=0.0005,
+        workers=2,
     )
