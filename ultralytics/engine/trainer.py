@@ -278,6 +278,9 @@ class BaseTrainer:
                 LOGGER.info(f"Freezing layer '{k}'")
                 v.requires_grad = False
             elif not v.requires_grad and v.dtype.is_floating_point:  # only floating point Tensor can require gradients
+                if self.args.temporal_freeze and "cv2" in k or "cv3" in k:
+                    # if temporal_freeze is active, cv2 and cv3 layers are frozen
+                    continue
                 LOGGER.info(
                     f"WARNING ⚠️ setting 'requires_grad=True' for frozen layer '{k}'. "
                     "See ultralytics.engine.trainer for customization of frozen layers."
