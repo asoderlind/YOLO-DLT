@@ -21,7 +21,7 @@ def eval_distance(model_path, data_path, use_dist, **kwargs):
 
 if __name__ == "__main__":
     eval_distance(
-        "runs/detect/kitti.yaml-yolo11n.pt-100e-SGD-dist-scale0.5-mosaic1.0-noDontCare-d0_/weights/best.pt",
+        "runs/detect/kitti.yaml-yolo11n.pt-100e-SGD-dist-scale0.0-mosaic1.0-noDontCare-d0.05_/weights/best.pt",
         "kitti.yaml",
         True,
         classes=KITTI_CLASSES,

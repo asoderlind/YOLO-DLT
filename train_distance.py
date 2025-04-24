@@ -56,6 +56,15 @@ train_with_distance(
     classes=KITTI_CLASSES,
 )
 
+# Test with a slightly larger model
+train_with_distance(
+    model_path="yolo11s.pt",
+    data_path="kitti.yaml",
+    use_dist=True,
+    dist=0.05,
+    classes=KITTI_CLASSES,
+)
+
 # finetune only the distance head on pretrained models
 """
 train_with_distance(
@@ -88,8 +97,9 @@ train_with_distance(
 # WAYMO #
 #########
 
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=False, d=0.00, scale=0.5, max_dist=85)
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=1.00, max_dist=85)
 """
-train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=0.05, max_dist=85)
 train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=0.00, max_dist=85)
 train_with_distance(data_path="waymo-noConf.yaml", use_dist=False, d=0.00, max_dist=85)
 """

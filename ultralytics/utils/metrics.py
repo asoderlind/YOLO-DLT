@@ -1520,7 +1520,7 @@ def plot_distance_error_distribution(
 
     # Plot histogram on left y-axis
     counts, bins, _ = ax1.hist(errors, bins=50, label=class_name, color="#6C8EBF")
-    ax1.set_xlabel("Distance Error")
+    ax1.set_xlabel("Distance Error (m)")
     ax1.set_ylabel("Frequency", color="#6C8EBF")
     ax1.tick_params(axis="y", labelcolor="#6C8EBF")
 
