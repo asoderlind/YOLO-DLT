@@ -10,13 +10,19 @@ model.info(verbose=True)
 model2.info(verbose=True)
 
 # compare the two state dicts
+# Define color codes
+RED = "\033[91m"
+YELLOW = "\033[93m"
+GREEN = "\033[92m"
+RESET = "\033[0m"
+
 for k in d1.keys():
     if k not in d2:
-        print(f"{k} not in d2")
+        print(f"{RED}[MISSING] {k} not in d2{RESET}")
     else:
         if d1[k].shape != d2[k].shape:
-            print(f"{k} shape mismatch: {d1[k].shape} vs {d2[k].shape}")
+            print(f"{YELLOW}[MISMATCH] {k} shape: {d1[k].shape} vs {d2[k].shape}{RESET}")
         else:
-            print(f"{k} shape match: {d1[k].shape}")
+            print(f"{GREEN}[MATCH] {k} shape: {d1[k].shape}{RESET}")
 
 # model.train(data="waymo16.yaml", device="cuda", batch=1, temporal_freeze=True, epochs=1)
