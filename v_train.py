@@ -154,8 +154,8 @@ if __name__ == "__main__":
         data="waymo-noConf-noDist-vid.yaml",
         mosaic=0.0,
         lr0=0.0005,
-        batch=4,
-        workers=2,
+        batch=1,
+        workers=8,
     )
 
     train_model_v(
