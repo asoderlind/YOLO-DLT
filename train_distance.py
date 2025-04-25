@@ -43,6 +43,7 @@ def train_with_distance(
 # KITTI #
 #########
 
+"""
 train_with_distance(
     data_path="kitti.yaml",
     use_dist=True,
@@ -64,6 +65,7 @@ train_with_distance(
     dist=0.05,
     classes=KITTI_CLASSES,
 )
+"""
 
 # finetune only the distance head on pretrained models
 """
@@ -97,12 +99,25 @@ train_with_distance(
 # WAYMO #
 #########
 
-train_with_distance(data_path="waymo-noConf.yaml", use_dist=False, d=0.00, scale=0.5, max_dist=85)
-train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=1.00, max_dist=85)
 """
+#train_with_distance(data_path="waymo-noConf.yaml", use_dist=False, dist=0.00, scale=0.5, max_dist=85)
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, dist=0.01, max_dist=85)
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, dist=0.05, max_dist=85)
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, dist=0.10, max_dist=85)
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, dist=0.50, max_dist=85)
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, dist=1.00, max_dist=85)
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, dist=2.00, max_dist=85)
 train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=0.00, max_dist=85)
 train_with_distance(data_path="waymo-noConf.yaml", use_dist=False, d=0.00, max_dist=85)
 """
+# Curriculum learning
+train_with_distance(
+        data_path="waymo-noConf.yaml",
+        model_path="./runs/detect/waymo-noConf.yaml-yolo11n.pt-100e-SGD-noDist-scale0.5-mosaic1.0-c-d0.0_/weights/best.pt",
+        use_dist=True,
+        d=2.00,
+        max_dist=85,
+        freeze=23)
 
 #########
 # CARLA #
