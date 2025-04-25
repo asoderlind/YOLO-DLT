@@ -419,3 +419,13 @@ if __name__ == "__main__":
     #     model="runs/detect/bdd100k_night-yolo11n-biformer/weights/last.pt",
     #     resume=True,
     # )
+
+    train_model(
+        name="bdd100k_night-yolo11n-bic-afr-reduced-channel-repc3k2",
+        model="runs/detect/bdd100k_night-yolo11n-bic-afr-reduced-channel-repc3k2.yaml",
+    )
+
+    train_model(
+        name="bdd100k_night-yolo11n-bic-reduced-channel-repc3k2-sppfcsp",
+        model="dlt-models/yolo11n-bic-reduced-channel-repc3k2-sppfcsp.yaml",
+    )
