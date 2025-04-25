@@ -31,37 +31,37 @@ if __name__ == "__main__":
     """
     eval_distance(
         "runs/detect/waymo-noConf.yaml-yolo11n.pt-100e-SGD-dist-scale0.0-mosaic1.0-c-d0.05_/weights/best.pt",
-        "waymo128-noConf.yaml",
+        "waymo-noConf.yaml",
         True,
         max_dist=85,
     )
     eval_distance(
         "runs/detect/waymo-noConf.yaml-yolo11n.pt-100e-SGD-dist-scale0.0-mosaic1.0-c-d0.1_/weights/best.pt",
-        "waymo128-noConf.yaml",
+        "waymo-noConf.yaml",
         True,
         max_dist=85,
     )
     eval_distance(
         "runs/detect/waymo-noConf.yaml-yolo11n.pt-100e-SGD-dist-scale0.0-mosaic1.0-c-d0.5_/weights/best.pt",
-        "waymo128-noConf.yaml",
+        "waymo-noConf.yaml",
         True,
         max_dist=85,
     )
     eval_distance(
         "runs/detect/waymo-noConf.yaml-yolo11n.pt-100e-SGD-dist-scale0.0-mosaic1.0-c-d1.0_/weights/best.pt",
-        "waymo128-noConf.yaml",
+        "waymo-noConf.yaml",
         True,
         max_dist=85,
     )
     eval_distance(
         "runs/detect/waymo-noConf.yaml-yolo11n.pt-100e-SGD-dist-scale0.0-mosaic1.0-c-d2.0_/weights/best.pt",
-        "waymo128-noConf.yaml",
+        "waymo-noConf.yaml",
         True,
         max_dist=85,
     )
     eval_distance(
         "runs/detect/waymo-noConf.yaml-yolo11n.pt-100e-SGD-dist-scale0.0-mosaic1.0-c-d0.01_/weights/best.pt",
-        "waymo128-noConf.yaml",
+        "waymo-noConf.yaml",
         True,
         max_dist=85,
     )
