@@ -1,6 +1,106 @@
 import cv2
 import matplotlib.pyplot as plt
 
+import numpy as np
+
+
+def xywh2xyxy(x_center, y_center, w_box, h_box, width, height):
+    """
+    Convert YOLO format (x_center, y_center, w_box, h_box) to (x1, y1, x2, y2)
+    """
+    x1 = int((x_center - w_box / 2) * width)
+    y1 = int((y_center - h_box / 2) * height)
+    x2 = int((x_center + w_box / 2) * width)
+    y2 = int((y_center + h_box / 2) * height)
+
+    # Clamp the coordinates to be within the image dimensions
+    x1 = max(0, min(width - 1, x1))
+    y1 = max(0, min(height - 1, y1))
+    x2 = max(0, min(width - 1, x2))
+    y2 = max(0, min(height - 1, y2))
+
+    return x1, y1, x2, y2
+
+
+def xyxy2xywh(x1, y1, x2, y2, width, height):
+    """
+    Convert (x1, y1, x2, y2) to YOLO format (x_center, y_center, w_box, h_box)
+    """
+    x_center = (x1 + x2) / 2 / width
+    y_center = (y1 + y2) / 2 / height
+    w_box = (x2 - x1) / width
+    h_box = (y2 - y1) / height
+
+    return x_center, y_center, w_box, h_box
+
+
+def filter_occluded_boxes(label_file: str, img_height: int, img_width: int, occlusion_threshold: float = 0.5):
+    # Make annotations array
+    with open(label_file, "r") as f:
+        lines = f.readlines()
+
+    num_lines = len(lines)
+    annotations = np.zeros((num_lines, 6), dtype=np.float32)
+
+    for i, line in enumerate(lines):
+        # Split the line into components
+        components = line.strip().split()
+        # Extract the bounding box coordinates
+        cls, x_center, y_center, w_box, h_box, dist = map(float, components[:6])
+
+        # Convert to (x1, y1, x2, y2) format
+        x1, y1, x2, y2 = xywh2xyxy(x_center, y_center, w_box, h_box, img_width, img_height)
+
+        # Append the bounding box to the list
+        annotations[i, 0] = cls
+        annotations[i, 1] = x1
+        annotations[i, 2] = y1
+        annotations[i, 3] = x2
+        annotations[i, 4] = y2
+        annotations[i, 5] = dist
+
+    # Sort the annotations by distance, largest to smallest
+    annotations = annotations[np.argsort(annotations[:, 5])[::-1]]
+
+    # Create a mock image with the same height and width as the image
+    # and a channel for classification
+    mock_image = np.zeros((img_height, img_width), dtype=np.int8)
+    mock_image.fill(-1)
+
+    total_area_per_annotation = np.zeros(num_lines, dtype=np.float32)
+    visible_area_per_annotation = np.zeros(num_lines, dtype=np.float32)
+
+    # Iterate over each annotation
+    for i in range(num_lines):
+        # Get the coordinates of the bounding box
+        x1, y1, x2, y2 = annotations[i, 1:5].astype(int)
+
+        # Calculate the area of the bounding box
+        total_area = (x2 - x1) * (y2 - y1)
+        total_area_per_annotation[i] = total_area
+
+        # Add the mask to the mock image
+        mock_image[y1:y2, x1:x2] = i
+
+    for i in range(num_lines):
+        # Compare the total area with the visible area
+        visible_area = np.sum(mock_image == i)
+        visible_area_per_annotation[i] = visible_area
+
+    visibility_ratio_per_annotation = visible_area_per_annotation / total_area_per_annotation
+
+    # Remove annotations with ratio less than the occlusion threshold
+    valid_indices = np.where(visibility_ratio_per_annotation >= occlusion_threshold)[0]
+    annotations = annotations[valid_indices]
+
+    # Convert the annotations back to YOLO format
+    for i in range(len(annotations)):
+        x1, y1, x2, y2 = annotations[i, 1:5].astype(int)
+        x_center, y_center, w_box, h_box = xyxy2xywh(x1, y1, x2, y2, img_width, img_height)
+        annotations[i, 1:5] = [x_center, y_center, w_box, h_box]
+
+    return annotations
+
 
 def draw_yolo_bboxes(
     image_path: str,
