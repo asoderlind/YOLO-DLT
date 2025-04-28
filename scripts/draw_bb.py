@@ -68,7 +68,7 @@ def get_id2cls(dataset: str):
     return id2cls
 
 
-def main(dataset: str, img_name: str | None = None):
+def main(dataset: str, img_name=None, train_set="train"):
     # switch statement
     if dataset == "kitti-yolo":
         dataset_path = os.path.join(path, "kitti-yolo")
@@ -85,7 +85,7 @@ def main(dataset: str, img_name: str | None = None):
         classes = [0, 1, 2]
         id2cls = get_id2cls(dataset)
         max_dist = 85.0
-    elif dataset == "carla-yolo" or dataset == "carla-town06-yolo-v3":
+    elif "carla" in dataset:
         dataset_path = os.path.join(path, dataset)
         classes = [0, 1, 2, 3, 4, 5]
         id2cls = get_id2cls(dataset)
@@ -94,7 +94,7 @@ def main(dataset: str, img_name: str | None = None):
         raise ValueError(f"Dataset {dataset} not supported")
 
     # Example usage
-    all_imgs_path = f"{dataset_path}/images/train"
+    all_imgs_path = f"{dataset_path}/images/{train_set}"
     print(f"Path: {all_imgs_path}")
 
     all_imgs = glob.glob(f"{all_imgs_path}/*")
@@ -116,7 +116,7 @@ def main(dataset: str, img_name: str | None = None):
     image_name = (
         os.path.basename(img_path).replace(".jpg", "").replace(".png", "").replace(".jpeg", "").replace(".JPEG", "")
     )
-    label_path = f"{dataset_path}/labels/train/{image_name}.txt"
+    label_path = f"{dataset_path}/labels/{train_set}/{image_name}.txt"
 
     print(img_path, label_path)
 
@@ -134,7 +134,6 @@ if __name__ == "__main__":
         "dataset",
         type=str,
         default="kitti-yolo",
-        choices=["kitti-yolo", "bdd100k_night", "waymo-noConf", "carla-yolo", "carla-town06-yolo-v3"],
         help="Dataset to use",
     )
     parser.add_argument(
@@ -142,5 +141,11 @@ if __name__ == "__main__":
         type=str,
         help="Name of the image to use",
     )
+    parser.add_argument(
+        "--train-set",
+        type=str,
+        default="train",
+        help="Train set to use",
+    )
     args = parser.parse_args()
-    main(args.dataset, img_name=args.img)
+    main(args.dataset, img_name=args.img, train_set=args.train_set)
