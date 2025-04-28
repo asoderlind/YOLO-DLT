@@ -109,7 +109,6 @@ train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, dist=1.00, max
 train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, dist=2.00, max_dist=85)
 train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, d=0.00, max_dist=85)
 train_with_distance(data_path="waymo-noConf.yaml", use_dist=False, d=0.00, max_dist=85)
-"""
 # Curriculum learning
 train_with_distance(
         data_path="waymo-noConf.yaml",
@@ -119,17 +118,16 @@ train_with_distance(
         max_dist=85,
         freeze=23)
 
+"""
 #########
 # CARLA #
 #########
 
-"""
 train_with_distance(data_path="carla-town06-night.yaml", max_dist=100, use_dist=True, dist=0.05)
-train_with_distance(data_path="carla-town06-night.yaml", max_dist=100, use_dist=True, dist=0.00)
+train_with_distance(data_path="carla-town06-night.yaml", max_dist=100, use_dist=False, dist=0.00)
 
 train_with_distance(data_path="carla-town06-sunset.yaml", max_dist=100, use_dist=True, dist=0.05)
-train_with_distance(data_path="carla-town06-sunset.yaml", max_dist=100, use_dist=True, dist=0.00)
+train_with_distance(data_path="carla-town06-sunset.yaml", max_dist=100, use_dist=False, dist=0.00)
 
 train_with_distance(data_path="carla-town06-day.yaml", max_dist=100, use_dist=True, dist=0.05)
-train_with_distance(data_path="carla-town06-day.yaml", max_dist=100, use_dist=True, dist=0.00)
-"""
+train_with_distance(data_path="carla-town06-day.yaml", max_dist=100, use_dist=False, dist=0.00)

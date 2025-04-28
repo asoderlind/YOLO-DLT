@@ -148,8 +148,8 @@ def run_grid_search():
         # {"optimizer": "SGD", "freeze": 0, "epochs": 50, "lr0": 0.001, "lrf": 0.01},
         # AdamW configurations
         # {"optimizer": "AdamW", "freeze": 10, "epochs": 50, "lr0": 0.0005, "lrf": 0.01},
-        {"optimizer": "AdamW", "freeze": 22, "epochs": 50, "lr0": 0.001, "lrf": 0.01},
-        {"optimizer": "AdamW", "freeze": 0, "epochs": 50, "lr0": 0.0001, "lrf": 0.01},
+        # {"optimizer": "AdamW", "freeze": 22, "epochs": 50, "lr0": 0.001, "lrf": 0.01},
+        # {"optimizer": "AdamW", "freeze": 0, "epochs": 50, "lr0": 0.0001, "lrf": 0.01},
     ]
 
     results = []
@@ -422,7 +422,7 @@ if __name__ == "__main__":
 
     train_model(
         name="bdd100k_night-yolo11n-bic-afr-reduced-channel-repc3k2",
-        model="runs/detect/bdd100k_night-yolo11n-bic-afr-reduced-channel-repc3k2.yaml",
+        model="dlt-models/yolo11n-bic-afr-reduced-channel-repc3k2.yaml",
     )
 
     train_model(
