@@ -1,5 +1,5 @@
 from ultralytics import YOLO
-from train_conf import DEVICE, KITTI_CLASSES, OPTIMIZER, MOMENTUM, BATCH, IOU_TYPE, LR0, WARMUP_BIAS_LR
+from train_conf import DEVICE, KITTI_CLASSES, OPTIMIZER, MOMENTUM, BATCH, IOU_TYPE, LR0, WARMUP_BIAS_LR, PRETRAINED
 
 
 def train_with_distance(
@@ -9,20 +9,20 @@ def train_with_distance(
     use_dist: bool = True,
     scale: float = 0.0,
     mosaic: float = 1.0,
+    epochs: int = 100,
     **kwargs,
-):
+) -> str:
     classes = kwargs.get("classes", [])
     class_string = "".join([str(c) for c in classes])
 
-    epochs = 100
-
     model = YOLO(model_path)
-    name = f"{data_path}-{model_path}-{epochs}e-{OPTIMIZER}-{'dist' if use_dist else 'noDist'}-scale{scale}-mosaic{mosaic}-c{class_string}-d{dist}_"
+    name = f"{data_path}-{model_path}-{epochs}e-noPre-{OPTIMIZER}-{'dist' if use_dist else 'noDist'}-scale{scale}-mosaic{mosaic}-c{class_string}-d{dist}_"
+    name = name.replace('/', '-')
 
     model.train(
         name=name,
         data=data_path,
-        pretrained=True,
+        pretrained=PRETRAINED,
         use_dist=use_dist,
         dist=dist,
         mosaic=mosaic,
@@ -37,6 +37,7 @@ def train_with_distance(
         optimizer=OPTIMIZER,
         **kwargs,
     )
+    return name
 
 
 #########
@@ -56,13 +57,27 @@ train_with_distance(
     dist=0.10,
     classes=KITTI_CLASSES,
 )
-
 # Test with a slightly larger model
 train_with_distance(
     model_path="yolo11s.pt",
     data_path="kitti.yaml",
+    use_dist=False,
+    dist=0.0,
+    classes=KITTI_CLASSES,
+    scale=0.5
+)
+train_with_distance(
+    model_path="yolo11s.pt",
+    data_path="kitti.yaml",
     use_dist=True,
-    dist=0.05,
+    dist=0.0,
+    classes=KITTI_CLASSES,
+)
+train_with_distance(
+    model_path="yolo11s.pt",
+    data_path="kitti.yaml",
+    use_dist=True,
+    dist=0.25,
     classes=KITTI_CLASSES,
 )
 """
@@ -99,9 +114,24 @@ train_with_distance(
 # WAYMO #
 #########
 
-"""
-#train_with_distance(data_path="waymo-noConf.yaml", use_dist=False, dist=0.00, scale=0.5, max_dist=85)
+#train_with_distance(model_path="dlt-models/yolo11n-SPDConv-3.yaml", data_path="waymo-noConf.yaml", use_dist=False, dist=0.00, scale=0.5, max_dist=85)
+#train_with_distance(model_path="dlt-models/yolo11n-SPDConv-3.yaml", data_path="waymo-noConf.yaml", use_dist=True, dist=0.05, max_dist=85)
+
+#train_with_distance(model_path="dlt-models/yolo11n-bic-reduced-channel-repc3k2.yaml", data_path="waymo-noConf.yaml", use_dist=False, dist=0.00, scale=0.5, max_dist=85)
+#train_with_distance(model_path="dlt-models/yolo11n-bic-reduced-channel-repc3k2.yaml", data_path="waymo-noConf.yaml", use_dist=True, dist=0.05, max_dist=85)
+
+train_with_distance(model_path="dlt-models/yolo11n-bic-reduced-channel.yaml", data_path="waymo-noConf.yaml", use_dist=False, dist=0.00, scale=0.5, max_dist=85)
+train_with_distance(model_path="dlt-models/yolo11n-bic-reduced-channel.yaml", data_path="waymo-noConf.yaml", use_dist=True, dist=0.05, max_dist=85)
+
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=False, scale=0.5, dist=0.00, max_dist=85)
 train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, dist=0.01, max_dist=85)
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, dist=0.05, max_dist=85)
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, dist=0.10, max_dist=85)
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, dist=0.5, max_dist=85)
+train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, dist=1.0, max_dist=85)
+
+
+"""
 train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, dist=0.05, max_dist=85)
 train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, dist=0.10, max_dist=85)
 train_with_distance(data_path="waymo-noConf.yaml", use_dist=True, dist=0.50, max_dist=85)
@@ -123,11 +153,21 @@ train_with_distance(
 # CARLA #
 #########
 
+"""
 train_with_distance(data_path="carla-town06-night.yaml", max_dist=100, use_dist=True, dist=0.05)
 train_with_distance(data_path="carla-town06-night.yaml", max_dist=100, use_dist=False, dist=0.00)
 
 train_with_distance(data_path="carla-town06-sunset.yaml", max_dist=100, use_dist=True, dist=0.05)
 train_with_distance(data_path="carla-town06-sunset.yaml", max_dist=100, use_dist=False, dist=0.00)
+train_with_distance(data_path="carla-town06-night.yaml", max_dist=100, use_dist=True, dist=0.05, epochs=200)
+train_with_distance(data_path="carla-town06-sunset.yaml", max_dist=100, use_dist=True, dist=0.05, epochs=200)
 
-train_with_distance(data_path="carla-town06-day.yaml", max_dist=100, use_dist=True, dist=0.05)
-train_with_distance(data_path="carla-town06-day.yaml", max_dist=100, use_dist=False, dist=0.00)
+#train_with_distance(data_path="carla-town06-day-occ0.25.yaml", max_dist=100, use_dist=True, dist=0.05)
+#train_with_distance(data_path="carla-town06-day-occ0.25.yaml", max_dist=100, use_dist=False, dist=0.00)
+
+train_with_distance(data_path="carla-town06-day-occ0.5.yaml", max_dist=100, use_dist=True, dist=0.05, epochs=200)
+#train_with_distance(data_path="carla-town06-day-occ0.5.yaml", max_dist=100, use_dist=False, dist=0.00)
+
+#train_with_distance(data_path="carla-town06-day-occ0.75.yaml", max_dist=100, use_dist=True, dist=0.05)
+#train_with_distance(data_path="carla-town06-day-occ0.75.yaml", max_dist=100, use_dist=False, dist=0.00)
+"""

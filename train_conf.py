@@ -12,3 +12,4 @@ BATCH = 16
 IOU_TYPE = "ciou"
 LR0 = 0.01
 WARMUP_BIAS_LR = 0.0
+PRETRAINED = False

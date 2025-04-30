@@ -20,26 +20,39 @@ def eval_distance(model_path, data_path, use_dist, **kwargs):
 
 
 if __name__ == "__main__":
+    #########
+    # CARLA #
+    #########
+    """
     eval_distance(
         "runs/detect/carla-town06-night.yaml-yolo11n.pt-100e-SGD-dist-scale0.0-mosaic1.0-c-d0.05_/weights/best.pt",
         "carla-town06-night.yaml",
         True,
         max_dist=100,
     )
-    eval_distance(
-        "runs/detect/carla-town06-night.yaml-yolo11n.pt-100e-SGD-noDist-scale0.0-mosaic1.0-c-d0.0_/weights/best.pt",
-        "carla-town06-night.yaml",
-        False,
-        max_dist=100,
-    )
     """
     eval_distance(
-        "runs/detect/kitti.yaml-yolo11n.pt-100e-SGD-dist-scale0.0-mosaic1.0-noDontCare-d0.01_/weights/best.pt",
+        "runs/detect/carla-town06-night.yaml-yolo11n.pt-200e-SGD-dist-scale0.0-mosaic1.0-c-d0.05_/weights/best.pt",
+        "carla-town06-night.yaml",
+        True,
+        max_dist=100,
+    )
+
+    #########
+    # KITTI #
+    #########
+    eval_distance(
+        "runs/detect/kitti.yaml-yolo11s.pt-100e-SGD-dist-scale0.0-mosaic1.0-c01234567-d1.0_/weights/best.pt",
         "kitti.yaml",
         True,
         classes=KITTI_CLASSES,
         max_dist=150,
     )
+
+    #########
+    # WAYMO #
+    #########
+    """
     eval_distance(
         "runs/detect/waymo-noConf.yaml-yolo11n.pt-100e-SGD-dist-scale0.0-mosaic1.0-c-d0.05_/weights/best.pt",
         "waymo-noConf.yaml",
