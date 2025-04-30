@@ -1,6 +1,17 @@
 import os
 import time
 from datetime import datetime
+from train_conf import (
+    DEVICE,
+    OPTIMIZER,
+    MOMENTUM,
+    BATCH,
+    IOU_TYPE,
+    LR0,
+    WARMUP_BIAS_LR,
+    PRETRAINED,
+    MODEL,
+)
 
 import torch.nn as nn
 
@@ -16,19 +27,19 @@ activations: dict[str, nn.Module] = {
 
 def train_model(
     name="{data}-{model}-{fe}-{augment}-{epochs}e",
-    model="yolo11n.yaml",
+    model=MODEL,
     data="bdd100k_night.yaml",
-    batch=16,
+    batch=BATCH,
     epochs=200,
-    device="cuda",
+    device=DEVICE,
     use_fe=False,
     augment=True,
-    pretrained=False,
-    iou_type="ciou",
-    warmup_bias_lr=0.0,
-    lr0=0.01,
-    optimizer="SGD",
-    momentum=0.9,
+    pretrained=PRETRAINED,
+    iou_type=IOU_TYPE,
+    warmup_bias_lr=WARMUP_BIAS_LR,
+    lr0=LR0,
+    optimizer=OPTIMIZER,
+    momentum=MOMENTUM,
     classes=None,
     **kwargs,
 ):
