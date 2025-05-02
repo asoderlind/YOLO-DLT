@@ -9,5 +9,5 @@ Regular set with distance loss disabled
 """
 model1 = YOLO("dlt-models/yolo11n.yaml")
 model1.train(
-    data="ultralytics/cfg/datasets/bdd100k-cluster.yaml", epochs=1, device=device, use_fe=False, use_dist=False
+    data="ultralytics/cfg/datasets/bdd100k-mini-cluster.yaml", epochs=1, device=device, use_fe=False, use_dist=False
 )
