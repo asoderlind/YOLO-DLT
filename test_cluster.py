@@ -1,6 +1,9 @@
-from ultralytics import YOLO
+from ultralytics import YOLO, settings
 import torch
+import os
 
+# Update a setting
+settings.update({"runs_dir": os.getenv("RUNS_DIR", "runs")})
 
 device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 
