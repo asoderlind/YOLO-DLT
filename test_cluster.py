@@ -3,7 +3,7 @@ import torch
 import os
 
 # Update a setting
-settings.update({"runs_dir": os.getenv("RUNS_DIR", "runs")})
+settings.update({"runs_dir": "/mnt/machine-learning-storage/ML1/ClusterOutput/MLC-499"})
 
 device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
 
