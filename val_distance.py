@@ -30,43 +30,78 @@ if __name__ == "__main__":
         True,
         max_dist=100,
     )
-    """
     eval_distance(
         "runs/detect/carla-town06-night.yaml-yolo11n.pt-200e-SGD-dist-scale0.0-mosaic1.0-c-d0.05_/weights/best.pt",
         "carla-town06-night.yaml",
         True,
         max_dist=100,
     )
+    """
 
     #########
     # KITTI #
     #########
     eval_distance(
-        "runs/detect/kitti.yaml-yolo11s.pt-100e-SGD-dist-scale0.0-mosaic1.0-c01234567-d1.0_/weights/best.pt",
+        "runs/detect/kitti.yaml-dlt-models-yolo11n.yaml-200e-noPre-SGD-noDist-scale0.5-mosaic1.0-c01234567-d0.0_/weights/best.pt",
         "kitti.yaml",
         True,
         classes=KITTI_CLASSES,
         max_dist=150,
     )
+    """
+
+    eval_distance(
+        "runs/detect/kitti.yaml-dlt-models-yolo11n.yaml-200e-noPre-SGD-dist-scale0.0-mosaic1.0-c01234567-d0.01_/weights/best.pt",
+        "kitti.yaml",
+        True,
+        classes=KITTI_CLASSES,
+        max_dist=150,
+    )
+    eval_distance(
+        "runs/detect/kitti.yaml-dlt-models-yolo11n.yaml-200e-noPre-SGD-dist-scale0.0-mosaic1.0-c01234567-d0.05_/weights/best.pt",
+        "kitti.yaml",
+        True,
+        classes=KITTI_CLASSES,
+        max_dist=150,
+    )
+    """
 
     #########
     # WAYMO #
     #########
     """
     eval_distance(
-        "runs/detect/waymo-noConf.yaml-yolo11n.pt-100e-SGD-dist-scale0.0-mosaic1.0-c-d0.05_/weights/best.pt",
+        "runs/detect/waymo-noConf.yaml-dlt-models-yolo11n.yaml-100e-noPre-SGD-noDist-scale0.5-mosaic1.0-c-d0.0_/weights/best.pt",
         "waymo-noConf.yaml",
         True,
         max_dist=85,
     )
     eval_distance(
-        "runs/detect/waymo-noConf.yaml-yolo11n.pt-100e-SGD-dist-scale0.0-mosaic1.0-c-d0.1_/weights/best.pt",
+        "runs/detect/waymo-noConf.yaml-dlt-models-yolo11n-SPDConv-3.yaml-100e-SGD-noDist-scale0.5-mosaic1.0-c-d0.0_/weights/best.pt",
         "waymo-noConf.yaml",
         True,
         max_dist=85,
     )
     eval_distance(
-        "runs/detect/waymo-noConf.yaml-yolo11n.pt-100e-SGD-dist-scale0.0-mosaic1.0-c-d0.5_/weights/best.pt",
+        "runs/detect/waymo-noConf.yaml-runs-detect-carla-town06-all-night.yaml-dlt-models-yolo11n.yaml-100e-noPre-SGD-noDist-scale0.5-mosaic1.0-c-d0.0_-weights-best.pt-100e-noPre-SGD-noDist-scale0.5-mosaic1.0-c-d0.0_/weights/best.pt",
+        "waymo-noConf.yaml",
+        True,
+        max_dist=85,
+    )
+    eval_distance(
+        "runs/detect/waymo-noConf.yaml-dlt-models-yolo11n-bic-reduced-channel.yaml-100e-noPre-SGD-dist-scale0.0-mosaic1.0-c-d0.05_/weights/best.pt",
+        "waymo-noConf.yaml",
+        True,
+        max_dist=85,
+    )
+    eval_distance(
+        "runs/detect/waymo-noConf.yaml-dlt-models-yolo11n.yaml-100e-noPre-SGD-dist-scale0.0-mosaic1.0-c-d0.05_/weights/best.pt",
+        "waymo-noConf.yaml",
+        True,
+        max_dist=85,
+    )
+    eval_distance(
+        "runs/detect/waymo-noConf.yaml-dlt-models-yolo11n.yaml-100e-noPre-SGD-noDist-scale0.5-mosaic1.0-c-d0.0_/weights/best.pt",
         "waymo-noConf.yaml",
         True,
         max_dist=85,
