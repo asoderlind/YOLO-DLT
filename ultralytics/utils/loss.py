@@ -282,14 +282,6 @@ class v8DetectionLoss:
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
         self.distance_loss = DistanceLoss().to(device)
 
-        self.dln = DLN()
-        self.dln = torch.nn.DataParallel(self.dln)
-        self.dln.load_state_dict(
-            torch.load("ultralytics/DLN/DLN_finetune_LOL.pth", map_location=lambda storage, loc: storage)
-        )
-        self.dln.eval()
-        self.dln.to(self.device)
-
     def preprocess(self, targets, batch_size, scale_tensor):
         """Preprocesses the target counts and matches with the input batch size to output a tensor."""
         nl, ne = targets.shape

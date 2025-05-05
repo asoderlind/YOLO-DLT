@@ -11,4 +11,12 @@ device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is
 Regular set with distance loss disabled
 """
 model1 = YOLO("dlt-models/yolo11n.yaml")
-model1.train(data="ultralytics/cfg/datasets/kitti-cluster.yaml", epochs=1, device=device, use_fe=False, use_dist=False)
+model1.train(
+    data="ultralytics/cfg/datasets/kitti-cluster.yaml",
+    epochs=1,
+    pretrained=False,
+    workers=1,
+    device=device,
+    use_fe=False,
+    use_dist=False,
+)
