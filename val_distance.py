@@ -41,6 +41,7 @@ if __name__ == "__main__":
     #########
     # KITTI #
     #########
+    """
     eval_distance(
         "runs/detect/kitti.yaml-dlt-models-yolo11n.yaml-200e-noPre-SGD-noDist-scale0.5-mosaic1.0-c01234567-d0.0_/weights/best.pt",
         "kitti.yaml",
@@ -124,4 +125,3 @@ if __name__ == "__main__":
         True,
         max_dist=85,
     )
-    """

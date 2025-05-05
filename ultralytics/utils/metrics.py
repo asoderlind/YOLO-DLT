@@ -1498,6 +1498,61 @@ class DistMetrics(SimpleClass):
         return 1.0 / (1.0 + total_error)
 
 
+def plot_distance_dependency(gt: np.ndarray, pred: np.ndarray, class_name: str, save_dir: Path):
+    """
+    Plot the distance errors against the distances and save the figure.
+
+    Args:
+        gt (list): Array of ground truth distances.
+        pred (list): Array of predicted distances.
+        class_name (str): Name of the class.
+        save_dir (Path): Directory to save the plot.
+
+    Returns:
+        None
+    """
+    bins = np.arange(0, gt.max() + 5, 5)  # bins: [0, 5, 10, ..., max+5]
+    bin_indices = np.digitize(gt, bins, right=False)
+
+    mean_absolute_errors = []
+    mean_relative_errors = []
+    bin_centers = []
+
+    for i in range(1, len(bins)):
+        in_bin = bin_indices == i
+        if np.any(in_bin):
+            absolute_errors = np.abs(pred[in_bin] - gt[in_bin])
+            relative_errors = absolute_errors / np.maximum(gt[in_bin], 1)
+
+            mean_absolute_errors.append(absolute_errors.mean())
+            mean_relative_errors.append(relative_errors.mean())
+
+            bin_centers.append(bins[i])
+
+    # Plotting
+    fig, ax = plt.subplots(figsize=(6, 2))
+    ax.bar(bin_centers, mean_absolute_errors, width=4, edgecolor="#6C8EBF", color="#DAE8FC", linewidth=1)
+    ax.set_xlabel("Groundtruth distance in meters")
+    ax.set_ylabel(r"$\varepsilon_A$")
+    ax.set_xticks(bin_centers)
+    ax.tick_params(axis="x", labelrotation=90, length=0)
+    ax.grid(axis="y", linestyle="--", alpha=0.5)
+    plt.tight_layout()
+    plt.savefig(save_dir / f"distance_dependency_eA_{class_name}.png", dpi=300)
+    plt.close()
+
+    fig, ax = plt.subplots(figsize=(6, 2))
+    ax.bar(bin_centers, mean_relative_errors, width=4, edgecolor="#B85450", color="#F8CECC", linewidth=1)
+    ax.set_xlabel("Groundtruth distance in meters")
+    ax.set_ylabel(r"$\varepsilon_R$")
+    ax.set_xticks(bin_centers)
+    ax.tick_params(axis="x", labelrotation=90)
+    ax.grid(axis="y", linestyle="--", alpha=0.5)
+    plt.tight_layout()
+    plt.savefig(save_dir / f"distance_dependency_eR_{class_name}.png", dpi=300)
+    plt.close()
+
+
 def plot_distance_error_distribution(
     errors: np.ndarray, mean: np.floating, std: np.floating, class_name: str, save_dir: Path
 ):
@@ -1597,6 +1652,8 @@ def get_distance_errors_per_class(
     e_max = [np.zeros((1, 1)) for _ in range(nc)]
     e_std = [np.zeros((1, 1)) for _ in range(nc)]
     errors_per_class = [np.zeros((1, 1)) for _ in range(nc)]
+    pred_per_class = [np.zeros((1, 1)) for _ in range(nc)]
+    gt_per_class = [np.zeros((1, 1)) for _ in range(nc)]
 
     # de-normalize the distances
     dist_gt_cls[:, 0] = dist_gt_cls[:, 0] * max_dist
@@ -1607,6 +1664,8 @@ def get_distance_errors_per_class(
         # Filter out pairs of predictions and ground truth with a certain class
         pred_gt = dist_gt_cls[dist_gt_cls[:, 2] == idx]
         if len(pred_gt) > 0:
+            pred_per_class[idx] = pred_gt[:, 0]
+            gt_per_class[idx] = pred_gt[:, 1]
             errors_per_class[idx] = pred_gt[:, 0] - pred_gt[:, 1]
             _errors = pred_gt[:, 0] - pred_gt[:, 1]
             # Calculate min, mean, and max errors
@@ -1624,6 +1683,7 @@ def get_distance_errors_per_class(
     names = [v for k, v in names.items() if k in unique_classes]  # list: only classes that have data
     names = dict(enumerate(names))  # to dict
 
+    # Distance error distribution
     if plot:
         flat_errors = [e.ravel() for e in errors_per_class]
         errors_all_classes = np.concatenate(flat_errors)
@@ -1637,6 +1697,13 @@ def get_distance_errors_per_class(
                 std = np.std(e)
                 class_name = names.get(i, f"Class {i}")
                 plot_distance_error_distribution(e, mean, std, class_name, save_dir)
+
+    # e_A, e_R gt distance dependency plot
+    if plot:
+        for i, (pred, gt) in enumerate(zip(pred_per_class, gt_per_class)):
+            if len(pred) > 0 and len(gt) > 0 and i in unique_classes:
+                class_name = names.get(i, f"Class {i}")
+                plot_distance_dependency(pred, gt, class_name, save_dir)
 
     return e_A, e_R, e_min, e_mean, e_max, e_std
 
