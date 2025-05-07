@@ -9,9 +9,9 @@
 #     └── coco128  ← downloads here (7 MB)
 
 # Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
-path: /mnt/machine-learning-storage/ML1/ClusterOutput/MLC-499/Datasets/GENAI-6804_BDD100K/bdd100k-yolo-night # dataset root dir
-train: images/train # train images (relative to 'path') 69863 images
-val: images/val # val images (relative to 'path') 10000 images
+path: /mnt/machine-learning-storage/ML1/ClusterOutput/MLC-499/Datasets/GENAI-6804_BDD100K/bdd100k-night-yolo # dataset root dir
+train: images/train # train images (relative to 'path') 36054 images (only night images from bdd100k train/test sets)
+val: images/val # val images (relative to 'path') 3929 images (only night images from bdd100k val set)
 #test: images/test
 
 # Classes

@@ -1,17 +1,7 @@
 import os
 import time
 from datetime import datetime
-from train_conf import (
-    DEVICE,
-    OPTIMIZER,
-    MOMENTUM,
-    BATCH,
-    IOU_TYPE,
-    LR0,
-    WARMUP_BIAS_LR,
-    PRETRAINED,
-    MODEL,
-)
+from train_conf import DEVICE, OPTIMIZER, MOMENTUM, BATCH, IOU_TYPE, LR0, WARMUP_BIAS_LR, PRETRAINED, MODEL, EPOCHS
 
 import torch.nn as nn
 
@@ -30,7 +20,7 @@ def train_model(
     model=MODEL,
     data="bdd100k_night.yaml",
     batch=BATCH,
-    epochs=200,
+    epochs=EPOCHS,
     device=DEVICE,
     use_fe=False,
     augment=True,
