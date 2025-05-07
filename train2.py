@@ -435,9 +435,58 @@ if __name__ == "__main__":
 
     data = "bdd100k_night_cluster.yaml"
 
+    # spdconv
     train_model(
         name="bdd100k_night_cluster-yolo11n-spdconv",
         model="yolo11n-spdconv.yaml",
         data=data,
         project=CLUSTER_OUTPUT_PATH,
     )
+
+    # # bic
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic",
+    #     model="yolo11n-bic.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
+
+    # # repc3k2
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-repc3k2",
+    #     model="yolo11n-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
+
+    # # spdconv + bic
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-spdconv-bic",
+    #     model="yolo11n-spdconv-bic.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
+
+    # # spdconv + repc3k2
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-spdconv-repc3k2",
+    #     model="yolo11n-spdconv-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
+
+    # # bic + repc3k2
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2",
+    #     model="yolo11n-bic-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
+
+    # # spdconv + bic + repc3k2
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-spdconv-bic-repc3k2",
+    #     model="yolo11n-spdconv-bic-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
