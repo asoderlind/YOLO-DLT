@@ -1,10 +1,22 @@
 import os
 import time
 from datetime import datetime
-from train_conf import DEVICE, OPTIMIZER, MOMENTUM, BATCH, IOU_TYPE, LR0, WARMUP_BIAS_LR, PRETRAINED, MODEL, EPOCHS
 
 import torch.nn as nn
 
+from train_conf import (
+    BATCH,
+    CLUSTER_OUTPUT_PATH,
+    DEVICE,
+    EPOCHS,
+    IOU_TYPE,
+    LR0,
+    MODEL,
+    MOMENTUM,
+    OPTIMIZER,
+    PRETRAINED,
+    WARMUP_BIAS_LR,
+)
 from ultralytics import YOLO
 
 activations: dict[str, nn.Module] = {
@@ -421,12 +433,11 @@ if __name__ == "__main__":
     #     resume=True,
     # )
 
-    train_model(
-        name="bdd100k_night-yolo11n-bic-afr-reduced-channel-repc3k2",
-        model="dlt-models/yolo11n-bic-afr-reduced-channel-repc3k2.yaml",
-    )
+    data = "bdd100k_night_cluster.yaml"
 
     train_model(
-        name="bdd100k_night-yolo11n-bic-reduced-channel-repc3k2-sppfcsp",
-        model="dlt-models/yolo11n-bic-reduced-channel-repc3k2-sppfcsp.yaml",
+        name="bdd100k_night_cluster-yolo11n-spdconv",
+        model="yolo11n-spdconv.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
     )
