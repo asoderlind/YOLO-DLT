@@ -173,7 +173,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--timeofdays",
         type=str,
-        default="",
         help="Time of day to filter train labels",
     )
     args = parser.parse_args()
@@ -189,7 +188,10 @@ if __name__ == "__main__":
     # Create output directory if it doesn't exist
     os.makedirs(args.output_dir, exist_ok=True)
 
-    timeofdays = args.timeofdays.split(",")
+    if args.timeofdays is None:
+        timeofdays = []
+    else:
+        timeofdays = args.timeofdays.split(",")
 
     print(f"Output directory: {args.output_dir}")
     print(f"Images directory: {args.images_dir}")

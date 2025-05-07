@@ -1,20 +1,22 @@
 import os
 import time
 from datetime import datetime
-from train_conf import (
-    DEVICE,
-    OPTIMIZER,
-    MOMENTUM,
-    BATCH,
-    IOU_TYPE,
-    LR0,
-    WARMUP_BIAS_LR,
-    PRETRAINED,
-    MODEL,
-)
 
 import torch.nn as nn
 
+from train_conf import (
+    BATCH,
+    CLUSTER_OUTPUT_PATH,
+    DEVICE,
+    EPOCHS,
+    IOU_TYPE,
+    LR0,
+    MODEL,
+    MOMENTUM,
+    OPTIMIZER,
+    PRETRAINED,
+    WARMUP_BIAS_LR,
+)
 from ultralytics import YOLO
 
 activations: dict[str, nn.Module] = {
@@ -30,7 +32,7 @@ def train_model(
     model=MODEL,
     data="bdd100k_night.yaml",
     batch=BATCH,
-    epochs=200,
+    epochs=EPOCHS,
     device=DEVICE,
     use_fe=False,
     augment=True,
@@ -431,12 +433,60 @@ if __name__ == "__main__":
     #     resume=True,
     # )
 
+    data = "bdd100k_night_cluster.yaml"
+
+    # spdconv
     train_model(
-        name="bdd100k_night-yolo11n-bic-afr-reduced-channel-repc3k2",
-        model="dlt-models/yolo11n-bic-afr-reduced-channel-repc3k2.yaml",
+        name="bdd100k_night_cluster-yolo11n-spdconv",
+        model="yolo11n-spdconv.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
     )
 
-    train_model(
-        name="bdd100k_night-yolo11n-bic-reduced-channel-repc3k2-sppfcsp",
-        model="dlt-models/yolo11n-bic-reduced-channel-repc3k2-sppfcsp.yaml",
-    )
+    # # bic
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic",
+    #     model="yolo11n-bic.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
+
+    # # repc3k2
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-repc3k2",
+    #     model="yolo11n-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
+
+    # # spdconv + bic
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-spdconv-bic",
+    #     model="yolo11n-spdconv-bic.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
+
+    # # spdconv + repc3k2
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-spdconv-repc3k2",
+    #     model="yolo11n-spdconv-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
+
+    # # bic + repc3k2
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2",
+    #     model="yolo11n-bic-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
+
+    # # spdconv + bic + repc3k2
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-spdconv-bic-repc3k2",
+    #     model="yolo11n-spdconv-bic-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
