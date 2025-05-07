@@ -1,47 +1,21 @@
 from ultralytics import YOLO
+from train_conf import (
+        MODEL,DEVICE, OPTIMIZER, MOMENTUM, BATCH, IOU_TYPE, LR0, WARMUP_BIAS_LR, PRETRAINED, EPOCHS
+        )
 
-""" might resume this one later
-# Without fe
-fe = False
-epochs = 200
-lc = 0.0
 
-data = "exDark-yolo.yaml"
-model_name = "dlt-models/yolo11n-SPDConv-3.yaml"
-model = YOLO(model_name)
-
-model.train(
-    data=data,
-    use_fe=fe,
-    epochs=epochs,
-    augment=True,
-    device="cuda",
-    lambda_c=lc,
-    optimizer="auto",
-    name=f"{model_name}-{data}-{'fe-' if fe else ''}-e{epochs}-allLoss-lc{lc}-Auto-aug-preLoad",
-)
-"""
-
-# With training first layer at same time as rest of net
-fe = True
-epochs = 200
-lc = 0.5
-data = "exDark-yolo.yaml"
-model_name = "dlt-models/yolo11n-SPDConv-3.yaml"
-model = YOLO(
-    "runs/detect/dlt-models/yolo11n-SPDConv-3.yaml-exDark-yolo.yaml-fe--e200-allLoss-lc0.5-Auto-aug-preLoad/weights/last.pt"
-)
-model.train(
-    data=data,
-    use_fe=fe,
-    epochs=epochs,
-    resume=True,
-    augment=True,
-    device="cuda",
-    lambda_c=lc,
-    optimizer="auto",
-    name=f"{model_name}-{data}{'-fe-' if fe else '-noFe-'}e{epochs}-allLoss-lc{lc}-Auto-aug-preLoad_",
-)
+def train_fe(model_name=MODEL, data="exDark-yolo.yaml", lc=0.5, fe=True, **kwargs):
+    name = f"{model_name}-{data}{'-fe-' if fe else '-noFe-'}e{epochs}-allLoss-lc{lc}-Auto-aug-preLoad_"
+    model = YOLO(MODEL)
+    model.train(
+        data=data,
+        use_fe=fe,
+        epochs=EPOCHS,
+        device=DEVICE,
+        lambda_c=lc,
+        optimizer=OPTIMIZER,
+        name=name,
+    )
 
 """
 # With training only first layer then freezing
