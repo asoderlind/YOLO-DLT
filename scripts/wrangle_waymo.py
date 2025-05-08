@@ -9,7 +9,7 @@ import dask.dataframe as dd
 import matplotlib.pyplot as plt  # type: ignore
 import numpy as np
 import pandas as pd  # type: ignore
-from gcsfs import GCSFileSystem  # type: ignore
+import tensorflow as tf  # type: ignore
 from tqdm import tqdm  # type: ignore
 
 pd.set_option("display.max_columns", None)
@@ -144,9 +144,10 @@ def read(
         paths = [path]
     else:
         # Read all contexts for this component
-        fs = GCSFileSystem()
-        paths = fs.glob(f"{DATASET_BUCKET}/{split}/{tag}/*.parquet")
-        paths = [f"gs://{path}" for path in paths]
+        # fs = GCSFileSystem()
+        # paths = fs.glob(f"{DATASET_BUCKET}/{split}/{tag}/*.parquet")
+        # paths = [f"gs://{path}" for path in paths]
+        paths = tf.io.gfile.glob(f"{DATASET_BUCKET}/{split}/{tag}/*.parquet")
 
     # Create the Dask DataFrame
     df = dd.read_parquet(
