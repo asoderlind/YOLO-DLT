@@ -175,16 +175,17 @@ def distance_distribution_histogram(dataset_path):
     plt.show()
 
 
-parser = argparse.ArgumentParser(description="Run statistics on dataset")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run statistics on dataset")
 
-parser.add_argument("name", type=str, default="bdd100k_night", help="Name of the dataset to run statistics on")
+    parser.add_argument("name", type=str, default="bdd100k_night", help="Name of the dataset to run statistics on")
 
-args = parser.parse_args()
+    args = parser.parse_args()
 
-stats = get_statistics(f"../../yolo-testing/datasets/{args.name}")
+    stats = get_statistics(f"../../yolo-testing/datasets/{args.name}")
 
-for key, value in stats.items():
-    print(f"{key}: {value}")
+    for key, value in stats.items():
+        print(f"{key}: {value}")
 
-if args.name.lower() in ["kitti-yolo", "carla-night", "waymo-noconf"]:
-    distance_distribution_histogram(f"../../yolo-testing/datasets/{args.name}")
+    if args.name.lower() in ["kitti-yolo", "carla-night", "waymo-noconf"]:
+        distance_distribution_histogram(f"../../yolo-testing/datasets/{args.name}")
