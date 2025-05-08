@@ -112,7 +112,9 @@ def train_model(
     minutes, seconds = divmod(remainder, 60)
     formatted_time = f"{int(hours)}h {int(minutes)}m {seconds:.2f}s"
 
-    output_path = f"runs/detect/{final_name}/"
+    project = kwargs.get("project", "")
+
+    output_path = project if project else f"runs/detect/{final_name}/"
 
     # Create output directory if it doesn't exist
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
