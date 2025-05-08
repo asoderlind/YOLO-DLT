@@ -861,7 +861,6 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--mode",
-        action="mode",
         choices=["train", "val", "both"],
         default="both",
         help="Specify which part of the dataset to process (train, val, or both)",
@@ -925,4 +924,5 @@ if __name__ == "__main__":
         save_checkpoint=args.save_checkpoint,
         load_from_checkpoint=args.load_from_checkpoint,
         dataset_name=args.dataset_name,
+        mode=args.mode,
     )
