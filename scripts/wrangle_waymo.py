@@ -726,6 +726,7 @@ def save_as_yolo_format(
                 # Write YOLO format line with additional data
                 f.write(f"{box_type} {x} {y} {w} {h} {distance}\n")
 
+    print(f"Saved {split} dataset in YOLO format to {output_dir}")
     print("Saved dataset with format: vid_XXX_frame_YYY_image_ZZZ.[jpeg/txt]")
     print(f"  - {len(unique_segments)} videos (padded to {vid_pad} digits)")
     print("  - Variable frames per video (padded based on each video's frame count)")
@@ -850,7 +851,7 @@ def waymo(
             verbose=verbose,
             save_checkpoint=save_checkpoint,
             load_from_checkpoint=load_from_checkpoint,
-            output_dir=Path(dataset_name),
+            output_dir=Path(DEFAULT_DATASET_PATH + dataset_name),
         )
 
 
