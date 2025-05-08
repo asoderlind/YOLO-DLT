@@ -822,6 +822,7 @@ def waymo(
     save_checkpoint: bool = False,
     load_from_checkpoint: bool = False,
     dataset_name: str = "",
+    mode: str = "both",
 ):
     if not dataset_name:
         if include_day_train and include_day_val:
@@ -833,28 +834,39 @@ def waymo(
             dataset_name = "waymo_day_val"
         else:
             dataset_name = "waymo_night"
-    wrangle_data(
-        split="training",
-        include_day=include_day_train,
-        verbose=verbose,
-        save_checkpoint=save_checkpoint,
-        load_from_checkpoint=load_from_checkpoint,
-        output_dir=Path(DEFAULT_DATASET_PATH + dataset_name),
-    )
-    wrangle_data(
-        split="validation",
-        include_day=include_day_val,
-        verbose=verbose,
-        save_checkpoint=save_checkpoint,
-        load_from_checkpoint=load_from_checkpoint,
-        output_dir=Path(dataset_name),
-    )
+    if mode in ["train", "both"]:
+        wrangle_data(
+            split="training",
+            include_day=include_day_train,
+            verbose=verbose,
+            save_checkpoint=save_checkpoint,
+            load_from_checkpoint=load_from_checkpoint,
+            output_dir=Path(DEFAULT_DATASET_PATH + dataset_name),
+        )
+    if mode in ["val", "both"]:
+        wrangle_data(
+            split="validation",
+            include_day=include_day_val,
+            verbose=verbose,
+            save_checkpoint=save_checkpoint,
+            load_from_checkpoint=load_from_checkpoint,
+            output_dir=Path(dataset_name),
+        )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Waymo Open Dataset Wrangling Script")
 
     # Add arguments
+
+    parser.add_argument(
+        "--mode",
+        action="mode",
+        choices=["train", "val", "both"],
+        default="both",
+        help="Specify which part of the dataset to process (train, val, or both)",
+    )
+
     parser.add_argument(
         "--include-day-train",
         action="store_true",
