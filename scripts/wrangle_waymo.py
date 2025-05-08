@@ -21,6 +21,7 @@ DATASET_BUCKET = "gs://waymo_open_dataset_v_2_0_1"
 MAX_DISTANCE = 85.0
 IMAGE_WIDTH = 1920
 IMAGE_HEIGHT = 1280
+DEFAULT_DATASET_PATH = "/mnt/machine-learning-storage/ML1/ClusterOutput/MLC-499/Datasets/GENAI-6807_Waymo/"
 
 
 class Stats(TypedDict):
@@ -838,7 +839,7 @@ def waymo(
         verbose=verbose,
         save_checkpoint=save_checkpoint,
         load_from_checkpoint=load_from_checkpoint,
-        output_dir=Path(dataset_name),
+        output_dir=Path(DEFAULT_DATASET_PATH + dataset_name),
     )
     wrangle_data(
         split="validation",
