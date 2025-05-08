@@ -26,7 +26,7 @@ def train_fe(model_name=MODEL, epochs=EPOCHS, data_path="exDark-yolo.yaml", lc=0
 
 
 # Curriculum on bdd100k with mirnet
-'''
+"""
 first_layer_trained = train_fe(
     data_path="bdd100k_night_mirnet.yaml",
     use_fe=True,
@@ -45,18 +45,11 @@ train_fe(
     val=False,
     freeze=1
 )
-'''
+"""
 
 # Curriculum on bdd100k with DLN
 first_layer_trained = train_fe(
-    data_path="bdd100k_night.yaml",
-    use_fe=True,
-    epochs=10,
-    lc=0.5,
-    box=0.0,
-    cls=0.0,
-    dfl=0.0,
-    val=False
+    data_path="bdd100k_night.yaml", use_fe=True, epochs=10, lc=0.5, box=0.0, cls=0.0, dfl=0.0, val=False
 )
 train_fe(
     model_name=f"runs/detect/{first_layer_trained}/weights/last.pt",
@@ -64,5 +57,52 @@ train_fe(
     use_fe=False,
     lc=0.0,
     val=False,
-    freeze=1
+    freeze=1,
 )
+
+"""
+# All loss on bdd100k with mirnet
+train_fe(
+    data_path="bdd100k_night_mirnet.yaml",
+    use_fe=True,
+    lc=0.5,
+)
+
+# All loss on bdd100k with DLN
+train_fe(
+    data_path="bdd100k_night.yaml",
+    use_fe=True,
+    lc=0.5,
+)
+
+# All loss on exDark with DLN
+for lc in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
+    train_fe(
+        data_path="exDark-yolo.yaml",
+        use_fe=True,
+        lc=lc,
+        epochs=100,
+        val=False,
+    )
+
+# Curriculum on exDark with DLN
+for lc in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
+    first_layer_trained = train_fe(
+        data_path="exDark-yolo.yaml",
+        use_fe=True,
+        lc=lc,
+        epochs=10,
+        box=0.0,
+        cls=0.0,
+        dfl=0.0,
+        val=False,
+    )
+    train_fe(
+        model_name=f"runs/detect/{first_layer_trained}/weights/last.pt",
+        data_path="exDark-yolo.yaml",
+        use_fe=False,
+        lc=0.0,
+        val=False,
+        freeze=1,
+    )
+"""
