@@ -520,8 +520,8 @@ def optimized_associate_distances(
     if projected_matches.empty:
         official_matches["distance"] = official_matches["distance"].replace({np.nan: 0.0}).round(1)
 
-        # Fix any mismatched match_score values - ensure they're 0.0 for distances of -1
-        mask = official_matches["distance"] == -1
+        # Fix any mismatched match_score values - ensure they're 0.0 for distances of 0.0
+        mask = official_matches["distance"] == 0.0
         official_matches.loc[mask, "match_score"] = 0.0
 
         official_matches["match_score"] = official_matches["match_score"].round(2)
@@ -551,9 +551,9 @@ def optimized_associate_distances(
     dist_mask = official_matches["distance"] > MAX_DISTANCE
     official_matches.loc[dist_mask, "distance"] = MAX_DISTANCE
     official_matches["distance"] = official_matches["distance"].divide(MAX_DISTANCE)
-    official_matches["distance"] = official_matches["distance"].replace({np.nan: -1})
-    # Fix any mismatched match_score values - ensure they're 0.0 for distances of -1
-    mask = official_matches["distance"] == -1
+    official_matches["distance"] = official_matches["distance"].replace({np.nan: 0.0})
+    # Fix any mismatched match_score values - ensure they're 0.0 for distances of 0.0
+    mask = official_matches["distance"] == 0.0
     official_matches.loc[mask, "match_score"] = 0.0
     official_matches["distance"] = official_matches["distance"].round(2)
     official_matches["match_score"] = official_matches["match_score"].round(2)
@@ -764,6 +764,12 @@ def wrangle_data(
         projected_lidar_box_df = pd.read_parquet("projected_lidar_box_df_checkpoint.parquet")
         camera_image_df = pd.read_parquet("camera_image_df.parquet")
         print("Loaded dataframes from checkpoint.")
+
+    # drop rows with [CameraBoxComponent].type that is 0 or 3
+    type_mask = camera_box_df["[CameraBoxComponent].type"].isin([0, 3])
+    camera_box_df = camera_box_df[~type_mask]
+    # Remap the types so that 1 -> 0, 2 -> 1, 4 -> 2
+    camera_box_df["[CameraBoxComponent].type"] = camera_box_df["[CameraBoxComponent].type"].replace({1: 0, 2: 1, 4: 2})
 
     print("Starting to associate distances...")
     camera_boxes_with_distance_df = optimized_associate_distances(
