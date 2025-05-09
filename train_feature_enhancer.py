@@ -2,8 +2,9 @@ from ultralytics import YOLO
 from train_conf import MODEL, DEVICE, OPTIMIZER, MOMENTUM, BATCH, IOU_TYPE, LR0, WARMUP_BIAS_LR, PRETRAINED, EPOCHS
 
 
-def train_fe(model_name=MODEL, data_path="exDark-yolo.yaml", lc=0.5, use_fe=True, **kwargs):
-    name = f"{model_name}-{data_path}{'-fe-' if use_fe else '-noFe-'}-lc{lc}_"
+def train_fe(model_name=MODEL, epochs=EPOCHS, data_path="exDark-yolo.yaml", lc=0.5, use_fe=True, **kwargs):
+    name = f"{model_name}-{epochs}e-{data_path}{'-fe-' if use_fe else '-noFe-'}lc{lc}_"
+    name = name.replace("/", "-")
     model = YOLO(MODEL)
     model.train(
         name=name,
@@ -18,81 +19,90 @@ def train_fe(model_name=MODEL, data_path="exDark-yolo.yaml", lc=0.5, use_fe=True
         warmup_bias_lr=WARMUP_BIAS_LR,
         optimizer=OPTIMIZER,
         pretrained=PRETRAINED,
-        epochs=EPOCHS,
+        epochs=epochs,
         **kwargs,
     )
+    return name
 
 
+# Curriculum on bdd100k with mirnet
+"""
+first_layer_trained = train_fe(
+    data_path="bdd100k_night_mirnet.yaml",
+    use_fe=True,
+    epochs=10,
+    lc=0.5,
+    box=0.0,
+    cls=0.0,
+    dfl=0.0,
+    val=False
+)
 train_fe(
+    model_name=f"runs/detect/dlt-models/yolo11n.yaml-10e-bdd100k_night_mirnet.yaml-fe-lc0.5_2/weights/last.pt",
     data_path="bdd100k_night_mirnet.yaml",
     use_fe=False,
     lc=0.0,
+    val=False,
+    freeze=1
+)
+"""
+
+# Curriculum on bdd100k with DLN
+first_layer_trained = train_fe(
+    data_path="bdd100k_night.yaml", use_fe=True, epochs=10, lc=0.5, box=0.0, cls=0.0, dfl=0.0, val=False
+)
+train_fe(
+    model_name=f"runs/detect/{first_layer_trained}/weights/last.pt",
+    data_path="bdd100k_night.yaml",
+    use_fe=False,
+    lc=0.0,
+    val=False,
+    freeze=1,
 )
 
+"""
+# All loss on bdd100k with mirnet
 train_fe(
     data_path="bdd100k_night_mirnet.yaml",
     use_fe=True,
     lc=0.5,
 )
 
+# All loss on bdd100k with DLN
 train_fe(
-    data_path="bdd100k_night_mirnet.yaml",
+    data_path="bdd100k_night.yaml",
     use_fe=True,
-    lc=0.1,
+    lc=0.5,
 )
 
-train_fe(
-    data_path="bdd100k_night_mirnet.yaml",
-    use_fe=True,
-    lc=1.0,
-)
+# All loss on exDark with DLN
+for lc in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
+    train_fe(
+        data_path="exDark-yolo.yaml",
+        use_fe=True,
+        lc=lc,
+        epochs=100,
+        val=False,
+    )
 
-
-"""
-# With training only first layer then freezing
-epochs = 10
-fe = True
-lc = 0.5
-
-model_name = "dlt-models/yolo11n-SPDConv-3.yaml"
-data = "exDark-yolo.yaml"
-
-pathConv1 = f"{model_name}-{data}-conv1-e{epochs}-lc{lc}"
-model = YOLO(model_name)
-model.train(
-    data=data,
-    epochs=10,
-    batch=16,
-    pretrained=True,
-    optimizer="auto",
-    device="cuda",
-    use_fe=fe,
-    val=False,
-    lambda_c=lc,
-    augment=True,
-    box=0.0,
-    cls=0.0,
-    dfl=0.0,
-    name=pathConv1,
-)
-"""
-
-"""
-freezeNum = 1
-epochs = 200
-model = YOLO(f"runs/detect/{pathConv1}/weights/last.pt")
-model.train(
-    data=data,
-    epochs=epochs,
-    pretrained=False,
-    optimizer="auto",
-    device="cuda",
-    use_fe=False,
-    val=True,
-    lambda_c=lc,
-    augment=True,
-    name=f"{pathConv1}-freeze{freezeNum}-e{epochs}_",
-    save_json=True,
-    freeze=freezeNum,
-)
+# Curriculum on exDark with DLN
+for lc in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
+    first_layer_trained = train_fe(
+        data_path="exDark-yolo.yaml",
+        use_fe=True,
+        lc=lc,
+        epochs=10,
+        box=0.0,
+        cls=0.0,
+        dfl=0.0,
+        val=False,
+    )
+    train_fe(
+        model_name=f"runs/detect/{first_layer_trained}/weights/last.pt",
+        data_path="exDark-yolo.yaml",
+        use_fe=False,
+        lc=0.0,
+        val=False,
+        freeze=1,
+    )
 """
