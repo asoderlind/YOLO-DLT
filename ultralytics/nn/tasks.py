@@ -48,6 +48,7 @@ from ultralytics.nn.modules import (
     C3x,
     CARAFEBiC,
     CARAFEConv,
+    CARepC3k2,
     CBFuse,
     CBLinear,
     Classify,
@@ -55,6 +56,7 @@ from ultralytics.nn.modules import (
     Conv,
     Conv2,
     ConvTranspose,
+    CoordinateAttention,
     Detect,
     DWConv,
     DWConvTranspose2d,
@@ -1000,6 +1002,7 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             C3k2,
             RFAC3k2,
             RepC3k2,
+            CARepC3k2,
             RepNCSPELAN4,
             ELAN1,
             ADown,
@@ -1120,7 +1123,15 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             c2 = args[0]
             c1 = ch[f]
             args = [*args[1:]]
-        elif m is GC or m is SE or m is ECA or m is FA or m is BiFormer or m is BottleneckBiFormer:
+        elif (
+            m is GC
+            or m is SE
+            or m is ECA
+            or m is FA
+            or m is BiFormer
+            or m is BottleneckBiFormer
+            or m is CoordinateAttention
+        ):
             c1 = c2 = ch[f]
             args = [c1, *args]
         elif m is SimAM:

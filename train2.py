@@ -198,7 +198,7 @@ def run_grid_search():
 
 
 if __name__ == "__main__":
-    run_grid_search()
+    # run_grid_search()
     ## perform grid test here
     ## we should use:
     #  data="waymo-noConf-noDist-vid.yaml",
@@ -435,15 +435,13 @@ if __name__ == "__main__":
     #     resume=True,
     # )
 
-    data = "bdd100k_night_cluster.yaml"
-
-    # spdconv
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-spdconv",
-        model="yolo11n-spdconv.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-    )
+    # # spdconv
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-spdconv",
+    #     model="yolo11n-SPDConv.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
 
     # # bic
     # train_model(
@@ -492,3 +490,139 @@ if __name__ == "__main__":
     #     data=data,
     #     project=CLUSTER_OUTPUT_PATH,
     # )
+
+    data = "bdd100k_night_cluster.yaml"
+
+    train_model(
+        name="bdd100k_night_cluster-yolo11n",
+        model="dlt-models/yolo11n.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+    )
+
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-fa",
+        model="dlt-models/yolo11n-bic-repc3k2-fa.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+    )
+
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-eca",
+        model="dlt-models/yolo11n-bic-repc3k2-eca.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+    )
+
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-simam",
+        model="dlt-models/yolo11n-bic-repc3k2-simam.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+    )
+
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-se",
+        model="dlt-models/yolo11n-bic-repc3k2-se.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+    )
+
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-hconv",
+        model="dlt-models/yolo11n-bic-repc3k2-hconv.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+    )
+
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-cl",
+        model="dlt-models/yolo11n-bic-repc3k2-cl.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+    )
+
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-ca",
+        model="dlt-models/yolo11n-bic-repc3k2-ca.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+    )
+
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-carepc3k2",
+        model="dlt-models/yolo11n-bic-carepc3k2.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+    )
+
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-eiou",
+        model="dlt-models/yolo11n-bic-repc3k2.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+        iou_type="eiou",
+    )
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-nwd",
+        model="dlt-models/yolo11n-bic-repc3k2.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+        iou_type="nwd",
+    )
+
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-wiou1",
+        model="dlt-models/yolo11n-bic-repc3k2.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+        iou_type="wiou1",
+    )
+
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-wiou2",
+        model="dlt-models/yolo11n-bic-repc3k2.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+        iou_type="wiou2",
+    )
+
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-siou",
+        model="dlt-models/yolo11n-bic-repc3k2.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+        iou_type="siou",
+    )
+
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-ciou+nwd",
+        model="dlt-models/yolo11n-bic-repc3k2.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+        iou_type="ciou+nwd",
+    )
+
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-isiou",
+        model="dlt-models/yolo11n-bic-repc3k2.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+        iou_type="isiou",
+    )
+
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-thiou",
+        model="dlt-models/yolo11n-bic-repc3k2.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+        iou_type="thiou",
+    )
+
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-mpdiou",
+        model="dlt-models/yolo11n-bic-repc3k2.yaml",
+        data=data,
+        project=CLUSTER_OUTPUT_PATH,
+        iou_type="mpdiou",
+    )

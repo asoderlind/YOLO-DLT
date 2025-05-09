@@ -249,6 +249,21 @@ class C2f(nn.Module):
         return self.cv2(torch.cat(y, 1))
 
 
+class CAC2f(C2f):
+    def __init__(self, c1, c2, n=1, shortcut=False, g=1, e=0.5):
+        super().__init__(c1, c2, n, shortcut, g, e)
+        self.ca = CoordinateAttention(channels=(2 + n) * self.c)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass using split() instead of chunk()."""
+        y: torch.Tensor | list[torch.Tensor] = self.cv1(x).split((self.c, self.c), 1)
+        y = [y[0], y[1]]
+        y.extend(m(y[-1]) for m in self.m)
+        y = torch.cat(y, 1)
+        y = self.ca(y)
+        return self.cv2(y)
+
+
 class C3(nn.Module):
     """CSP Bottleneck with 3 convolutions."""
 
@@ -779,6 +794,17 @@ class RepC3k2(C3k2):
 
     def __init__(self, c1, c2, n=1, c3k=False, e=0.5, g=1, shortcut=True):
         super().__init__(c1, c2, n, c3k, e, g, shortcut)
+        self.m = nn.ModuleList(
+            RepC3k(self.c, self.c, 2, shortcut, g) if c3k else RepBottleneck(self.c, self.c, shortcut, g)
+            for _ in range(n)
+        )
+
+
+class CARepC3k2(CAC2f):
+    """RepC3k2 module with RepConv blocks."""
+
+    def __init__(self, c1, c2, n=1, c3k=False, e=0.5, g=1, shortcut=True):
+        super().__init__(c1, c2, n, e, g, shortcut)
         self.m = nn.ModuleList(
             RepC3k(self.c, self.c, 2, shortcut, g) if c3k else RepBottleneck(self.c, self.c, shortcut, g)
             for _ in range(n)
@@ -2264,3 +2290,45 @@ class BottleneckBiFormer(nn.Module):
             x = identity + self.gamma * x
 
         return x
+
+
+class CoordinateAttention(nn.Module):
+    """
+    Coordinate Attention module
+    https://arxiv.org/abs/2103.02907
+    Code adapted from: https://github.com/houqb/CoordAttention/blob/main/coordatt.py
+    """
+
+    def __init__(self, channels: int, reduction=32):
+        super().__init__()
+        self.pool_h = nn.AdaptiveAvgPool2d((None, 1))
+        self.pool_w = nn.AdaptiveAvgPool2d((1, None))
+        c_ = max(8, channels // reduction)
+
+        self.conv1 = Conv(channels, c_, k=1, s=1)
+
+        self.conv_h = nn.Conv2d(c_, channels, kernel_size=1, stride=1, padding=0)
+        self.conv_w = nn.Conv2d(c_, channels, kernel_size=1, stride=1, padding=0)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Coordinate Attention module
+        Args:
+            x (torch.Tensor): Input tensor of shape [batch_size, channels, height, width]
+        Returns:
+            out (torch.Tensor): Output tensor of shape [batch_size, channels, height, width]
+        """
+        identity = x  # (b, c, h, w)
+
+        _, _, h, w = x.size()
+        x_h = self.pool_h(x)  # (b, c, h, 1)
+        x_w = self.pool_w(x).permute(0, 1, 3, 2)  # (b, c, w, 1)
+        y = torch.cat([x_h, x_w], dim=2)  # (b, c, h + w, 1)
+        y = self.conv1(y)  # (b, c_, h + w, 1)
+
+        x_h, x_w = torch.split(y, [h, w], dim=2)  # (b, c_, h, 1), (b, c_, w, 1)
+        x_w = x_w.permute(0, 1, 3, 2)  # (b, c_, 1, w)
+        a_h = self.conv_h(x_h).sigmoid()  # (b, c2, h, 1)
+        a_w = self.conv_w(x_w).sigmoid()  # (b, c2, 1, w)
+        out = identity * a_w * a_h  # (b, c, h, w)
+        return out

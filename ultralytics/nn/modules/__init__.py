@@ -55,9 +55,11 @@ from .block import (
     C3k2,
     C3x,
     CARAFEBiC,
+    CARepC3k2,
     CBFuse,
     CBLinear,
     ContrastiveHead,
+    CoordinateAttention,
     EfficientFEM,
     EnhancedC3k2,
     GhostBottleneck,
@@ -242,4 +244,6 @@ __all__ = (
     "CARAFEBiC",
     "MalleConv",
     "MalleC3k2",
+    "CoordinateAttention",
+    "CARepC3k2",
 )
