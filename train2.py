@@ -500,129 +500,164 @@ if __name__ == "__main__":
         project=CLUSTER_OUTPUT_PATH,
     )
 
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-fa",
-        model="dlt-models/yolo11n-bic-repc3k2-fa.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-    )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-fa",
+    #     model="dlt-models/yolo11n-bic-repc3k2-fa.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
 
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-eca",
-        model="dlt-models/yolo11n-bic-repc3k2-eca.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-    )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-eca",
+    #     model="dlt-models/yolo11n-bic-repc3k2-eca.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
 
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-simam",
-        model="dlt-models/yolo11n-bic-repc3k2-simam.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-    )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-simam",
+    #     model="dlt-models/yolo11n-bic-repc3k2-simam.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
 
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-se",
-        model="dlt-models/yolo11n-bic-repc3k2-se.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-    )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-se",
+    #     model="dlt-models/yolo11n-bic-repc3k2-se.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
 
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-hconv",
-        model="dlt-models/yolo11n-bic-repc3k2-hconv.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-    )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-hconv",
+    #     model="dlt-models/yolo11n-bic-repc3k2-hconv.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
 
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-cl",
-        model="dlt-models/yolo11n-bic-repc3k2-cl.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-    )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-cl",
+    #     model="dlt-models/yolo11n-bic-repc3k2-cl.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
 
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-ca",
-        model="dlt-models/yolo11n-bic-repc3k2-ca.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-    )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-ca",
+    #     model="dlt-models/yolo11n-bic-repc3k2-ca.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
 
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-bic-carepc3k2",
-        model="dlt-models/yolo11n-bic-carepc3k2.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-    )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-carepc3k2",
+    #     model="dlt-models/yolo11n-bic-carepc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
 
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-eiou",
-        model="dlt-models/yolo11n-bic-repc3k2.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-        iou_type="eiou",
-    )
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-nwd",
-        model="dlt-models/yolo11n-bic-repc3k2.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-        iou_type="nwd",
-    )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-eiou",
+    #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     iou_type="eiou",
+    # )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-nwd",
+    #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     iou_type="nwd",
+    # )
 
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-wiou1",
-        model="dlt-models/yolo11n-bic-repc3k2.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-        iou_type="wiou1",
-    )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-wiou1",
+    #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     iou_type="wiou1",
+    # )
 
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-wiou2",
-        model="dlt-models/yolo11n-bic-repc3k2.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-        iou_type="wiou2",
-    )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-wiou2",
+    #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     iou_type="wiou2",
+    # )
 
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-siou",
-        model="dlt-models/yolo11n-bic-repc3k2.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-        iou_type="siou",
-    )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-siou",
+    #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     iou_type="siou",
+    # )
 
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-ciou+nwd",
-        model="dlt-models/yolo11n-bic-repc3k2.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-        iou_type="ciou+nwd",
-    )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-ciou+nwd",
+    #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     iou_type="ciou+nwd",
+    # )
 
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-isiou",
-        model="dlt-models/yolo11n-bic-repc3k2.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-        iou_type="isiou",
-    )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-isiou",
+    #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     iou_type="isiou",
+    # )
 
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-thiou",
-        model="dlt-models/yolo11n-bic-repc3k2.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-        iou_type="thiou",
-    )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-thiou",
+    #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     iou_type="thiou",
+    # )
 
-    train_model(
-        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-mpdiou",
-        model="dlt-models/yolo11n-bic-repc3k2.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-        iou_type="mpdiou",
-    )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-mpdiou",
+    #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     iou_type="mpdiou",
+    # )
+
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-gc",
+    #     model="dlt-models/yolo11n-bic-repc3k2-gc.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
+
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-gc-spdconv",
+    #     model="dlt-models/yolo11n-bic-repc3k2-gc-spdconv.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
+
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-sppfcsp",
+    #     model="dlt-models/yolo11n-bic-repc3k2-sppfcsp.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
+
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-simsppfcsp",
+    #     model="dlt-models/yolo11n-bic-repc3k2-simsppfcsp.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
+
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-simsppf",
+    #     model="dlt-models/yolo11n-bic-repc3k2-simsppf.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )

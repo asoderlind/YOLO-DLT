@@ -1,3 +1,4 @@
+from special_gflops import profile_model_with_dummy_conv
 from ultralytics import YOLO
 
 model_bic_repc3k2 = YOLO("dlt-models/yolo11n-bic-repc3k2.yaml")
@@ -9,6 +10,11 @@ model_bic_repc3k2_hconv = YOLO("dlt-models/yolo11n-bic-repc3k2-hconv.yaml")
 model_bic_repc3k2_cl = YOLO("dlt-models/yolo11n-bic-repc3k2-cl.yaml")
 model_bic_repc3k2_ca = YOLO("dlt-models/yolo11n-bic-repc3k2-ca.yaml")
 model_bic_carepc3k2 = YOLO("dlt-models/yolo11n-bic-carepc3k2.yaml")
+model_bic_repc3k2_gc = YOLO("dlt-models/yolo11n-bic-repc3k2-gc.yaml")
+model_bic_repc3k2_gc_spdconv = YOLO("dlt-models/yolo11n-bic-repc3k2-gc-spdconv.yaml")
+model_bic_repc3k2_sppfcsp = YOLO("dlt-models/yolo11n-bic-repc3k2-sppfcsp.yaml")
+model_bic_repc3k2_simsppfcsp = YOLO("dlt-models/yolo11n-bic-repc3k2-simsppfcsp.yaml")
+model_bic_repc3k2_simsppf = YOLO("dlt-models/yolo11n-bic-repc3k2-simsppf.yaml")
 
 model_bic_repc3k2.info()
 model_bic_repc3k2_fa.info()
@@ -19,6 +25,11 @@ model_bic_repc3k2_hconv.info()
 model_bic_repc3k2_cl.info()
 model_bic_repc3k2_ca.info()
 model_bic_carepc3k2.info()
+profile_model_with_dummy_conv("dlt-models/yolo11n-bic-repc3k2-gc.yaml")
+profile_model_with_dummy_conv("dlt-models/yolo11n-bic-repc3k2-gc-spdconv.yaml")
+model_bic_repc3k2_sppfcsp.info()
+model_bic_repc3k2_simsppfcsp.info()
+model_bic_repc3k2_simsppf.info()
 # model_ghostconv = YOLO("dlt-models/yolo11n-GhostConv.yaml")
 # model_spdconv = YOLO("dlt-models/yolo11n-SPDConv.yaml")
 # model_repconv = YOLO("dlt-models/yolo11n-RepConv.yaml")

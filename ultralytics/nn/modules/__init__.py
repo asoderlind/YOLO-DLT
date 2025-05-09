@@ -83,6 +83,7 @@ from .block import (
     SCDown,
     SimAM,
     SimSPPF,
+    SimSPPFCSP,
     TopkRouting,
     TorchVision,
     Transpose,
@@ -246,4 +247,5 @@ __all__ = (
     "MalleC3k2",
     "CoordinateAttention",
     "CARepC3k2",
+    "SimSPPFCSP",
 )

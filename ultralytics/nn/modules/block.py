@@ -1764,6 +1764,33 @@ class SPPFCSP(nn.Module):
         return y_out
 
 
+class SimSPPFCSP(nn.Module):
+    # CSP https://github.com/WongKinYiu/CrossStagePartialNetworks
+    # Implemented from https://github.com/meituan/YOLOv6/blob/main/yolov6/layers/common.py
+    def __init__(self, c1, c2, k: int = 5, e: float = 0.5):
+        super().__init__()
+        hidden_ch = int(c2 * e)
+        act = nn.ReLU()
+        self.cv1 = Conv(c1, hidden_ch, k=1, s=1, act=act)
+        self.cv2 = Conv(c1, hidden_ch, k=1, s=1, act=act)
+        self.cv3 = Conv(hidden_ch, hidden_ch, k=3, s=1, act=act)
+        self.cv4 = Conv(hidden_ch, hidden_ch, k=1, s=1, act=act)
+
+        self.m = nn.MaxPool2d(kernel_size=k, stride=1, padding=k // 2)
+        self.cv5 = Conv(4 * hidden_ch, hidden_ch, 1, 1, act=act)
+        self.cv6 = Conv(hidden_ch, hidden_ch, 3, 1, act=act)
+        self.cv7 = Conv(2 * hidden_ch, c2, 1, 1, act=act)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y_skip = self.cv2(x)
+        y0: list[torch.Tensor] = [self.cv4(self.cv3(self.cv1(x)))]
+        y0.extend(self.m(y0[-1]) for _ in range(3))
+        y1 = torch.cat(y0, 1)
+        y2: torch.Tensor = self.cv6(self.cv5(y1))
+        y_out = self.cv7(torch.cat((y_skip, y2), dim=1))
+        return y_out
+
+
 class Transpose(nn.Module):
     """Normal Transpose, default for upsampling"""
 
