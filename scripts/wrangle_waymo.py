@@ -21,8 +21,8 @@ DATASET_BUCKET = "gs://waymo_open_dataset_v_2_0_1"
 MAX_DISTANCE = 85.0
 IMAGE_WIDTH = 1920
 IMAGE_HEIGHT = 1280
-# DEFAULT_DATASET_PATH = "/mnt/machine-learning-storage/ML1/ClusterOutput/MLC-499/Datasets/GENAI-6807_Waymo/"
-DEFAULT_DATASET_PATH = "../yolo-testing/datasets/"
+DEFAULT_DATASET_PATH = "/mnt/machine-learning-storage/ML1/ClusterOutput/MLC-499/Datasets/GENAI-6807_Waymo/"
+# DEFAULT_DATASET_PATH = "../yolo-testing/datasets/"
 
 
 class Stats(TypedDict):
