@@ -6,7 +6,6 @@ import torch.nn as nn
 
 from train_conf import (
     BATCH,
-    CLUSTER_OUTPUT_PATH,
     DEVICE,
     EPOCHS,
     IOU_TYPE,
@@ -493,12 +492,12 @@ if __name__ == "__main__":
 
     data = "bdd100k_night_cluster.yaml"
 
-    train_model(
-        name="bdd100k_night_cluster-yolo11n",
-        model="dlt-models/yolo11n.yaml",
-        data=data,
-        project=CLUSTER_OUTPUT_PATH,
-    )
+    # train_model(
+    #     name="bdd100k_night_cluster-yolo11n",
+    #     model="dlt-models/yolo11n.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    # )
 
     # train_model(
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-fa",
@@ -627,19 +626,19 @@ if __name__ == "__main__":
     #     iou_type="mpdiou",
     # )
 
-    # train_model(
-    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-gc",
-    #     model="dlt-models/yolo11n-bic-repc3k2-gc.yaml",
-    #     data=data,
-    #     project=CLUSTER_OUTPUT_PATH,
-    # )
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-gc",
+        model="dlt-models/yolo11n-bic-repc3k2-gc.yaml",
+        # data=data,
+        # project=CLUSTER_OUTPUT_PATH,
+    )
 
-    # train_model(
-    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-gc-spdconv",
-    #     model="dlt-models/yolo11n-bic-repc3k2-gc-spdconv.yaml",
-    #     data=data,
-    #     project=CLUSTER_OUTPUT_PATH,
-    # )
+    train_model(
+        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-gc-spdconv",
+        model="dlt-models/yolo11n-bic-repc3k2-gc-spdconv.yaml",
+        # data=data,
+        # project=CLUSTER_OUTPUT_PATH,
+    )
 
     # train_model(
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-sppfcsp",
