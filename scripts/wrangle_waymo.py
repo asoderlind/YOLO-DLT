@@ -21,7 +21,8 @@ DATASET_BUCKET = "gs://waymo_open_dataset_v_2_0_1"
 MAX_DISTANCE = 85.0
 IMAGE_WIDTH = 1920
 IMAGE_HEIGHT = 1280
-DEFAULT_DATASET_PATH = "/mnt/machine-learning-storage/ML1/ClusterOutput/MLC-499/Datasets/GENAI-6807_Waymo/"
+# DEFAULT_DATASET_PATH = "/mnt/machine-learning-storage/ML1/ClusterOutput/MLC-499/Datasets/GENAI-6807_Waymo/"
+DEFAULT_DATASET_PATH = "../yolo-testing/datasets/"
 
 
 class Stats(TypedDict):
@@ -519,6 +520,11 @@ def optimized_associate_distances(
 
     if projected_matches.empty:
         official_matches["distance"] = official_matches["distance"].replace({np.nan: 0.0}).round(1)
+
+        # Normalize distance to be between 0 and 1
+        dist_mask = official_matches["distance"] > MAX_DISTANCE
+        official_matches.loc[dist_mask, "distance"] = MAX_DISTANCE
+        official_matches["distance"] = official_matches["distance"].divide(MAX_DISTANCE)
 
         # Fix any mismatched match_score values - ensure they're 0.0 for distances of 0.0
         mask = official_matches["distance"] == 0.0
