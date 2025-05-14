@@ -165,15 +165,17 @@ if __name__ == "__main__":
         ##########
 
         # Baseline exDark-yolo
+        '''
         train(
             data_path="exDark-yolo.yaml",
             use_fe=False,
             lambda_c=0.0,
             val=True,
         )
+        '''
 
         # All loss on exDark with DLN
-        for lambda_c in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
+        for lambda_c in [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
             train(
                 data_path="exDark-yolo.yaml",
                 use_fe=True,
