@@ -74,6 +74,7 @@ class BaseDataset(Dataset):
         classes=None,
         fraction=1.0,
         use_fe=False,
+        **kwargs,
     ):
         """Initialize BaseDataset with given configuration and options."""
         super().__init__()

@@ -66,9 +66,9 @@ class TestTemporalDataset:
                 6: 1,
                 7: 1,  # vid1
             }
-            dataset.video_to_frames = defaultdict(list)
-            dataset.video_to_frames[0] = [(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)]
-            dataset.video_to_frames[1] = [(0, 5), (1, 6), (2, 7)]
+            dataset.video_to_index = defaultdict(list)
+            dataset.video_to_index[0] = [(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)]
+            dataset.video_to_index[1] = [(0, 5), (1, 6), (2, 7)]
 
             # Mock __getitem__ to return simpler data for testing
             def mock_getitem(self, index):

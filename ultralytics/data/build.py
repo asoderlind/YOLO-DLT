@@ -1,6 +1,5 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
-import copy
 import os
 import random
 from pathlib import Path
@@ -95,15 +94,6 @@ def seed_worker(worker_id):  # noqa
     random.seed(worker_seed)
 
 
-def temporal_worker_init_fn(worker_id):
-    """Set dataloader worker seed for temporal dataset."""
-    seed_worker(worker_id)
-    worker_info = torch.utils.data.get_worker_info()
-    dataset = worker_info.dataset
-    dataset.video_to_frames = copy.deepcopy(dataset.video_to_frames)
-    dataset.dataset_idx_to_video_id = copy.deepcopy(dataset.dataset_idx_to_video_id)
-
-
 DATASET_TYPE = Literal["default", "multi_modal", "temporal"]
 
 
@@ -139,6 +129,7 @@ def build_yolo_dataset(
         data=data,
         fraction=cfg.fraction if mode == "train" else 1.0,
         use_fe=cfg.use_fe,
+        mode=mode,
     )
 
 
@@ -172,13 +163,8 @@ def build_dataloader(dataset, batch, workers, shuffle=True, rank=-1):
     generator = torch.Generator()
     generator.manual_seed(6148914691236517205 + RANK)
 
-    # Get the appropriate collate function
-    if isinstance(dataset, TemporalYOLODataset):
-        worker_init_fn = temporal_worker_init_fn
-        collate_fn = dataset.get_collate_fn()
-    else:
-        worker_init_fn = seed_worker
-        collate_fn = getattr(dataset, "collate_fn", None)
+    worker_init_fn = seed_worker
+    collate_fn = getattr(dataset, "collate_fn", None)
 
     return InfiniteDataLoader(
         dataset=dataset,

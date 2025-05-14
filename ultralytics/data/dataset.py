@@ -1,6 +1,5 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
-import copy
 import json
 import random
 from collections import defaultdict
@@ -278,12 +277,106 @@ class TemporalYOLODataset(YOLODataset):
     """
 
     def __init__(self, *args, data=None, task="detect", **kwargs):
-        """Initializes the TemporalYOLODataset with optional temporal window and stride."""
+        """Initializes the TemporalYOLODataset."""
+        self.mode = kwargs.pop("mode", "train")
         self.hyp = kwargs.pop("hyp", None)
-        self.temporal_window: int = self.hyp.get("temporal_window", 3)
-        self.temporal_stride: int = self.hyp.get("temporal_stride", 1)
+        self.lframe = self.hyp.pop("lframe", 0)
+        self.gframe = self.hyp.pop("gframe", 0)
+        self.temporal_stride = self.hyp.pop("temporal_stride", 1)
+        if self.lframe == 0 and self.gframe == 0:
+            raise ValueError("Either lframe or gframe should be set to a non-zero value.")
+        assert self.hyp.get("batch", 0) == 1, (
+            "Batch size should be 1 for temporal dataset. The real batch size is set by lframe + gframe."
+        )
+        if self.lframe > 0 and self.mode == "train":
+            assert self.hyp.get("mosaic", 0) == 0 and self.hyp.get("mixup", 0) == 0, (
+                "Mosaic and mixup are not supported when using local frames. Please set them to 0 or set lframe to 0."
+            )
+        if self.mode == "val":
+            lframe_val = self.hyp.get("lframe_val", self.lframe)
+            temporal_stride_val = self.hyp.get("temporal_stride_val", self.temporal_stride)
+            gframe_val = self.hyp.get("gframe_val", self.gframe)
+            self.lframe = lframe_val if lframe_val > 0 else self.lframe
+            self.temporal_stride = temporal_stride_val if temporal_stride_val > 0 else self.temporal_stride
+            self.gframe = gframe_val if gframe_val > 0 else self.gframe
         super().__init__(*args, data=data, task=task, **kwargs)
+
+        # init random seed
+        random.seed(self.hyp.get("seed", 0))
+
         self._build_video_index()  # map frames to videos
+        self._validate_video_lengths()  # check if videos are long enough
+
+    def _validate_video_lengths(self, len_warn_thresh: int = 50) -> None:
+        """
+        Validate videos and calculate valid keyframes considering mode constraints.
+        """
+        # Base requirements (same for all modes)
+        local_span = (self.lframe - 1) * self.temporal_stride + 1
+        base_min_vid_len = max(local_span, self.lframe + self.gframe)
+
+        # Mode-specific keyframe position requirements
+        if self.mode == "val":
+            # Online: frames must come before keyframe
+            local_frames_before = (self.lframe - 1) * self.temporal_stride
+            min_frames_before_keyframe = max(local_frames_before, self.lframe - 1 + self.gframe)
+            mode_str = "validation (online)"
+        else:
+            # Training: keyframe just needs local span before it
+            min_frames_before_keyframe = (self.lframe - 1) * self.temporal_stride
+            mode_str = "training"
+
+        short_videos: list[int] = []
+        limited_videos: list[tuple[int, int]] = []
+        total_valid_keyframes = 0
+
+        for vid_id, frames in self.video_to_index.items():
+            vid_len = len(frames)
+
+            # Check if video meets minimum length
+            if vid_len < base_min_vid_len:
+                short_videos.append(vid_id)
+                continue
+
+            # Calculate valid keyframe positions
+            # Keyframe can be at any position where it has enough frames before it
+            valid_keyframes = max(0, vid_len - min_frames_before_keyframe)
+            total_valid_keyframes += valid_keyframes
+
+            if valid_keyframes < len_warn_thresh:
+                limited_videos.append((vid_id, valid_keyframes))
+
+        # Error handling and warnings
+        if short_videos:
+            LOGGER.error(
+                f"ERROR ❌ {len(short_videos)} videos too short for {mode_str} with "
+                f"gframe={self.gframe}, lframe={self.lframe}, temporal_stride={self.temporal_stride}"
+            )
+            raise ValueError(f"Some videos are too short for {mode_str} settings.")
+
+        if limited_videos:
+            LOGGER.warning(f"WARNING ⚠️ {len(limited_videos)} videos severely limited in {mode_str} mode:")
+            for vid_id, valid_count in limited_videos[:5]:
+                LOGGER.warning(f"  Video {vid_id}: only {valid_count} valid keyframes")
+
+        # Summary info
+        total_videos = len(self.video_to_index)
+        avg_valid_per_video = total_valid_keyframes / total_videos if total_videos > 0 else 0
+
+        LOGGER.info(
+            f"INFO 📊 {mode_str.capitalize()}: {total_videos} videos, "
+            f"{total_valid_keyframes} total valid keyframes "
+            f"(avg {avg_valid_per_video:.1f} per video)"
+        )
+
+        # Special warning for heavily constrained validation
+        if self.mode == "val":
+            reduction_factor = total_valid_keyframes / (total_videos * max(1, vid_len // 2))
+            if reduction_factor < 0.5:  # More than 50% reduction
+                LOGGER.warning(
+                    "WARNING ⚠️ Online constraints significantly reduce valid keyframes! "
+                    "Consider adjusting gframe/lframe for validation."
+                )
 
     def _build_video_index(self) -> None:
         """
@@ -291,18 +384,18 @@ class TemporalYOLODataset(YOLODataset):
         """
 
         # video id to a list of tuples of frame id and index in the dataset
-        self.video_to_frames: defaultdict[int, list[tuple[int, int]]] = defaultdict(list[tuple[int, int]])
+        self.video_to_index: defaultdict[int, list[int]] = defaultdict(list[int])
 
         self.dataset_idx_to_video_id: dict[int, int] = {}  # Maps dataset image index to video id
         # Parse filenames to extract video and frame IDs
         for idx, path in enumerate(self.im_files):
-            vid_id, frame_id = self._parse_path(path)
-            self.video_to_frames[vid_id].append((frame_id, idx))
+            vid_id, _ = self._parse_path(path)
+            self.video_to_index[vid_id].append(idx)
             self.dataset_idx_to_video_id[idx] = vid_id
 
-        # Sort frames in each video by frame ID
-        for vid_id in self.video_to_frames:
-            self.video_to_frames[vid_id].sort()
+        # Sort frames in each video by image index just in case
+        for vid_id in self.video_to_index:
+            self.video_to_index[vid_id].sort()
 
     def _parse_path(self, path: str) -> tuple[int, int]:
         """
@@ -330,154 +423,95 @@ class TemporalYOLODataset(YOLODataset):
 
     def get_valid_index(self, index: int) -> int:
         """
-        Get an index that is sure to have enough reference frames if possible,
-        minimizing zero padding by selecting the most optimal frame in the video.
+        Get an index that is sure to have enough reference frames.
         """
         # Get video ID and frames
         vid_id = self.dataset_idx_to_video_id[index]
-        frames = self.video_to_frames[vid_id]
+        image_indices = self.video_to_index[vid_id]
 
-        # Find position of current index in frame list using binary search for larger videos
-        if len(frames) > 100:  # Only use binary search for longer videos
-            left, right = 0, len(frames) - 1
-            frame_position = -1
-            while left <= right:
-                mid = (left + right) // 2
-                if frames[mid][1] == index:
-                    frame_position = mid
-                    break
-                elif frames[mid][1] < index:
-                    left = mid + 1
-                else:
-                    right = mid - 1
-            if frame_position == -1:  # Fallback if not found (shouldn't happen)
-                frame_position = next((i for i, (_, idx) in enumerate(frames) if idx == index), 0)
+        # image index of the first frame in the video
+        first_index = image_indices[0]
+
+        # Position of the current index in the video
+        frame_position = index - first_index
+
+        # Calculate minimum frames needed before keyframe based on mode
+        if self.mode == "val":
+            # Validation: need frames for both local sequence AND global frames before keyframe
+            local_frames_before = (self.lframe - 1) * self.temporal_stride
+            min_frames_before = max(local_frames_before, self.lframe - 1 + self.gframe)
         else:
-            # For smaller videos, linear search is fine
-            frame_position = next((i for i, (_, idx) in enumerate(frames) if idx == index), 0)
+            # Training: only need local span before keyframe (global can come from anywhere)
+            min_frames_before = (self.lframe - 1) * self.temporal_stride
 
-        # Check if there are enough frames before the current index
-        if frame_position >= self.temporal_window * self.temporal_stride:
-            # Enough frames before, return the current index
+        # Check if current position has enough frames before it
+        if frame_position >= min_frames_before:
             return index
 
-        # Not enough frames at current position, find optimal position
-        required_history = self.temporal_window * self.temporal_stride
+        # return a random index between the first valid frame and the last frame in the video
+        last_frame_position = len(image_indices) - 1
+        adjusted_index = first_index + random.randint(min_frames_before, last_frame_position)
+        return adjusted_index
 
-        # Try to find a valid position that requires minimal padding
-        if len(frames) > required_history:
-            # Return the first frame that has enough history
-            return frames[required_history][1]
-
-        # Video is too short for full history, return the last frame
-        # which minimizes the needed padding
-        if len(frames) > 0:
-            return frames[-1][1]
-
-        # Fallback
-        LOGGER.warning(
-            f"WARNING ⚠️ No valid index found for {index}, returning the original index. "
-            "This will result in zero padding for the reference frames."
-        )
-        return index
-
-    def get_reference_frames(self, idx: int, global_sampling=False) -> list[tuple[int, int]]:
-        """
-        Get reference frames indicies for a given frame index.
-
-        Args:
-            idx (int): Index of the main frame in the dataset.
-            global_sampling (bool): Whether to sample globally from the video or locally around the main frame.
-        Returns:
-            reference_frames (list[tuple[int, itn]]): List of tuples of frame ids and dataset indices.,
-                that is which frames have come before the current in the same video and
-                their index in the entire dataset.
-        """
-        vid_id = self.dataset_idx_to_video_id[idx]
-        frames = self.video_to_frames[vid_id]
-
-        if global_sampling:
-            if len(frames) <= self.temporal_window:
-                return [(f_id, f_idx) for f_id, f_idx in frames]
-            # Get global temporal window
-            return random.sample([(f_id, f_idx) for f_id, f_idx in frames], self.temporal_window)
-
-        # Get loca temporal window
-        frame_id, _ = next(((f_id, f_idx) for f_id, f_idx in frames if f_idx == idx))
-        # Create a lookup dictionary
-        frame_id_to_dataset_idx = dict(frames)  # dict[frame_id, dataset_idx]
-        reference_frames: list[tuple[int, int]] = []
-
-        # Then for each reference frame
-        for i in range(1, self.temporal_window + 1):
-            ref_frame_id = frame_id - i * self.temporal_stride
-            if ref_frame_id < 0 or ref_frame_id not in frame_id_to_dataset_idx:
-                break
-            ref_dataset_idx = frame_id_to_dataset_idx[ref_frame_id]
-            reference_frames.append((ref_frame_id, ref_dataset_idx))
-        return reference_frames
-
-    def __getitem__(self, index: int) -> tuple[BaseDatasetItem, list[BaseDatasetItem]]:  # type: ignore[override]
+    def __getitem__(self, index: int) -> list[BaseDatasetItem]:  # type: ignore[override]
         """
         Returns temporal information including main frame and reference frames.
+        Handles training and validation modes with different global frame sampling strategies.
         """
-        # Minimize zero padding by selecting the most optimal frame in the video
-        index = self.get_valid_index(index)
-        # Get main frame data using parent implementation
-        main_data = super().__getitem__(index)
+        # Get video information
+        vid_id = self.dataset_idx_to_video_id[index]
+        images_indices = self.video_to_index[vid_id]
+        sequence_indices: list[int] = []
 
-        # Fetch reference frames
-        ref_indices = self.get_reference_frames(index)
-        ref_data: list[BaseDatasetItem] = []
+        # Ensure valid index if using local frames
+        if self.lframe > 0:
+            index = self.get_valid_index(index)
 
-        for _, ref_idx in ref_indices:
-            ref_frame_data = super().__getitem__(ref_idx)
-            ref_data.append(ref_frame_data)
+            # Get local frame indices (going backwards from key frame)
+            for i in range(self.lframe):
+                sequence_indices.append(index - i * self.temporal_stride)
 
-        return main_data, ref_data
+        # Add global frames if needed
+        if self.gframe > 0:
+            # For global frames, we need to exclude any local frames already added
+            local_set = set(sequence_indices)
+
+            # Different sampling strategy for validation vs training
+            if self.mode == "val":
+                # For validation, only sample from frames before the current index
+                available_global = [idx for idx in images_indices if idx not in local_set and idx < index]
+            else:
+                # For training, sample from all frames in video except local frames
+                available_global = [idx for idx in images_indices if idx not in local_set]
+
+            # Only sample if we have enough frames
+            if len(available_global) >= self.gframe:
+                global_indices = random.sample(available_global, self.gframe)
+                sequence_indices.extend(global_indices)
+            else:
+                # Fall back to using all available frames if not enough for sampling
+                sequence_indices.extend(available_global)
+                LOGGER.warning(
+                    f"WARNING: Not enough global frames available in video {vid_id}. "
+                    f"Requested {self.gframe}, but only {len(available_global)} available."
+                )
+
+        # Get frame data using parent implementation
+        batch: list[BaseDatasetItem] = []
+        for idx in sequence_indices:
+            item = super().__getitem__(idx)
+            batch.append(item)
+
+        return batch
 
     @staticmethod
     def collate_fn(  # type: ignore[override]
-        batch: list[tuple[BaseDatasetItem, list[BaseDatasetItem]]], temporal_window: int = 3
+        batch: list[list[BaseDatasetItem]],
     ) -> YOLODatasetitem:  # type: ignore[override]
-        all_frames: list[BaseDatasetItem] = []
-        for batch_idx, (key_frame, ref_frames) in enumerate(batch):
-            # add key frame
-            # key_frame["batch_idx"] = torch.tensor([batch_idx])
-            key_frame["batch_idx"] = torch.full_like(key_frame["batch_idx"], batch_idx)
-
-            all_frames.append(key_frame)
-
-            # add reference frames
-            for ref_frame in ref_frames:
-                # set to -9999 to indicate that these are reference frames
-                # for easy filtering in the loss function
-                ref_frame["batch_idx"] = torch.full_like(ref_frame["batch_idx"], -9999)
-                all_frames.append(ref_frame)
-
-            # pad with zero tensors if we have less than temporal_window frames
-            padding_needed = temporal_window - len(ref_frames)
-
-            if not padding_needed > 0:
-                continue
-            for _ in range(padding_needed):
-                pad_frame = copy.deepcopy(key_frame)
-                pad_frame["img"] = torch.zeros_like(key_frame["img"])  # zero out the image
-
-                # IMPORTANT: Clear all object-related data to avoid mismatch
-                num_instances = 0  # No instances in padding frames
-                pad_frame["cls"] = torch.zeros((num_instances,), dtype=key_frame["cls"].dtype)
-                pad_frame["bboxes"] = torch.zeros((num_instances, 4), dtype=key_frame["bboxes"].dtype)
-                pad_frame["batch_idx"] = torch.zeros((num_instances,), dtype=key_frame["batch_idx"].dtype)
-                all_frames.append(pad_frame)
-
-        # collate all frames
-        collated_batch = YOLODataset.collate_fn(all_frames)
-
-        return collated_batch  # type: ignore[return-value]
-
-    def get_collate_fn(self):
-        return lambda batch: self.collate_fn(batch, self.temporal_window)
+        # Flatten the batch and call the parent collate_fn,
+        # we already require batch size 1 since getitem returns a list
+        flat_batch = batch[0]
+        return YOLODataset.collate_fn(flat_batch)
 
 
 class YOLOMultiModalDataset(YOLODataset):
