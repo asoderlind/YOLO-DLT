@@ -1,5 +1,6 @@
 from ultralytics import YOLO
 import argparse
+import os
 from train_conf import (
     DEVICE,
     KITTI_CLASSES,
@@ -23,6 +24,7 @@ def train(
     seed: int = SEED,
     epochs: int = EPOCHS,
     name=None,
+    project="runs/detect",
     **kwargs,
 ) -> str:
     classes = kwargs.get("classes", [])
@@ -44,8 +46,13 @@ def train(
     if name is None:
         name = f"{data_no_yaml}-c{class_string}-{model_no_yaml}-{epochs}e-{seed}s-{'dist' if use_dist else 'noDist'}-d={dist}-{'fe' if use_fe else 'noFe'}-lc={lambda_c}_"
         name = name.replace("/", "-")
+        last_weight = f"{project}/{name}/weights/last.pt"
+        if os.path.exists(last_weight):
+            model = YOLO(last_weight)
+            kwargs["resume"] = True
 
     model.train(
+        project=project,
         name=name,
         data=data_path,
         pretrained=PRETRAINED,
@@ -132,7 +139,7 @@ if __name__ == "__main__":
         for s in [1]:
             for d in [1.0]:
                 train(
-                    data_path="kitti.yaml",
+                    data_path="kitti-mini.yaml",
                     use_dist=True,
                     dist=d,
                     seed=s,
@@ -165,14 +172,14 @@ if __name__ == "__main__":
         ##########
 
         # Baseline exDark-yolo
-        '''
+        """
         train(
             data_path="exDark-yolo.yaml",
             use_fe=False,
             lambda_c=0.0,
             val=True,
         )
-        '''
+        """
 
         # All loss on exDark with DLN
         for lambda_c in [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
