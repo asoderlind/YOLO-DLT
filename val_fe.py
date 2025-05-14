@@ -7,19 +7,24 @@ ENV = os.getenv("ENV", "LOCAL")
 KITTI_CLASSES = [0, 1, 2, 3, 4, 5, 6]
 
 
-def eval_distance(model_path, data_path, use_dist, **kwargs):
+def eval_model(model_path, data_path, **kwargs):
     model_name = f"val_distance/{model_path.split('/')[-3]}"
     model = YOLO(model_path)
     model.val(
         device=DEVICE,
         data=data_path,
-        use_dist=use_dist,
         name=model_name,
         **kwargs,
     )
 
 
+
 if __name__ == "__main__":
+    ##########
+    # EXDARK #
+    ##########
+    eval_model(f"runs/detect/exDark-yolo-dln-c-yolo11n.yaml-200e-0s-noDist-d=0.05-fe-lc=0.1_/weights/best.pt", "exDark-yolo-dln.yaml")
+
     #########
     # CARLA #
     #########
@@ -42,6 +47,8 @@ if __name__ == "__main__":
     # KITTI #
     #########
 
+    """
+
     eval_distance(
         "runs/detect/kitti.yaml-dlt-models-yolo11n.yaml-200e-1s-SGD-noDist-scale0.5-mosaic1.0-c01234567-d0.0_/weights/best.pt",
         "kitti.yaml",
@@ -63,7 +70,6 @@ if __name__ == "__main__":
         classes=KITTI_CLASSES,
         max_dist=150,
     )
-    """
     eval_distance(
         "runs/detect/kitti.yaml-dlt-models-yolo11n.yaml-200e-2s-SGD-dist-scale0.5-mosaic1.0-c01234567-d0.5_/weights/best.pt",
         "kitti.yaml",
