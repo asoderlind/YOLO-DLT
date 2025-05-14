@@ -11,6 +11,7 @@ from train_conf import (
     PRETRAINED,
     MODEL,
     EPOCHS,
+    SEED
 )
 
 
@@ -21,6 +22,7 @@ def train_with_distance(
     use_dist: bool = True,
     scale: float = 0.0,
     mosaic: float = 1.0,
+    seed: int = SEED,
     epochs: int = EPOCHS,
     name=None,
     **kwargs,
@@ -31,7 +33,7 @@ def train_with_distance(
     model = YOLO(model_path)
 
     if name is None:
-        name = f"{data_path}-{model_path}-{epochs}e-{OPTIMIZER}-{'dist' if use_dist else 'noDist'}-scale{scale}-mosaic{mosaic}-c{class_string}-d{dist}_"
+        name = f"{data_path}-{model_path}-{epochs}e-{seed}s-{OPTIMIZER}-{'dist' if use_dist else 'noDist'}-scale{scale}-mosaic{mosaic}-c{class_string}-d{dist}_"
         name = name.replace("/", "-")
 
     model.train(
@@ -50,6 +52,7 @@ def train_with_distance(
         iou_type=IOU_TYPE,
         warmup_bias_lr=WARMUP_BIAS_LR,
         optimizer=OPTIMIZER,
+        seed=seed,
         **kwargs,
     )
     return name
@@ -151,38 +154,27 @@ train_with_distance(
 #########
 
 # Test without dist
-# train_with_distance(data_path="kitti.yaml", use_dist=True, dist=0.5, classes=KITTI_CLASSES, epochs=200)
+'''
+ train_with_distance(data_path="kitti.yaml", use_dist=True, dist=0.5, classes=KITTI_CLASSES, epochs=200)
 train_with_distance(
     data_path="kitti.yaml", model_path="runs/detect/kitti.yaml-dlt-models-yolo11n-SPDConv-3.yaml-200e-SGD-dist-scale0.0-mosaic1.0-c01234567-d0.5_5/weights/last.pt", use_dist=True, dist=0.5, classes=KITTI_CLASSES, epochs=200, resume=True
 )
 train_with_distance(
-    data_path="kitti.yaml", model_path="dlt-models/yolo11n-SPDConv-3.yaml", use_dist=True, dist=1.0, classes=KITTI_CLASSES, epochs=200,
+    data_path="kitti.yaml", model_path="dlt-models/yolo11n-SPDConv-3.yaml", use_dist=True, dist=1.0, classes=KITTI_CLASSES, epochs=200)
+'''
 
-)
+# last ablations
+# train_with_distance(data_path="kitti.yaml", use_dist=True, dist=0.5, seed=2, classes=KITTI_CLASSES, epochs=200, scale=0.5, mosaic=0.0)
+# train_with_distance(data_path="kitti.yaml", use_dist=True, dist=0.5, seed=2, classes=KITTI_CLASSES, epochs=200, scale=0.5, mosaic=1.0)
+# no dist
+for s in [1]:
+    for d in [1.0]:
+        train_with_distance(data_path="kitti.yaml", use_dist=True, dist=d, seed=s, classes=KITTI_CLASSES, epochs=200, scale=0.0, mosaic=1.0)
 
+for s in [2]:
+    train_with_distance(data_path="kitti.yaml", use_dist=False, dist=d, seed=s, classes=KITTI_CLASSES, epochs=200, scale=0.5, mosaic=1.0)
+    for d in [0.01, 0.05, 0.1, 1.0]:
+        train_with_distance(data_path="kitti.yaml", use_dist=True, dist=d, seed=s, classes=KITTI_CLASSES, epochs=200, scale=0.0, mosaic=1.0)
 
-#########
-# CARLA #
-#########
-
-# train_with_distance(data_path="carla-town06-all-night-0.25.yaml", max_dist=100, use_dist=True, dist=0.01)
-# train_with_distance(data_path="carla-town06-all-night-0.25.yaml", max_dist=100, use_dist=True, dist=0.05)
-# train_with_distance(data_path="carla-town06-all-night-0.25.yaml", max_dist=100, use_dist=True, dist=0.1)
-# train_with_distance(data_path="carla-town06-all-night-0.25.yaml", max_dist=100, use_dist=True, dist=1.0)
-# train_with_distance(data_path="carla-town06-all-night-0.25.yaml", max_dist=100, use_dist=False, scale=0.5, dist=0.00)
-"""
-
-train_with_distance(data_path="carla-town06-sunset.yaml", max_dist=100, use_dist=True, dist=0.05)
-train_with_distance(data_path="carla-town06-sunset.yaml", max_dist=100, use_dist=False, dist=0.00)
-train_with_distance(data_path="carla-town06-night.yaml", max_dist=100, use_dist=True, dist=0.05, epochs=200)
-train_with_distance(data_path="carla-town06-sunset.yaml", max_dist=100, use_dist=True, dist=0.05, epochs=200)
-
-#train_with_distance(data_path="carla-town06-day-occ0.25.yaml", max_dist=100, use_dist=True, dist=0.05)
-#train_with_distance(data_path="carla-town06-day-occ0.25.yaml", max_dist=100, use_dist=False, dist=0.00)
-
-train_with_distance(data_path="carla-town06-day-occ0.5.yaml", max_dist=100, use_dist=True, dist=0.05, epochs=200)
-#train_with_distance(data_path="carla-town06-day-occ0.5.yaml", max_dist=100, use_dist=False, dist=0.00)
-
-#train_with_distance(data_path="carla-town06-day-occ0.75.yaml", max_dist=100, use_dist=True, dist=0.05)
-#train_with_distance(data_path="carla-town06-day-occ0.75.yaml", max_dist=100, use_dist=False, dist=0.00)
-"""
+# train_with_distance(data_path="kitti.yaml", use_dist=True, dist=0.5, seed=seed, classes=KITTI_CLASSES, epochs=200, scale=0.0, mosaic=0.0)
+# train_with_distance(data_path="kitti.yaml", use_dist=True, dist=0.5, seed=seed, classes=KITTI_CLASSES, epochs=200, scale=0.0, mosaic=1.0)
