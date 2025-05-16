@@ -263,49 +263,65 @@ class TemporalDetect(Detect):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
 
         # loop over detection layers (usually 3, 80x80, 40x40, 20x20)
-        before_nms_vid_feats: list[torch.Tensor] = []
-        before_nms_reg_feats: list[torch.Tensor] = []
+        before_fsm_vid_feats: list[torch.Tensor] = []
+        before_fsm_reg_feats: list[torch.Tensor] = []
 
         for i in range(self.nl):
-            reg_feat = self.vid_reg[i](x[i]) if self.vid_reg else self.cv2[i](x[i])
-            vid_cls_feat = self.vid_cls[i](x[i]) if self.vid_cls else self.cv3[i](x[i])
+            reg_feat = self.cv2[i](x[i])
+            cls_feat = self.cv3[i](x[i])
+            if self.vid_reg:
+                vid_reg_feat = self.vid_reg[i](x[i])
+            if self.vid_cls:
+                vid_cls_feat = self.vid_cls[i](x[i])
 
             # store features for FSM
-            before_nms_vid_feats.append(vid_cls_feat)
-            before_nms_reg_feats.append(reg_feat)
+            if self.vid_cls:
+                before_fsm_vid_feats.append(vid_cls_feat)
+            else:
+                before_fsm_vid_feats.append(cls_feat)
+            if self.vid_reg:
+                before_fsm_reg_feats.append(vid_reg_feat)
+            else:
+                before_fsm_reg_feats.append(reg_feat)
 
             # same as original model:
             reg_out = self.cv2_pred[i](reg_feat)
-            cls_out = self.cv3_pred[i](vid_cls_feat)
+            cls_out = self.cv3_pred[i](cls_feat)
             x[i] = torch.cat((reg_out, cls_out), 1)
 
         # flatten features for FSM
         flat_vid_features = torch.cat(
-            [feat.flatten(2).permute(0, 2, 1) for feat in before_nms_vid_feats], dim=1
+            [feat.flatten(2).permute(0, 2, 1) for feat in before_fsm_vid_feats], dim=1
         )  # [batch_size, sum(h_i*w_i), num_classes]
         flat_reg_features = torch.cat(
-            [feat.flatten(2).permute(0, 2, 1) for feat in before_nms_reg_feats], dim=1
+            [feat.flatten(2).permute(0, 2, 1) for feat in before_fsm_reg_feats], dim=1
         )  # [batch_size, sum(h_i*w_i), 4 * reg_max]
 
         # model base predictions
         raw_predictions = self._inference(x)  # [bs, 4 + num_classes, sum_i(w_i * h_i)]
 
         # Apply FSM (Feature Selection Module)
-        # selected_cls_feats: [batch_size, topk_post, cls_ch]
-        # selected_reg_feats: [batch_size, topk_post, reg_ch]
-        # selected_boxes: [batch_size, topk_post, 4]
-        # selected_scores: [batch_size, topk_post]
-        # selected_indices: [batch_size, topk_post]
-
-        selected_cls_feats, selected_reg_feats, selected_boxes, selected_scores, selected_indices = self.fsm(
-            raw_predictions, flat_vid_features, flat_reg_features
-        )
+        # selected_reg_feats: [1, total_detections, reg_ch]
+        # selected_cls_feats: [1, total_detections, cls_ch]
+        # selected_boxes: [1, total_detections, 4]
+        # selected_scores: [1, total_detections]
+        # pred_res: [batch_size, topk_post, 4 + num_classes]
+        # pred_idx: [batch_size, topk_post]
+        (
+            selected_cls_feats,
+            selected_reg_feats,
+            selected_boxes,
+            selected_scores,
+            pred_res,
+            pred_idx,
+        ) = self.fsm(raw_predictions, flat_vid_features, flat_reg_features)
 
         # Apply temporal aggregation
         match self.fam_mode:
             case "cls":
-                final_cls_preds, final_reg_preds, key_frame_indices = self._forward_cls(
-                    selected_cls_feats, selected_reg_feats, selected_scores, selected_indices
+                # final_cls_preds: [1, topk_post, num_classes]
+                final_cls_preds, final_reg_preds = self._forward_cls(
+                    selected_cls_feats, selected_reg_feats, selected_scores
                 )
             case "reg":
                 final_cls_preds, final_reg_preds, key_frame_indices = self._forward_reg(
@@ -322,19 +338,20 @@ class TemporalDetect(Detect):
             case _:
                 raise ValueError(f"Invalid fam_mode: {self.fam_mode}")
 
-        # split up the batch into individual key_frame-reference pairs
-        # for each pair, apply temporal aggregation
-        # Filter out ref frames from x
-        batch_size = selected_cls_feats.shape[0]
-        key_frame_batch_indices = torch.arange(0, batch_size, self.temporal_window + 1, device=x[0].device)
-        x = [x[i][key_frame_batch_indices] for i in range(len(x))]
+        # # split up the batch into individual key_frame-reference pairs
+        # # for each pair, apply temporal aggregation
+        # # Filter out ref frames from x
+        # batch_size = selected_cls_feats.shape[0]
+        # key_frame_batch_indices = torch.arange(0, batch_size, self.temporal_window + 1, device=x[0].device)
+        # x = [x[i][key_frame_batch_indices] for i in range(len(x))]
 
         if self.training:  # Training path
             return (
                 x,
-                final_cls_preds,
+                final_cls_preds,  # [1, topk_post, num_classes]
                 final_reg_preds,
-                key_frame_indices,
+                pred_res,  # [batch_size, topk_post, 4 + num_classes]
+                pred_idx,  # [batch_size, topk_post]
             )
 
         y = self._temporal_inference(
@@ -347,47 +364,24 @@ class TemporalDetect(Detect):
         selected_cls_feats: torch.Tensor,
         selected_reg_feats: torch.Tensor,
         selected_scores: torch.Tensor,
-        selected_indices: torch.Tensor,
-    ) -> tuple[torch.Tensor, None, torch.Tensor]:
+    ) -> tuple[torch.Tensor, None]:
         """
         Process features through fam with cls only
 
         Args:
-            selected_cls_feats (torch.Tensor): Selected classification features [batch_size, target_count, cls_ch]
-            selected_reg_feats (torch.Tensor): Selected regression features [batch_size, target_count, reg_ch]
-            selected_scores (torch.Tensor): Selected confidence scores [batch_size, target_count]
-            selected_indices (torch.Tensor): Selected indices [batch_size, target_count]
+            selected_cls_feats (torch.Tensor): Selected classification features [1, total_selections, cls_ch]
+            selected_reg_feats (torch.Tensor): Selected regression features [1, total_selections, reg_ch]
+            selected_scores (torch.Tensor): Selected confidence scores [1, total_selections]
         """
 
-        batch_size = selected_cls_feats.shape[0]
-        enhanced_batch_cls_feats: list[torch.Tensor] = []
-        key_frame_indices_list: list[torch.Tensor] = []
+        enhanced_cls_feats, _ = self.fam(
+            cls_features=selected_cls_feats, reg_features=selected_reg_feats, cls_scores=selected_scores
+        )
+        # The yolov paper did this to get the final features down to 30 I guess. Should be changed for yolov++ though.
+        topk_post = 30
+        final_cls_preds = self.linear_pred(enhanced_cls_feats[:, :topk_post, :])  # [1, topk_post, num_classes]
 
-        for b in range(0, batch_size, self.temporal_window + 1):
-            # extract batch slice for temporal window
-            single_cls_feats = selected_cls_feats[b : b + 1 + self.temporal_window]
-            single_reg_feats = selected_reg_feats[b : b + 1 + self.temporal_window]
-            single_scores = selected_scores[b : b + 1 + self.temporal_window]
-            single_indices = selected_indices[b : b + 1 + self.temporal_window]
-
-            # Apply temporal aggregation
-            enhanced_cls_feats, _ = self.fam(
-                cls_features=single_cls_feats,
-                reg_features=single_reg_feats,
-                cls_scores=single_scores,
-            )
-
-            # Keep only key frame results
-            enhanced_batch_cls_feats.append(enhanced_cls_feats[0:1])  # range keeps the batch dimension
-            key_frame_indices_list.append(single_indices[0:1])
-
-        # Concatenate all the results
-        enhanced_cls_feats = torch.cat(enhanced_batch_cls_feats, dim=0)  # [batch_size, topk_post, common_ch]
-        key_frame_indices = torch.cat(key_frame_indices_list, dim=0)  # [batch_size, topk_post]
-
-        final_cls_preds = self.linear_pred(enhanced_cls_feats)  # [batch_size, topk_post, num_classes]
-
-        return final_cls_preds, None, key_frame_indices  # No reg features in this case
+        return final_cls_preds, None  # No reg features in this case
 
     def _forward_reg(
         self,

@@ -1892,7 +1892,6 @@ class FeatureAggregationModule(nn.Module):
         # Cast similarity weights to match feature dtype for mixed precision compatibility
         if not self.training:
             similarity_weights = similarity_weights.to(features.dtype)
-
         # Weighted aggregation of support features using similarity scores
         weighted_features = torch.bmm(similarity_weights, features)  # [B, N, 2*common_ch]
 
@@ -1910,24 +1909,24 @@ class FeatureAggregationModule(nn.Module):
         Forward pass of the Feature Aggregation Module.
 
         Args:
-            cls_features (torch.tensor):  Classification branch features [B, N, C_cls]
-            reg_features (torch.tensor):  Regression branch features [B, N, C_reg]
-            cls_scores (torch.tensor): Confidence scores for classification [B, N]
-            boxes (torch.tensor): Bounding boxes for the current frame [B, N, 4]
+            cls_features (torch.tensor):  Classification branch features [1, N, C_cls]
+            reg_features (torch.tensor):  Regression branch features [1, N, C_reg]
+            cls_scores (torch.tensor): Confidence scores for classification [1, N]
+            boxes (torch.tensor): Bounding boxes for the current frame [1, N, 4]
         """
         B, N, C_cls = cls_features.shape
         _, _, C_reg = reg_features.shape
         # Reshape for 1x1 convolutions (treating the N dimension as height * width)
         if C_cls != self.common_ch:
-            cls_features_reshaped = cls_features.view(B, 1, N, C_cls).permute(0, 3, 1, 2)  # [B, C_cls, 1, N]
+            cls_features_reshaped = cls_features.view(B, 1, N, C_cls).permute(0, 3, 1, 2)  # [1, C_cls, 1, N]
             cls_features = self.cls_proj(cls_features_reshaped)
-            cls_features = cls_features.permute(0, 2, 3, 1).view(B, N, self.common_ch)  # [B, N, common_ch]
+            cls_features = cls_features.permute(0, 2, 3, 1).view(B, N, self.common_ch)  # [1, N, common_ch]
         if C_reg != self.common_ch:
-            reg_features_reshaped = reg_features.view(B, 1, N, C_reg).permute(0, 3, 1, 2)  # [B, C_reg, 1, N]
+            reg_features_reshaped = reg_features.view(B, 1, N, C_reg).permute(0, 3, 1, 2)  # [1, C_reg, 1, N]
             reg_features = self.reg_proj(reg_features_reshaped)
-            reg_features = reg_features.permute(0, 2, 3, 1).view(B, N, self.common_ch)  # [B, N, common_ch]
+            reg_features = reg_features.permute(0, 2, 3, 1).view(B, N, self.common_ch)  # [1, N, common_ch]
 
-        # [B, N, 2*common_ch], [B, N, N]
+        # [1, N, 2*common_ch], [1, N, N]
         enhanced_cls_features, enhanced_reg_features, similarity_weights, reg_similarity_weights = (
             self.temporal_attention(cls_features, reg_features, cls_scores)  # type: ignore[misc]
         )
@@ -2121,45 +2120,42 @@ class FeatureSelectionModule(nn.Module):
 
     def _nms_selection(
         self, raw_preds: torch.Tensor, vid_features: torch.Tensor, reg_features: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
-        Select features using NMS to eliminate redundant detections.
-        """
-        # Implement NMS-based selection
-        # This would include:
-        # 1. Getting high-confidence proposals
-        # 2. Running NMS to eliminate redundant boxes
-        # 3. Selecting features from the remaining proposals
+        Select features using NMS, following YOLOV's concatenate-all approach.
+        Returns variable length features that get concatenated across batch.
 
-        # Similar structure to threshold selection, but with NMS
-        predictions = raw_preds.permute(0, 2, 1)
+        Args:
+            raw_preds (torch.Tensor): Raw predictions from the model [batch_size, 4 + num_classes, num_anchors]
+            vid_features (torch.Tensor): Video features [batch_size, num_anchors, cls_ch]
+            reg_features (torch.Tensor): Regression features [batch_size, num_anchors, reg_ch]
+        """
+        predictions = raw_preds.permute(0, 2, 1)  # [batch, num_anchors, 4+nc]
         batch_size = raw_preds.shape[0]
         device = raw_preds.device
 
-        # Initialize tensors (same as threshold method)
-        selected_cls_features = torch.zeros(
-            batch_size, self.topk_post, vid_features.shape[-1], device=device, dtype=raw_preds.dtype
-        )
-        selected_reg_features = torch.zeros(
-            batch_size, self.topk_post, reg_features.shape[-1], device=device, dtype=raw_preds.dtype
-        )
-        selected_boxes = torch.zeros(batch_size, self.topk_post, 4, device=device, dtype=raw_preds.dtype)
-        selected_scores = torch.zeros(batch_size, self.topk_post, device=device, dtype=raw_preds.dtype)
-        selected_indices = torch.zeros(batch_size, self.topk_post, dtype=torch.long, device=device)
-        # Process each batch
+        # Collect all selected features across the batch
+        all_selected_cls_features = []
+        all_selected_reg_features = []
+        all_selected_boxes = []
+        all_selected_scores = []
+        batch_selected_predictions = []
+        batch_selected_indices = []
+
+        # Process each frame in the batch
         for b in range(batch_size):
             boxes = predictions[b, :, :4]
             scores = predictions[b, :, 4:]
             max_scores, cls_ids = scores.max(dim=1)
 
+            # Stage 1: Pre-selection by score
             if len(max_scores) > self.topk_pre:
-                # Take top-k proposals
                 topk_values, topk_indices = torch.topk(max_scores, self.topk_pre)
             else:
                 topk_indices = torch.arange(len(max_scores), device=device)
                 topk_values = max_scores[topk_indices]
 
-            # Apply NMS
+            # Stage 2: NMS
             nms_indices = batched_nms(
                 boxes[topk_indices],
                 topk_values,
@@ -2167,48 +2163,29 @@ class FeatureSelectionModule(nn.Module):
                 iou_threshold=self.nms_thresh_train if self.training else self.nms_thresh_val,
             )
 
-            if len(nms_indices) < self.topk_post:
-                if len(nms_indices) == 0:
-                    # No detections after NMS, use top-k
-                    final_indices = topk_indices[: self.topk_post]
-                else:
-                    final_indices = topk_indices[nms_indices]
+            # Stage 3: Final selection (take up to topk_post)
+            final_indices = topk_indices[nms_indices[: self.topk_post]]
 
-                    mask = torch.ones(len(topk_indices), dtype=torch.bool, device=device)
-                    mask[nms_indices] = False
+            # Store selected features (variable length per frame)
+            all_selected_cls_features.append(vid_features[b, final_indices])
+            all_selected_reg_features.append(reg_features[b, final_indices])
+            all_selected_boxes.append(boxes[final_indices])
+            all_selected_scores.append(max_scores[final_indices])
 
-                    remaining = topk_indices[mask]
+            batch_selected_predictions.append(predictions[b, final_indices])
+            batch_selected_indices.append(final_indices)
 
-                    additional_needed = self.topk_post - len(final_indices)
-                    if len(remaining) > 0:
-                        # Add more boxes to reach target count
-                        additional_indices = remaining[:additional_needed]
-                        final_indices = torch.cat([final_indices, additional_indices])
-                    else:
-                        # Pad with duplicates of the highest scoring index
-                        padding_indices = torch.full(
-                            (additional_needed,), final_indices[0].item(), dtype=torch.long, device=device
-                        )
-                        final_indices = torch.cat([final_indices, padding_indices])
-            else:
-                # Take top-k after NMS
-                if len(nms_indices) > self.topk_post:
-                    nms_indices = nms_indices[: self.topk_post]
-                final_indices = topk_indices[nms_indices]
-
-            assert len(final_indices) == self.topk_post, f"Expected {self.topk_post} indices, got {len(final_indices)}"
-
-            # Fill tensors with selected indices
-            selected_cls_features[b] = vid_features[b, final_indices]
-            selected_reg_features[b] = reg_features[b, final_indices]
-            selected_boxes[b] = boxes[final_indices]
-            selected_scores[b] = max_scores[final_indices]
-            selected_indices[b] = final_indices
+        # Concatenate all features across frames (YOLOV style)
+        concat_cls_features = torch.cat(all_selected_cls_features, dim=0).unsqueeze(0)
+        concat_reg_features = torch.cat(all_selected_reg_features, dim=0).unsqueeze(0)
+        concat_boxes = torch.cat(all_selected_boxes, dim=0).unsqueeze(0)
+        concat_scores = torch.cat(all_selected_scores, dim=0).unsqueeze(0)
 
         return (
-            selected_cls_features,  # [batch_size, topk_post, cls_ch]
-            selected_reg_features,  # [batch_size, topk_post, reg_ch]
-            selected_boxes,  # [batch_size, topk_post, 4]
-            selected_scores,  # [batch_size, topk_post]
-            selected_indices,  # [batch_size, topk_post]
+            concat_cls_features,  # [1, total_detections, cls_ch]
+            concat_reg_features,  # [1, total_detections, reg_ch]
+            concat_boxes,  # [1, total_detections, 4]
+            concat_scores,  # [1, total_detections]
+            torch.stack(batch_selected_predictions, dim=0),  # [batch_size, topk_post, 4+nc]
+            torch.stack(batch_selected_indices, dim=0),  # [batch_size, topk_post, 4+nc]
         )
