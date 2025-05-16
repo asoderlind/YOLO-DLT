@@ -440,7 +440,7 @@ class TemporalYOLODataset(YOLODataset):
         if self.mode == "val":
             # Validation: need frames for both local sequence AND global frames before keyframe
             local_frames_before = max(0, (self.lframe - 1) * self.temporal_stride)
-            min_frames_before = max(local_frames_before, max(0, self.lframe - 1) + self.gframe)
+            min_frames_before = max(local_frames_before, max(0, self.lframe + self.gframe) - 1)
         else:
             # Training: only need local span before keyframe (global can come from anywhere)
             min_frames_before = max(0, (self.lframe - 1) * self.temporal_stride)
@@ -488,11 +488,14 @@ class TemporalYOLODataset(YOLODataset):
                 available_global = [idx for idx in images_indices if idx not in local_set]
 
             # Only sample if we have enough frames
-            if len(available_global) >= self.gframe:
+            if len(available_global) >= self.gframe or (
+                len(available_global) == self.gframe - 1 and len(available_global) == 1
+            ):
                 # if we have val with gframe == 0 we add the current index manually so we subtract 1
                 efective_gframe = self.gframe - 1 if self.lframe == 0 and self.mode == "val" else self.gframe
                 global_indices = random.sample(available_global, efective_gframe)
                 sequence_indices.extend(global_indices)
+
             else:
                 # Fall back to using all available frames if not enough for sampling
                 sequence_indices.extend(available_global)
@@ -500,7 +503,10 @@ class TemporalYOLODataset(YOLODataset):
                     f"ERROR: Not enough global frames available in video {vid_id}. "
                     f"Requested {self.gframe}, but only {len(available_global)} available."
                 )
-                raise ValueError(f"Not enough global frames available in video {vid_id}. ")
+                raise ValueError(
+                    f"Not enough global frames available in video {vid_id} with length {len(images_indices)}."
+                    f"Found {len(available_global)} frames and inded is {index}."
+                )
 
         # Get frame data using parent implementation
         batch: list[BaseDatasetItem] = []
