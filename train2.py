@@ -244,274 +244,253 @@ if __name__ == "__main__":
     waymo = "waymo_cluster.yaml"
     bdd100k = "bdd100k_cluster.yaml"
 
-    run_seeded_train(
-        iterations=3,
-        name="test",
-        model="yolo11n.yaml",
-        data="waymo16.yaml",
-    )
-
-    # 0. some bdd100k night
+    # cache the dataset
     train_model(
-        name="bdd100k_night_cluster-yolo11n-spdconv-bic-repc3k2-thiou",
-        model="dlt-models/yolo11n-spdconv-bic-repc3k2.yaml",
-        data=data,
+        name="waymo_cluster_night-yolo11n-cache",
+        model="yolo11n.yaml",
+        data=waymo_night,
         project=CLUSTER_OUTPUT_PATH,
-        iou_type="thiou",
+        epochs=1,
+        use_dist=True,
     )
 
+    # # cache the dataset
     # train_model(
+    #     name="waymo_cluster-yolo11n-cache",
+    #     model="yolo11n.yaml",
+    #     data=waymo,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     epochs=1,
+    #     use_dist=True,
+    # )
+
+    # # 0. bdd100k night
+    # run_seeded_train(
+    #     iterations=3,
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2",
+    #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     use_dist=False,
+    # )
+
+    # run_seeded_train(
+    #     iterations=3,
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-thiou",
+    #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     iou_type="thiou",
+    #     use_dist=False,
+    # )
+
+    # run_seeded_train(
+    #     iterations=3,
+    #     name="bdd100k_night_cluster-yolo11n-bic-carep3k2",
+    #     model="dlt-models/yolo11n-bic-carep3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     use_dist=False,
+    # )
+
+    # run_seeded_train(
+    #     iterations=3,
+    #     name="bdd100k_night_cluster-yolo11n-bic-carep3k2-thiou",
+    #     model="dlt-models/yolo11n-bic-carep3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     iou_type="thiou",
+    #     use_dist=False,
+    # )
+
+    # run_seeded_train(
+    #     iterations=3,
     #     name="bdd100k_night_cluster-yolo11n-spdconv1-bic-repc3k2",
     #     model="dlt-models/yolo11n-spdconv1-bic-repc3k2.yaml",
     #     data=data,
     #     project=CLUSTER_OUTPUT_PATH,
+    #     use_dist=False,
     # )
-
-    # train_model(
+    # run_seeded_train(
+    #     iterations=3,
     #     name="bdd100k_night_cluster-yolo11n-spdconv1-bic-repc3k2-thiou",
     #     model="dlt-models/yolo11n-spdconv1-bic-repc3k2.yaml",
     #     data=data,
     #     project=CLUSTER_OUTPUT_PATH,
     #     iou_type="thiou",
+    #     use_dist=False,
+    # )
+    # run_seeded_train(
+    #     iterations=3,
+    #     name="bdd100k_night_cluster-yolo11n-spdconv-bic-repc3k2",
+    #     model="dlt-models/yolo11n-spdconv-bic-repc3k2.yaml",
+    #     data=data,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     use_dist=False,
     # )
 
-    # train_model(
-    #     name="bdd100k_night_cluster-yolo11n-bic-carepc3k2-thiou",
-    #     model="dlt-models/yolo11n-bic-carep3k2.yaml",
+    # run_seeded_train(
+    #     iterations=3,
+    #     name="bdd100k_night_cluster-yolo11n-spdconv-bic-repc3k2-thiou",
+    #     model="dlt-models/yolo11n-spdconv-bic-repc3k2.yaml",
     #     data=data,
     #     project=CLUSTER_OUTPUT_PATH,
     #     iou_type="thiou",
-    # )
-
-    # train_model(
-    #     name="bdd100k_night_cluster-yolo11s",
-    #     model="yolo11s.yaml",
-    #     data=data,
-    #     project=CLUSTER_OUTPUT_PATH,
+    #     use_dist=False,
     # )
 
     # # 1. waymo night
 
-    # train_model(
+    # run_seeded_train(
+    #     iterations=3,
     #     name="waymo_cluster_night-yolo11n-bic-repc3k2",
     #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
     #     data=waymo_night,
     #     project=CLUSTER_OUTPUT_PATH,
+    #     use_dist=False,
     # )
 
-    # train_model(
-    #     name="waymo_cluster_night-yolo11n-bic-repc3k2",
+    # run_seeded_train(
+    #     iterations=3,
+    #     name="waymo_cluster_night-yolo11n-bic-repc3k2-thiou",
     #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
     #     data=waymo_night,
     #     project=CLUSTER_OUTPUT_PATH,
     #     iou_type="thiou",
+    #     use_dist=False,
     # )
 
-    # train_model(
-    #     name="waymo_cluster_night-yolo11n-spdconv-bic-repc3k2",
-    #     model="dlt-models/yolo11n-spdconv-bic-repc3k2.yaml",
-    #     data=waymo_night,
-    #     project=CLUSTER_OUTPUT_PATH,
-    # )
-
-    # train_model(
-    #     name="waymo_cluster_night-yolo11n-spdconv-bic-repc3k2-thiou",
-    #     model="dlt-models/yolo11n-spdconv-bic-repc3k2.yaml",
-    #     data=waymo_night,
-    #     project=CLUSTER_OUTPUT_PATH,
-    #     iou_type="thiou",
-    # )
-
-    # train_model(
-    #     name="waymo_cluster_night-yolo11n-spdconv1-bic-repc3k2",
-    #     model="dlt-models/yolo11n-spdconv1-bic-repc3k2.yaml",
-    #     data=waymo_night,
-    #     project=CLUSTER_OUTPUT_PATH,
-    # )
-
-    # train_model(
-    #     name="waymo_cluster_night-yolo11n-spdconv1-bic-repc3k2-thiou",
-    #     model="dlt-models/yolo11n-spdconv1-bic-repc3k2.yaml",
-    #     data=waymo_night,
-    #     project=CLUSTER_OUTPUT_PATH,
-    #     iou_type="thiou",
-    # )
-
-    # train_model(
-    #     name="waymo_cluster_night-yolo11n",
-    #     model="dlt-models/yolo11n.yaml",
-    #     data=waymo_night,
-    #     project=CLUSTER_OUTPUT_PATH,
-    # )
-
-    # train_model(
+    # run_seeded_train(
+    #     iterations=3,
     #     name="waymo_cluster_night-yolo11n-bic-carep3k2",
     #     model="dlt-models/yolo11n-bic-carep3k2.yaml",
     #     data=waymo_night,
     #     project=CLUSTER_OUTPUT_PATH,
+    #     use_dist=False,
     # )
 
-    # train_model(
+    # run_seeded_train(
+    #     iterations=3,
     #     name="waymo_cluster_night-yolo11n-bic-carep3k2-thiou",
     #     model="dlt-models/yolo11n-bic-carep3k2.yaml",
     #     data=waymo_night,
     #     project=CLUSTER_OUTPUT_PATH,
     #     iou_type="thiou",
+    #     use_dist=False,
     # )
 
-    # train_model(
-    #     name="waymo_cluster_night-yolo11s",
-    #     model="yolo11s.yaml",
+    # run_seeded_train(
+    #     iterations=3,
+    #     name="waymo_cluster_night-yolo11n-spdconv1-bic-repc3k2",
+    #     model="dlt-models/yolo11n-spdconv1-bic-repc3k2.yaml",
     #     data=waymo_night,
     #     project=CLUSTER_OUTPUT_PATH,
+    #     use_dist=False,
+    # )
+
+    # run_seeded_train(
+    #     iterations=3,
+    #     name="waymo_cluster_night-yolo11n-spdconv1-bic-repc3k2-thiou",
+    #     model="dlt-models/yolo11n-spdconv1-bic-repc3k2.yaml",
+    #     data=waymo_night,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     iou_type="thiou",
+    #     use_dist=False,
+    # )
+
+    # run_seeded_train(
+    #     iterations=3,
+    #     name="waymo_cluster_night-yolo11n-spdconv-bic-repc3k2",
+    #     model="dlt-models/yolo11n-spdconv-bic-repc3k2.yaml",
+    #     data=waymo_night,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     use_dist=False,
+    # )
+
+    # run_seeded_train(
+    #     iterations=3,
+    #     name="waymo_cluster_night-yolo11n-spdconv-bic-repc3k2-thiou",
+    #     model="dlt-models/yolo11n-spdconv-bic-repc3k2.yaml",
+    #     data=waymo_night,
+    #     project=CLUSTER_OUTPUT_PATH,
+    #     iou_type="thiou",
+    #     use_dist=False,
     # )
 
     # # 2. waymo
 
-    # train_model(
+    # run_seeded_train(
+    #     iterations=3,
     #     name="waymo_cluster-yolo11n-bic-repc3k2",
     #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
     #     data=waymo,
     #     project=CLUSTER_OUTPUT_PATH,
+    #     use_dist=False,
     # )
 
-    # train_model(
+    # run_seeded_train(
+    #     iterations=3,
     #     name="waymo_cluster-yolo11n-bic-repc3k2-thiou",
     #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
     #     data=waymo,
     #     project=CLUSTER_OUTPUT_PATH,
-    # )
-
-    # train_model(
-    #     name="waymo_cluster-yolo11n-spdconv-bic-repc3k2",
-    #     model="dlt-models/yolo11n-spdconv-bic-repc3k2.yaml",
-    #     data=waymo,
-    #     project=CLUSTER_OUTPUT_PATH,
-    # )
-
-    # train_model(
-    #     name="waymo_cluster-yolo11n-spdconv-bic-repc3k2-thiou",
-    #     model="dlt-models/yolo11n-spdconv-bic-repc3k2.yaml",
-    #     data=waymo,
-    #     project=CLUSTER_OUTPUT_PATH,
     #     iou_type="thiou",
+    #     use_dist=False,
     # )
 
-    # train_model(
-    #     name="waymo_cluster-yolo11n-spdconv1-bic-repc3k2",
-    #     model="dlt-models/yolo11n-spdconv1-bic-repc3k2.yaml",
-    #     data=waymo,
-    #     project=CLUSTER_OUTPUT_PATH,
-    # )
-
-    # train_model(
-    #     name="waymo_cluster-yolo11n-spdconv1-bic-repc3k2-thiou",
-    #     model="dlt-models/yolo11n-spdconv1-bic-repc3k2.yaml",
-    #     data=waymo,
-    #     project=CLUSTER_OUTPUT_PATH,
-    #     iou_type="thiou",
-    # )
-
-    # train_model(
-    #     name="waymo_cluster-yolo11n",
-    #     model="dlt-models/yolo11n.yaml",
-    #     data=waymo,
-    #     project=CLUSTER_OUTPUT_PATH,
-    # )
-
-    # train_model(
+    # run_seeded_train(
+    #     iterations=3,
     #     name="waymo_cluster-yolo11n-bic-carep3k2",
     #     model="dlt-models/yolo11n-bic-carep3k2.yaml",
     #     data=waymo,
     #     project=CLUSTER_OUTPUT_PATH,
+    #     use_dist=False,
     # )
 
-    # train_model(
+    # run_seeded_train(
+    #     iterations=3,
     #     name="waymo_cluster-yolo11n-bic-carep3k2-thiou",
     #     model="dlt-models/yolo11n-bic-carep3k2.yaml",
     #     data=waymo,
     #     project=CLUSTER_OUTPUT_PATH,
     #     iou_type="thiou",
+    #     use_dist=False,
     # )
 
-    # train_model(
-    #     name="waymo_cluster-yolo11s",
-    #     model="yolo11s.yaml",
+    # run_seeded_train(
+    #     iterations=3,
+    #     name="waymo_cluster-yolo11n-spdconv1-bic-repc3k2",
+    #     model="dlt-models/yolo11n-spdconv1-bic-repc3k2.yaml",
     #     data=waymo,
     #     project=CLUSTER_OUTPUT_PATH,
+    #     use_dist=False,
     # )
 
-    # # 3. bdd100k
-
-    # train_model(
-    #     name="bdd100k_cluster-yolo11n-bic-repc3k2",
-    #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
-    #     data=bdd100k,
-    #     project=CLUSTER_OUTPUT_PATH,
-    # )
-
-    # train_model(
-    #     name="bdd100k_cluster-yolo11n-bic-repc3k2-thiou",
-    #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
-    #     data=bdd100k,
-    #     project=CLUSTER_OUTPUT_PATH,
-    # )
-
-    # train_model(
-    #     name="bdd100k_cluster-yolo11n-spdconv-bic-repc3k2",
-    #     model="dlt-models/yolo11n-spdconv-bic-repc3k2.yaml",
-    #     data=bdd100k,
-    #     project=CLUSTER_OUTPUT_PATH,
-    # )
-
-    # train_model(
-    #     name="bdd100k_cluster-yolo11n-spdconv-bic-repc3k2-thiou",
-    #     model="dlt-models/yolo11n-spdconv-bic-repc3k2.yaml",
-    #     data=bdd100k,
-    #     project=CLUSTER_OUTPUT_PATH,
-    #     iou_type="thiou",
-    # )
-
-    # train_model(
-    #     name="bdd100k_cluster-yolo11n-spdconv1-bic-repc3k2",
+    # run_seeded_train(
+    #     iterations=3,
+    #     name="waymo_cluster-yolo11n-spdconv1-bic-repc3k2-thiou",
     #     model="dlt-models/yolo11n-spdconv1-bic-repc3k2.yaml",
-    #     data=bdd100k,
-    #     project=CLUSTER_OUTPUT_PATH,
-    # )
-
-    # train_model(
-    #     name="bdd100k_cluster-yolo11n-spdconv1-bic-repc3k2-thiou",
-    #     model="dlt-models/yolo11n-spdconv1-bic-repc3k2.yaml",
-    #     data=bdd100k,
+    #     data=waymo,
     #     project=CLUSTER_OUTPUT_PATH,
     #     iou_type="thiou",
+    #     use_dist=False,
     # )
 
-    # train_model(
-    #     name="bdd100k_cluster-yolo11n",
-    #     model="dlt-models/yolo11n.yaml",
-    #     data=bdd100k,
+    # run_seeded_train(
+    #     iterations=3,
+    #     name="waymo_cluster-yolo11n-spdconv-bic-repc3k2",
+    #     model="dlt-models/yolo11n-spdconv-bic-repc3k2.yaml",
+    #     data=waymo,
     #     project=CLUSTER_OUTPUT_PATH,
+    #     use_dist=False,
     # )
 
-    # train_model(
-    #     name="bdd100k_cluster-yolo11n-bic-carep3k2",
-    #     model="dlt-models/yolo11n-bic-carep3k2.yaml",
-    #     data=bdd100k,
-    #     project=CLUSTER_OUTPUT_PATH,
-    # )
-
-    # train_model(
-    #     name="bdd100k_cluster-yolo11n-bic-carep3k2-thiou",
-    #     model="dlt-models/yolo11n-bic-carep3k2.yaml",
-    #     data=bdd100k,
+    # run_seeded_train(
+    #     iterations=3,
+    #     name="waymo_cluster-yolo11n-spdconv-bic-repc3k2-thiou",
+    #     model="dlt-models/yolo11n-spdconv-bic-repc3k2.yaml",
+    #     data=waymo,
     #     project=CLUSTER_OUTPUT_PATH,
     #     iou_type="thiou",
-    # )
-
-    # train_model(
-    #     name="bdd100k_cluster-yolo11s",
-    #     model="yolo11s.yaml",
-    #     data=bdd100k,
-    #     project=CLUSTER_OUTPUT_PATH,
+    #     use_dist=False,
     # )
