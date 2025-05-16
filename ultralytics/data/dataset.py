@@ -350,7 +350,8 @@ class TemporalYOLODataset(YOLODataset):
         if short_videos:
             LOGGER.error(
                 f"ERROR ❌ {len(short_videos)} videos too short for {mode_str} with "
-                f"gframe={self.gframe}, lframe={self.lframe}, temporal_stride={self.temporal_stride}"
+                f"gframe={self.gframe}, lframe={self.lframe}, temporal_stride={self.temporal_stride}. "
+                f"Video IDs: {short_videos}"
             )
             raise ValueError(f"Some videos are too short for {mode_str} settings.")
 
