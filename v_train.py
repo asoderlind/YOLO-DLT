@@ -129,7 +129,7 @@ def train_model_v(
 # Example usage
 if __name__ == "__main__":
     train_model_v(
-        name="waymo_night-yolo11nv-16gframe-0.005lr0",
+        name="waymo_night-yolo11nv-16_gframe-0.005_lr0-5_temporal_cls",
         model="dlt-models/yolo11n-temporal.yaml",
         model_load_path="runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt",
         gframe=16,
@@ -137,6 +137,7 @@ if __name__ == "__main__":
         cos_lr=True,
         data="waymo_night.yaml",
         lr0=0.005,
+        temporal_cls=0.5,
     )
     # train_model_v(
     #     name="waymo-yolo11nv-4tw-1s-0.0005lr0",
