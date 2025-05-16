@@ -136,6 +136,47 @@ def train_model(
     return results
 
 
+def run_seeded_train(
+    iterations: int = 3,
+    name="{data}-{model}-{fe}-{augment}-{epochs}e",
+    model=MODEL,
+    data="bdd100k_night.yaml",
+    batch=BATCH,
+    epochs=EPOCHS,
+    device=DEVICE,
+    use_fe=False,
+    augment=True,
+    pretrained=PRETRAINED,
+    iou_type=IOU_TYPE,
+    warmup_bias_lr=WARMUP_BIAS_LR,
+    lr0=LR0,
+    optimizer=OPTIMIZER,
+    momentum=MOMENTUM,
+    classes=None,
+    **kwargs,
+):
+    for i in range(iterations):
+        train_model(
+            name=f"{name}-seed-{i}",
+            model=model,
+            data=data,
+            batch=batch,
+            epochs=epochs,
+            device=device,
+            use_fe=use_fe,
+            augment=augment,
+            pretrained=pretrained,
+            iou_type=iou_type,
+            warmup_bias_lr=warmup_bias_lr,
+            lr0=lr0,
+            optimizer=optimizer,
+            momentum=momentum,
+            classes=classes,
+            seed=i,
+            **kwargs,
+        )
+
+
 grid_sgd = {
     "epochs": [50, 100, 150, 200],
     "lr0": [0.001, 0.005, 0.01],
@@ -202,6 +243,13 @@ if __name__ == "__main__":
     waymo_night = "waymo_cluster_night.yaml"
     waymo = "waymo_cluster.yaml"
     bdd100k = "bdd100k_cluster.yaml"
+
+    run_seeded_train(
+        iterations=3,
+        name="test",
+        model="yolo11n.yaml",
+        data="waymo16.yaml",
+    )
 
     # 0. some bdd100k night
     train_model(
