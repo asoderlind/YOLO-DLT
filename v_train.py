@@ -138,6 +138,7 @@ if __name__ == "__main__":
         data="waymo_night.yaml",
         lr0=0.005,
         temporal_cls=0.5,
+        batch=1,
     )
     # train_model_v(
     #     name="waymo-yolo11nv-4tw-1s-0.0005lr0",
