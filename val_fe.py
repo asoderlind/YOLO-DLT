@@ -23,7 +23,10 @@ if __name__ == "__main__":
     ##########
     # EXDARK #
     ##########
-    eval_model(f"runs/detect/exDark-yolo-dln-c-yolo11n.yaml-200e-0s-noDist-d=0.05-fe-lc=0.1_/weights/best.pt", "exDark-yolo-dln.yaml")
+    for enhancer in ["dln", "mbllen"]:
+        for lc in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
+            for s in [1, 2]:
+                eval_model(f"runs/detect/exDark-yolo-{enhancer}-c-yolo11n.yaml-200e-{s}s-noDist-d=0.05-fe-lc={lc}_/weights/best.pt", "exDark-yolo-dln.yaml")
 
     #########
     # CARLA #
