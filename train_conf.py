@@ -16,3 +16,5 @@ WARMUP_BIAS_LR = 0.0
 PRETRAINED = False
 EPOCHS = 200
 CLUSTER_OUTPUT_PATH = "/mnt/machine-learning-storage/ML1/ClusterOutput/MLC-499/Runs"
+SEED = 0
+MAX_DIST_WAYMO = 85

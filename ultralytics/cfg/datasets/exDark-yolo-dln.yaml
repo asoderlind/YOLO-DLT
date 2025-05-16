@@ -9,20 +9,26 @@
 #     └── coco128  ← downloads here (7 MB)
 
 # Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
-path: ../datasets/kitti-yolo-mini # dataset root dir
+path: ../datasets/exDark-yolo-dln # dataset root dir
 train: images/train # train images (relative to 'path') 69863 images
 val: images/val # val images (relative to 'path') 10000 images
-#test: images/test
+test: images/test
 
+# Classes
+nc: 12
 names:
-  0: Car
-  1: Van
-  2: Truck
-  3: Pedestrian
-  4: Person_sitting
-  5: Cyclist
-  6: Tram
-  7: Misc
-  8: DontCare
+  0: "Bicycle"
+  1: "Boat"
+  2: "Bottle"
+  3: "Bus"
+  4: "Car"
+  5: "Cat"
+  6: "Chair"
+  7: "Cup"
+  8: "Dog"
+  9: "Motorbike"
+  10: "People"
+  11: "Table"
+
 # Download script/URL (optional)
-#download: https://files.soderlind.dev/bdd1k.zip
+download: https://files.soderlind.dev/datasets/exDark-yolo.zip
