@@ -280,11 +280,12 @@ class v8DetectionLoss:
             loss = torch.zeros(4, device=self.device)  # box, cls, dfl, con
         else:
             loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal_cls
-            feats = preds[0]
-            refined_cls_preds: torch.Tensor = preds[1]
-            refined_reg_preds = preds[2]
-            pred_res: torch.Tensor = preds[3]  # [batch_size, topk_post, 4 + nc]
-            pred_idx: torch.Tensor = preds[4]  # [batch_size, topk_post]
+            start_index = 0 if len(preds) == 5 else 1  # 5 outputs during training, 6 during validation
+            feats = preds[start_index]
+            refined_cls_preds: torch.Tensor = preds[start_index + 1]
+            # refined_reg_preds = preds[start_index + 2] NOT USED FOR NOW
+            pred_res: list[torch.Tensor] = preds[start_index + 3]  # len batch_size [ <= topk_post, 4 + nc]
+            pred_idx: torch.Tensor = preds[start_index + 4]  # len batch_size [<= topk_post]
             # match self.fam_mode:
             #     case "cls":
             #         loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal_cls
@@ -356,7 +357,16 @@ class v8DetectionLoss:
         # Temporal cls loss
         if self.temporal and self.fam_mode in ["cls", "both_combined", "both_separate"]:
             loss[4] = self._calculate_temporal_cls_loss_iou_based(
-                refined_cls_preds, pred_res, gt_labels, gt_bboxes, batch_size, dtype, eps
+                refined_cls_preds,
+                pred_res,
+                pred_idx,
+                target_scores,
+                fg_mask,
+                gt_labels,
+                gt_bboxes,
+                batch_size,
+                dtype,
+                eps,
             )
         # if self.fam_mode in ["reg", "both_combined", "both_separate"]:
         #     loss_idx = 4 if self.fam_mode == "reg" else 5
@@ -438,124 +448,92 @@ class v8DetectionLoss:
 
     def _calculate_temporal_cls_loss_iou_based(
         self,
-        refined_cls_preds: torch.Tensor,  # [1, total_detections, nc]
-        pred_res: torch.Tensor,  # [batch_size, topk_post, 4+nc]
-        gt_labels: torch.Tensor,  # [batch_size, max_gt, 1]
-        gt_bboxes: torch.Tensor,  # [batch_size, max_gt, 4]
+        refined_cls_preds: torch.Tensor,
+        pred_res: list[torch.Tensor],
+        pred_idx: list[torch.Tensor],
+        target_scores: torch.Tensor,
+        fg_mask: torch.Tensor,
+        gt_labels: torch.Tensor,
+        gt_bboxes: torch.Tensor,
         batch_size: int,
         dtype,
         eps: float = 1e-7,
     ) -> torch.Tensor:
         """
-        Calculate temporal classification loss using IoU-based soft labeling.
-
-        This mimics YOLOV's approach where FSM-selected detections are matched to GT
-        using IoU similarity rather than the standard anchor assignment.
-
-        Args:
-            refined_cls_preds: Temporally enhanced classification predictions, concatenated
-                              across all batches [1, total_detections, num_classes]
-            pred_res: Selected predictions from FSM [batch_size, topk_post, 4+nc] on xywh format
-            gt_labels: Ground truth class labels [batch_size, max_gt, 1]
-            gt_bboxes: Ground truth bounding boxes in xyxy format [batch_size, max_gt, 4]
-            batch_size: Number of batches
-            dtype: Tensor dtype for loss computation
-            eps: Small epsilon for numerical stability
-
-        Returns:
-            torch.Tensor: Temporal classification loss (scalar)
+        Calculate temporal loss exactly like YOLOV - reuse standard assigner results when possible.
         """
         from ultralytics.utils.metrics import box_iou
         from ultralytics.utils.ops import xywh2xyxy
 
-        breakpoint()
+        ref_targets: list[torch.Tensor] = []
+        ref_masks: list[torch.Tensor] = []
 
-        # Flatten refined predictions to work with concatenated structure
-        # refined_cls_preds is [1, total_detections, nc], we need [total_detections, nc]
+        for batch_idx in range(batch_size):
+            num_detections = len(pred_idx[batch_idx])
+
+            # Create target tensor for this batch
+            ref_target = torch.zeros(num_detections, self.nc + 1, device=self.device, dtype=dtype)
+
+            # Get foreground anchors from standard assigner
+            fg_indices = torch.where(fg_mask[batch_idx])[0]
+
+            # Process each refined detection
+            for det_idx, anchor_idx in enumerate(pred_idx[batch_idx]):
+                # Check if this anchor was assigned by standard assigner
+
+                assigned_mask = fg_indices == anchor_idx
+
+                if assigned_mask.any():
+                    # Use standard assigner's target
+                    ref_target[det_idx, : self.nc] = target_scores[batch_idx, anchor_idx]
+                else:
+                    # Fall back to IoU-based matching (like YOLOV)
+                    pred_box = xywh2xyxy(pred_res[batch_idx][det_idx, :4].unsqueeze(0))
+
+                    # Get valid GT for this batch
+                    batch_gt_boxes = gt_bboxes[batch_idx]
+                    batch_gt_labels = gt_labels[batch_idx, :, 0]
+                    valid_gt_mask = batch_gt_boxes.sum(dim=1) > 0
+
+                    if valid_gt_mask.any():
+                        valid_gt_boxes = batch_gt_boxes[valid_gt_mask]
+                        valid_gt_labels = batch_gt_labels[valid_gt_mask]
+
+                        # Compute IoU
+                        ious = box_iou(pred_box, valid_gt_boxes)
+                        max_iou, matched_idx = ious.max(dim=1)
+
+                        if max_iou >= 0.6:
+                            # High IoU - create soft label
+                            gt_class = valid_gt_labels[matched_idx].long()
+                            ref_target[det_idx, gt_class] = max_iou.item()
+                        else:
+                            # Low IoU - background
+                            ref_target[det_idx, -1] = 1 - max_iou.item()
+                    else:
+                        # No valid GT - background
+                        ref_target[det_idx, -1] = 1.0
+
+            # Extract targets and foreground mask
+            ref_targets.append(ref_target[:, : self.nc])
+            ref_masks.append(ref_target[:, -1] == 0)
+
+        # Concatenate all batches
+        ref_targets = torch.cat(ref_targets, dim=0)  # type: ignore[assignment]
+        ref_masks = torch.cat(ref_masks, dim=0)  # type: ignore[assignment]
+
+        # Flatten refined predictions
         refined_preds_flat = refined_cls_preds.view(-1, self.nc)
 
-        # Initialize list to collect soft labels for all detections
-        all_soft_labels = []
-        detection_idx = 0  # Track position in flattened predictions
-
-        # Process each batch separately to create IoU-based soft labels
-        for b in range(batch_size):
-            # Extract predictions for current batch (FSM-selected boxes)
-            batch_pred_boxes = pred_res[b][:, :4]  # [topk_post, 4] - boxes only
-            batch_pred_boxes = xywh2xyxy(batch_pred_boxes)  # Convert to xyxy format
-            num_detections = len(batch_pred_boxes)
-
-            # Extract ground truth for current batch
-            batch_gt_boxes = gt_bboxes[b]  # [max_gt, 4]
-            batch_gt_labels = gt_labels[b]  # [max_gt, 1]
-
-            # Remove padded ground truth boxes (where sum of coords is 0)
-            valid_gt_mask = batch_gt_boxes.sum(dim=1) > 0
-
-            # Initialize soft labels for this batch
-            # Shape: [topk_post, nc + 1] (extra dimension for background class)
-            batch_soft_labels = torch.zeros(num_detections, self.nc + 1, device=self.device, dtype=dtype)
-
-            if not valid_gt_mask.any():
-                # No valid ground truth in this batch - all detections are background
-                batch_soft_labels[:, -1] = 1.0  # Set background class to 1
-                all_soft_labels.append(batch_soft_labels)
-                detection_idx += num_detections
-                continue
-
-            # Filter to valid ground truth only
-            valid_gt_boxes = batch_gt_boxes[valid_gt_mask]  # [num_valid_gt, 4]
-            valid_gt_labels = batch_gt_labels[valid_gt_mask, 0]  # [num_valid_gt]
-
-            # Compute IoU between all predictions and all ground truth boxes
-            # IoU matrix: [topk_post, num_valid_gt]
-            ious = box_iou(batch_pred_boxes, valid_gt_boxes)
-
-            # Find best matching GT for each prediction
-            max_ious, matched_gt_indices = ious.max(dim=1)  # [topk_post], [topk_post]
-
-            # Create soft labels based on IoU similarity (YOLOV's approach)
-            iou_threshold = 0.6  # Same threshold as YOLOV
-
-            for det_idx in range(num_detections):
-                if max_ious[det_idx] >= iou_threshold:
-                    # High IoU: assign ground truth label weighted by IoU confidence
-                    # This creates "soft" supervision - higher IoU = higher confidence
-                    matched_gt_idx = matched_gt_indices[det_idx]
-                    gt_class = valid_gt_labels[matched_gt_idx].long()
-                    batch_soft_labels[det_idx, gt_class] = max_ious[det_idx]
-                else:
-                    # Low IoU: assign to background class with confidence = (1 - IoU)
-                    # This penalizes false positives based on how far they are from any GT
-                    batch_soft_labels[det_idx, -1] = 1 - max_ious[det_idx]
-
-            all_soft_labels.append(batch_soft_labels)
-            detection_idx += num_detections
-
-        # Concatenate soft labels from all batches to match refined predictions
-        # Shape: [total_detections, nc + 1]
-        soft_labels = torch.cat(all_soft_labels, dim=0)
-
-        # Only compute loss on foreground predictions (non-background)
-        # Background predictions (column -1) don't contribute to classification loss
-        fg_mask = soft_labels[:, -1] == 0  # True where background weight is 0
-
-        if not fg_mask.sum():
-            # No foreground predictions - return zero loss
+        # Compute loss
+        if not ref_masks.sum():
             return torch.tensor(0.0, device=self.device)
 
-        # Extract foreground predictions and targets
-        refined_targets = soft_labels[fg_mask, :-1]  # Remove background column
-        refined_preds_fg = refined_preds_flat[fg_mask]
+        loss_ref = self.bce(refined_preds_flat[ref_masks], ref_targets[ref_masks]).sum() / (
+            ref_targets[ref_masks].sum() + eps
+        )
 
-        # Compute Binary Cross-Entropy loss on soft labels
-        # This is identical to standard YOLO classification loss
-        temporal_loss = self.bce(refined_preds_fg, refined_targets).sum()
-
-        # Normalize by sum of target scores (standard YOLO normalization)
-        temporal_loss /= refined_targets.sum() + eps
-
-        return temporal_loss
+        return loss_ref
 
     # def _calculate_temporal_cls_loss(
     #     self,

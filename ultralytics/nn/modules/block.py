@@ -2120,7 +2120,7 @@ class FeatureSelectionModule(nn.Module):
 
     def _nms_selection(
         self, raw_preds: torch.Tensor, vid_features: torch.Tensor, reg_features: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, list[torch.Tensor], list[torch.Tensor]]:
         """
         Select features using NMS, following YOLOV's concatenate-all approach.
         Returns variable length features that get concatenated across batch.
@@ -2186,6 +2186,6 @@ class FeatureSelectionModule(nn.Module):
             concat_reg_features,  # [1, total_detections, reg_ch]
             concat_boxes,  # [1, total_detections, 4]
             concat_scores,  # [1, total_detections]
-            torch.stack(batch_selected_predictions, dim=0),  # [batch_size, topk_post, 4+nc]
-            torch.stack(batch_selected_indices, dim=0),  # [batch_size, topk_post, 4+nc]
+            batch_selected_predictions,  #  len batch_size, [up to topk_post, 4+nc]
+            batch_selected_indices,  # len batch_size, [up to topk_post] (indices in the original raw_preds tensor)
         )

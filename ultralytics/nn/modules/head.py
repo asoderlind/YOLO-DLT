@@ -305,8 +305,8 @@ class TemporalDetect(Detect):
         # selected_cls_feats: [1, total_detections, cls_ch]
         # selected_boxes: [1, total_detections, 4]
         # selected_scores: [1, total_detections]
-        # pred_res: [batch_size, topk_post, 4 + num_classes]
-        # pred_idx: [batch_size, topk_post]
+        # pred_res: len batch_size [ <= topk_post, 4 + num_classes]
+        # pred_idx: len batch_size [<= topk_post]
         (
             selected_cls_feats,
             selected_reg_feats,
@@ -314,7 +314,7 @@ class TemporalDetect(Detect):
             selected_scores,
             pred_res,
             pred_idx,
-        ) = self.fsm(raw_predictions, flat_vid_features, flat_reg_features)
+        ) = self.fsm(raw_predictions, flat_vid_features, flat_reg_features)  # type: ignore[misc]
 
         # Apply temporal aggregation
         match self.fam_mode:
@@ -354,10 +354,19 @@ class TemporalDetect(Detect):
                 pred_idx,  # [batch_size, topk_post]
             )
 
-        y = self._temporal_inference(
-            x, final_cls_preds, final_reg_preds, key_frame_indices
-        )  # [bs, 4 + num_classes, sum_i(w_i * h_i)]
-        return y if self.export else (y, x, final_cls_preds, final_reg_preds, key_frame_indices)
+        y = self._update_predictions_with_refined_classes(raw_predictions, final_cls_preds, pred_idx)
+        return (
+            y
+            if self.export
+            else (
+                y,
+                x,
+                final_cls_preds,  # [1, topk_post, num_classes]
+                final_reg_preds,
+                pred_res,  # [batch_size, topk_post, 4 + num_classes]
+                pred_idx,  # [batch_size, topk_post]
+            )
+        )
 
     def _forward_cls(
         self,
@@ -377,9 +386,8 @@ class TemporalDetect(Detect):
         enhanced_cls_feats, _ = self.fam(
             cls_features=selected_cls_feats, reg_features=selected_reg_feats, cls_scores=selected_scores
         )
-        # The yolov paper did this to get the final features down to 30 I guess. Should be changed for yolov++ though.
-        topk_post = 30
-        final_cls_preds = self.linear_pred(enhanced_cls_feats[:, :topk_post, :])  # [1, topk_post, num_classes]
+
+        final_cls_preds = self.linear_pred(enhanced_cls_feats)  # [1, topk_post, num_classes]
 
         return final_cls_preds, None  # No reg features in this case
 
@@ -530,6 +538,53 @@ class TemporalDetect(Detect):
         final_cls_preds = self.linear_pred_cls(enhanced_cls_feats)  # [batch_size, topk_post, num_classes]
         final_reg_preds = self.linear_pred_reg(enhanced_reg_feats)  # [batch_size, topk_post, 4 * reg_max]
         return final_cls_preds, final_reg_preds, key_frame_indices  # both cls and reg features
+
+    def _update_predictions_with_refined_classes(
+        self,
+        raw_predictions: torch.Tensor,  # [batch_size, 4+nc, sum(h_i*w_i)]
+        refined_cls_preds: torch.Tensor,  # [1, total_detections, nc]
+        selected_indices: list[torch.Tensor],  # len batch_size [topk_post]
+    ) -> torch.Tensor:
+        """
+        Update raw predictions with refined classifications using FSM indices as a bridge.
+
+        Args:
+            raw_predictions: Original model predictions [batch_size, 4+nc, num_anchors]
+            refined_cls_preds: FSM+FAM refined classifications [1, total_detections, nc]
+            selected_indices: FSM selected indices [batch_size, topk_post]
+
+        Returns:
+            Updated predictions with refined classifications [batch_size, 4+nc, num_anchors]
+        """
+        # Make a copy to avoid modifying the original
+        updated_preds = raw_predictions.clone()
+
+        # Flatten refined predictions to work with
+        refined_cls_flat = refined_cls_preds.view(-1, self.nc)  # [total_detections, nc]
+
+        # Track position in flattened refined predictions
+        refined_idx = 0
+
+        # Process each batch
+        for batch_idx in range(updated_preds.shape[0]):
+            # Get number of refined predictions for this batch
+            num_refined = len(selected_indices[batch_idx])
+
+            # Extract refined classes for this batch
+            batch_refined_cls = refined_cls_flat[refined_idx : refined_idx + num_refined]  # [topk_post, nc]
+
+            # Get the anchor indices selected by FSM for this batch
+            batch_selected_indices = selected_indices[batch_idx]  # [topk_post]
+
+            # Update predictions: replace original class scores with refined ones
+            # raw_predictions format: [batch, 4+nc, num_anchors]
+            # Classes are in positions 4:4+nc in the channel dimension
+            updated_preds[batch_idx, 4 : 4 + self.nc, batch_selected_indices] = batch_refined_cls.T
+
+            # Move to next batch's refined predictions
+            refined_idx += num_refined
+
+        return updated_preds
 
     def _temporal_inference(
         self,
