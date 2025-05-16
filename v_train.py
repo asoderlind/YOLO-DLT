@@ -139,6 +139,7 @@ if __name__ == "__main__":
         lr0=0.005,
         temporal_cls=0.5,
         batch=1,
+        temporal_freeze=True,
     )
     # train_model_v(
     #     name="waymo-yolo11nv-4tw-1s-0.0005lr0",
