@@ -279,28 +279,34 @@ class v8DetectionLoss:
             feats = preds[1] if isinstance(preds, tuple) else preds
             loss = torch.zeros(4, device=self.device)  # box, cls, dfl, con
         else:
-            match self.fam_mode:
-                case "cls":
-                    loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal_cls
-                    start_index = 0 if len(preds) == 4 else 1  # 4 outputs during training, 5 during validation
-                    feats = preds[start_index]
-                    refined_cls_preds = preds[start_index + 1]
-                    _ = preds[start_index + 2]  # skip reg preds
-                    refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
-                case "reg":
-                    loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal reg
-                    start_index = 0 if len(preds) == 4 else 1
-                    feats = preds[start_index]
-                    _ = preds[start_index + 1]  # skip cls preds
-                    refined_reg_preds = preds[start_index + 2]
-                    refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
-                case _:  # both cls and reg
-                    loss = torch.zeros(6, device=self.device)  # box, cls, dfl, con, temporal_cls, temporal_reg
-                    start_index = 0 if len(preds) == 4 else 1
-                    feats = preds[start_index]
-                    refined_cls_preds = preds[start_index + 1]
-                    refined_reg_preds = preds[start_index + 2]
-                    refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
+            loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal_cls
+            feats = preds[0]
+            refined_cls_preds: torch.Tensor = preds[1]
+            refined_reg_preds = preds[2]
+            pred_res: torch.Tensor = preds[3]  # [batch_size, topk_post, 4 + nc]
+            pred_idx: torch.Tensor = preds[4]  # [batch_size, topk_post]
+            # match self.fam_mode:
+            #     case "cls":
+            #         loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal_cls
+            #         start_index = 0 if len(preds) == 4 else 1  # 4 outputs during training, 5 during validation
+            #         feats = preds[start_index]
+            #         refined_cls_preds = preds[start_index + 1]
+            #         _ = preds[start_index + 2]  # skip reg preds
+            #         refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
+            #     case "reg":
+            #         loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal reg
+            #         start_index = 0 if len(preds) == 4 else 1
+            #         feats = preds[start_index]
+            #         _ = preds[start_index + 1]  # skip cls preds
+            #         refined_reg_preds = preds[start_index + 2]
+            #         refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
+            #     case _:  # both cls and reg
+            #         loss = torch.zeros(6, device=self.device)  # box, cls, dfl, con, temporal_cls, temporal_reg
+            #         start_index = 0 if len(preds) == 4 else 1
+            #         feats = preds[start_index]
+            #         refined_cls_preds = preds[start_index + 1]
+            #         refined_reg_preds = preds[start_index + 2]
+            #         refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
 
             # Reference frames batch_idx are set < 0 in the temporal collate function
             key_frame_mask = batch["batch_idx"] >= 0
@@ -348,27 +354,22 @@ class v8DetectionLoss:
         loss[1] = self.bce(pred_scores, target_scores.to(dtype)).sum() / (target_scores_sum + eps)  # BCE
 
         # Temporal cls loss
-        if self.temporal:
-            # NOTE: temporal cls loss does not make sense for validation
-            # But I can't be bothered to handle more conditionals
-
-            if self.fam_mode in ["cls", "both_combined", "both_separate"]:
-                # Calculate the temporal classification loss
-                loss[4] = self._calculate_temporal_cls_loss(
-                    refined_cls_preds, refined_indices, target_scores, batch_size, dtype, eps
-                )
-            if self.fam_mode in ["reg", "both_combined", "both_separate"]:
-                loss_idx = 4 if self.fam_mode == "reg" else 5
-                loss[loss_idx] = self._calculate_temporal_reg_loss(
-                    refined_reg_preds,
-                    refined_indices,
-                    target_bboxes,
-                    target_scores,
-                    anchor_points,
-                    stride_tensor,
-                    fg_mask,
-                    batch_size,
-                )
+        if self.temporal and self.fam_mode in ["cls", "both_combined", "both_separate"]:
+            loss[4] = self._calculate_temporal_cls_loss_iou_based(
+                refined_cls_preds, pred_res, gt_labels, gt_bboxes, batch_size, dtype, eps
+            )
+        # if self.fam_mode in ["reg", "both_combined", "both_separate"]:
+        #     loss_idx = 4 if self.fam_mode == "reg" else 5
+        #     loss[loss_idx] = self._calculate_temporal_reg_loss(
+        #         refined_reg_preds,
+        #         refined_indices,
+        #         target_bboxes,
+        #         target_scores,
+        #         anchor_points,
+        #         stride_tensor,
+        #         fg_mask,
+        #         batch_size,
+        #     )
 
         # Bbox loss
         if fg_mask.sum():
@@ -435,39 +436,160 @@ class v8DetectionLoss:
 
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
 
-    def _calculate_temporal_cls_loss(
+    def _calculate_temporal_cls_loss_iou_based(
         self,
-        refined_cls_preds: torch.Tensor,
-        refined_indices: torch.Tensor,
-        target_scores: torch.Tensor,
+        refined_cls_preds: torch.Tensor,  # [1, total_detections, nc]
+        pred_res: torch.Tensor,  # [batch_size, topk_post, 4+nc]
+        gt_labels: torch.Tensor,  # [batch_size, max_gt, 1]
+        gt_bboxes: torch.Tensor,  # [batch_size, max_gt, 4]
         batch_size: int,
         dtype,
         eps: float = 1e-7,
     ) -> torch.Tensor:
-        """Calculate the temporal classification loss.
+        """
+        Calculate temporal classification loss using IoU-based soft labeling.
+
+        This mimics YOLOV's approach where FSM-selected detections are matched to GT
+        using IoU similarity rather than the standard anchor assignment.
 
         Args:
-            refined_cls_preds (torch.Tensor): [B, target_count, num_classes]
-            refined_indices (torch.Tensor): [B, target_count]
-            target_scores (torch.Tensor): [B, sum(h_i * w_i), num_classes]
-            batch_size (int): Batch size.
-            dtype: Data type of the tensors.
-            eps (float, optional): Small value to avoid division by zero. Defaults to 1e-7.
-        Returns:
-            torch.Tensor: Temporal classification loss.
+            refined_cls_preds: Temporally enhanced classification predictions, concatenated
+                              across all batches [1, total_detections, num_classes]
+            pred_res: Selected predictions from FSM [batch_size, topk_post, 4+nc] on xywh format
+            gt_labels: Ground truth class labels [batch_size, max_gt, 1]
+            gt_bboxes: Ground truth bounding boxes in xyxy format [batch_size, max_gt, 4]
+            batch_size: Number of batches
+            dtype: Tensor dtype for loss computation
+            eps: Small epsilon for numerical stability
 
+        Returns:
+            torch.Tensor: Temporal classification loss (scalar)
         """
-        batch_indices = (
-            torch.arange(batch_size, device=target_scores.device).view(-1, 1).expand(-1, refined_indices.size(1))
-        )
-        # Crazy PyTorch indexing to get the target scores for the key frames
-        # Filter target_scores[batch_indices[i,j], refined_indices[i,j]] for each i, j
-        # Keep other dim the same
-        refined_target_scores = target_scores[batch_indices, refined_indices]
-        refined_target_scores_sum = max(  # type: ignore
-            refined_target_scores.sum(), 1
-        )
-        return self.bce(refined_cls_preds, refined_target_scores.to(dtype)).sum() / (refined_target_scores_sum + eps)
+        from ultralytics.utils.metrics import box_iou
+        from ultralytics.utils.ops import xywh2xyxy
+
+        breakpoint()
+
+        # Flatten refined predictions to work with concatenated structure
+        # refined_cls_preds is [1, total_detections, nc], we need [total_detections, nc]
+        refined_preds_flat = refined_cls_preds.view(-1, self.nc)
+
+        # Initialize list to collect soft labels for all detections
+        all_soft_labels = []
+        detection_idx = 0  # Track position in flattened predictions
+
+        # Process each batch separately to create IoU-based soft labels
+        for b in range(batch_size):
+            # Extract predictions for current batch (FSM-selected boxes)
+            batch_pred_boxes = pred_res[b][:, :4]  # [topk_post, 4] - boxes only
+            batch_pred_boxes = xywh2xyxy(batch_pred_boxes)  # Convert to xyxy format
+            num_detections = len(batch_pred_boxes)
+
+            # Extract ground truth for current batch
+            batch_gt_boxes = gt_bboxes[b]  # [max_gt, 4]
+            batch_gt_labels = gt_labels[b]  # [max_gt, 1]
+
+            # Remove padded ground truth boxes (where sum of coords is 0)
+            valid_gt_mask = batch_gt_boxes.sum(dim=1) > 0
+
+            # Initialize soft labels for this batch
+            # Shape: [topk_post, nc + 1] (extra dimension for background class)
+            batch_soft_labels = torch.zeros(num_detections, self.nc + 1, device=self.device, dtype=dtype)
+
+            if not valid_gt_mask.any():
+                # No valid ground truth in this batch - all detections are background
+                batch_soft_labels[:, -1] = 1.0  # Set background class to 1
+                all_soft_labels.append(batch_soft_labels)
+                detection_idx += num_detections
+                continue
+
+            # Filter to valid ground truth only
+            valid_gt_boxes = batch_gt_boxes[valid_gt_mask]  # [num_valid_gt, 4]
+            valid_gt_labels = batch_gt_labels[valid_gt_mask, 0]  # [num_valid_gt]
+
+            # Compute IoU between all predictions and all ground truth boxes
+            # IoU matrix: [topk_post, num_valid_gt]
+            ious = box_iou(batch_pred_boxes, valid_gt_boxes)
+
+            # Find best matching GT for each prediction
+            max_ious, matched_gt_indices = ious.max(dim=1)  # [topk_post], [topk_post]
+
+            # Create soft labels based on IoU similarity (YOLOV's approach)
+            iou_threshold = 0.6  # Same threshold as YOLOV
+
+            for det_idx in range(num_detections):
+                if max_ious[det_idx] >= iou_threshold:
+                    # High IoU: assign ground truth label weighted by IoU confidence
+                    # This creates "soft" supervision - higher IoU = higher confidence
+                    matched_gt_idx = matched_gt_indices[det_idx]
+                    gt_class = valid_gt_labels[matched_gt_idx].long()
+                    batch_soft_labels[det_idx, gt_class] = max_ious[det_idx]
+                else:
+                    # Low IoU: assign to background class with confidence = (1 - IoU)
+                    # This penalizes false positives based on how far they are from any GT
+                    batch_soft_labels[det_idx, -1] = 1 - max_ious[det_idx]
+
+            all_soft_labels.append(batch_soft_labels)
+            detection_idx += num_detections
+
+        # Concatenate soft labels from all batches to match refined predictions
+        # Shape: [total_detections, nc + 1]
+        soft_labels = torch.cat(all_soft_labels, dim=0)
+
+        # Only compute loss on foreground predictions (non-background)
+        # Background predictions (column -1) don't contribute to classification loss
+        fg_mask = soft_labels[:, -1] == 0  # True where background weight is 0
+
+        if not fg_mask.sum():
+            # No foreground predictions - return zero loss
+            return torch.tensor(0.0, device=self.device)
+
+        # Extract foreground predictions and targets
+        refined_targets = soft_labels[fg_mask, :-1]  # Remove background column
+        refined_preds_fg = refined_preds_flat[fg_mask]
+
+        # Compute Binary Cross-Entropy loss on soft labels
+        # This is identical to standard YOLO classification loss
+        temporal_loss = self.bce(refined_preds_fg, refined_targets).sum()
+
+        # Normalize by sum of target scores (standard YOLO normalization)
+        temporal_loss /= refined_targets.sum() + eps
+
+        return temporal_loss
+
+    # def _calculate_temporal_cls_loss(
+    #     self,
+    #     refined_cls_preds: torch.Tensor,
+    #     refined_indices: torch.Tensor,
+    #     target_scores: torch.Tensor,
+    #     batch_size: int,
+    #     dtype,
+    #     eps: float = 1e-7,
+    # ) -> torch.Tensor:
+    #     """Calculate the temporal classification loss.
+
+    #     Args:
+    #         refined_cls_preds (torch.Tensor): [B, target_count, num_classes]
+    #         refined_indices (torch.Tensor): [B, target_count]
+    #         target_scores (torch.Tensor): [B, sum(h_i * w_i), num_classes]
+    #         batch_size (int): Batch size.
+    #         dtype: Data type of the tensors.
+    #         eps (float, optional): Small value to avoid division by zero. Defaults to 1e-7.
+    #     Returns:
+    #         torch.Tensor: Temporal classification loss.
+
+    #     """
+    #     batch_indices = (
+    #         torch.arange(batch_size, device=target_scores.device).view(-1, 1).expand(-1, refined_indices.size(1))
+    #     )
+    #     # Crazy PyTorch indexing to get the target scores for the key frames
+    #     # Filter target_scores[batch_indices[i,j], refined_indices[i,j]] for each i, j
+    #     # Keep other dim the same
+    #     refined_target_scores = target_scores[batch_indices, refined_indices]
+    #     refined_target_scores_sum = max(  # type: ignore
+    #         refined_target_scores.sum(), 1
+    #     )
+    #     return self.bce(refined_cls_preds, refined_target_scores.to(dtype)).sum() / (refined_target_scores_sum + eps)
 
     def _calculate_temporal_reg_loss(
         self,
