@@ -23,6 +23,7 @@ def train(
     model_path: str = MODEL,
     seed: int = SEED,
     epochs: int = EPOCHS,
+    optimizer: str = OPTIMIZER,
     name=None,
     project="runs/detect",
     **kwargs,
@@ -68,7 +69,7 @@ def train(
             lr0=LR0,
             iou_type=IOU_TYPE,
             warmup_bias_lr=WARMUP_BIAS_LR,
-            optimizer=OPTIMIZER,
+            optimizer=optimizer,
             seed=seed,
             hsv_h=hsv_h,
             hsv_s=hsv_s,
@@ -77,185 +78,107 @@ def train(
         )
     except AssertionError as e:
         print("Already finished: ", e)
-        return ''
+        return name
 
     return name
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    args = parser.parse_args()
+    ######
+    # FE #
+    ######
 
-    #########
-    # WAYMO #
-    #########
-    """
-    train(
-        data_path="waymo-noConf.yaml",
-        use_dist=False,
-        dist=0.00,
-        scale=0.5,
-        max_dist=MAX_DIST_WAYMO,
-    )
-    train(
-        data_path="waymo-noConf.yaml",
-        use_dist=True,
-        dist=0.01,
-        max_dist=MAX_DIST_WAYMO,
-    )
-    # SPDConv
-    train(
-        model_path="dlt-models/yolo11n-SPDConv-3.yaml",
-        data_path="waymo-noConf.yaml",
-        use_dist=False,
-        dist=0.00,
-        scale=0.5,
-        max_dist=MAX_DIST_WAYMO,
-    )
-    train(
-        model_path="dlt-models/yolo11n-SPDConv-3.yaml",
-        data_path="waymo-noConf.yaml",
-        use_dist=True,
-        dist=0.01,
-        max_dist=MAX_DIST_WAYMO,
-    )
-    """
-
-
-    ##########
-    # exdark #
-    ##########
-
-    # Baseline exDark-yolo
-    """
-    train(
-        data_path="exDark-yolo.yaml",
-        use_fe=False,
-        lambda_c=0.0,
-        val=True,
-    )
-    """
+    # exDark
 
     for data in ["exDark-yolo-dln.yaml", "exDark-yolo-mbllen.yaml"]:
         # All loss
         for lambda_c in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
-            train(
-                data_path=data,
-                use_fe=True,
-                lambda_c=lambda_c,
-            )
+            for s in [1, 2]:
+                train(
+                    data_path=data,
+                    use_fe=True,
+                    lambda_c=lambda_c,
+                    seed=s
+                )
 
-        # Curriculum learning
-        for lambda_c in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
-            first_layer_trained = train(
-                data_path=data,
-                use_fe=True,
-                lambda_c=lambda_c,
-                epochs=20,
-                box=0.0,
-                cls=0.0,
-                dfl=0.0,
-                optimizer='auto'
-            )
-            train(
-                model_name=f"runs/detect/{first_layer_trained}/weights/last.pt",
-                name="exDark-yolo-dln-curriculum-lc={lambda_c}-10e-auto-then-200e-f=1",
-                data_path=data,
-                use_fe=False,
-                lambda_c=0.0,
-                freeze=1,
-            )
+    # BDD100k-night
 
-    # Curriculum on bdd100k with mirnet
     """
-    first_layer_trained = train(
-        data_path="bdd100k_night-mirnet.yaml",
-        use_fe=True,
-        epochs=10,
-        lambda_c=0.5,
-        box=0.0,
-        cls=0.0,
-        dfl=0.0,
-        val=False
-    )
-    train(
-        model_name=f"runs/detect/dlt-models/yolo11n.yaml-10e-bdd100k_night-mirnet.yaml-fe-lambda_c0.5_2/weights/last.pt",
-        data_path="bdd100k_night-mirnet.yaml",
-        use_fe=False,
-        lambda_c=0.0,
-        val=False,
-        freeze=1
-    )
-
-    # Curriculum on bdd100k with DLN
-    first_layer_trained = train(
-        data_path="bdd100k_night-dln.yaml", use_fe=True, epochs=10, lambda_c=0.5, box=0.0, cls=0.0, dfl=0.0, val=False
-    )
-    train(
-        model_name=f"runs/detect/{first_layer_trained}/weights/last.pt",
-        data_path="bdd100k_night-dln.yaml",
-        use_fe=False,
-        lambda_c=0.0,
-        val=False,
-        freeze=1,
-    )
-
-    # All loss on bdd100k with mirnet
-    train(
-        data_path="bdd100k_night-mirnet.yaml",
-        use_fe=True,
-        lambda_c=0.5,
-    )
-
-    # All loss on bdd100k with DLN
-    train(
-        data_path="bdd100k_night-dln.yaml",
-        use_fe=True,
-        lambda_c=0.5,
-    )
+    for s in [0, 1, 2]:
+        # Baseline
+        train(
+            data_path="bdd100k_night-dln.yaml",
+            use_fe=False,
+            lambda_c=0.0,
+            seed=s,
+        )
+        # DLN
+        train(
+            data_path="bdd100k_night-dln.yaml",
+            use_fe=True,
+            lambda_c=0.3,
+            seed=s,
+        )
+        # MBLLEN
+        train(
+            data_path="bdd100k_night-mbllen.yaml",
+            use_fe=True,
+            lambda_c=0.1,
+            seed=s,
+        )
     """
 
-    #########
-    # KITTI #
-    #########
+    ############
+    # Distance #
+    ############
+
+    # KITTI
 
     # Test without dist
-    """
-    train(data_path="kitti.yaml", use_dist=True, dist=0.5, classes=KITTI_CLASSES, epochs=200)
-    train(
-        data_path="kitti.yaml", model_path="runs/detect/kitti.yaml-dlt-models-yolo11n-SPDConv-3.yaml-200e-SGD-dist-scale0.0-mosaic1.0-c01234567-d0.5_5/weights/last.pt", use_dist=True, dist=0.5, classes=KITTI_CLASSES, epochs=200, resume=True
-    )
-    train(
-        data_path="kitti.yaml", model_path="dlt-models/yolo11n-SPDConv-3.yaml", use_dist=True, dist=1.0, classes=KITTI_CLASSES, epochs=200)
-    """
+    # train(data_path="kitti.yaml", use_dist=True, dist=0.5, classes=KITTI_CLASSES, epochs=200)
 
-    # no dist
-    for s in [1]:
-        for d in [1.0]:
-            train(
-                data_path="kitti-mini.yaml",
-                use_dist=True,
-                dist=d,
-                seed=s,
-                classes=KITTI_CLASSES,
-            )
+    # Waymo-night
 
-    for s in [2]:
+    for s in [1, 2]:
         train(
-            data_path="kitti.yaml",
+            data_path="waymo_cluster_night.yaml",
             use_dist=False,
-            dist=d,
+            dist=0.00,
+            max_dist=MAX_DIST_WAYMO,
             seed=s,
-            classes=KITTI_CLASSES,
         )
-        for d in [0.01, 0.05, 0.1, 1.0]:
-            train(
-                data_path="kitti.yaml",
-                use_dist=True,
-                dist=d,
-                seed=s,
-                classes=KITTI_CLASSES,
-            )
-
-    # train(data_path="kitti.yaml", use_dist=True, dist=0.5, seed=seed, classes=KITTI_CLASSES, epochs=200, scale=0.0, mosaic=0.0)
-    # train(data_path="kitti.yaml", use_dist=True, dist=0.5, seed=seed, classes=KITTI_CLASSES, epochs=200, scale=0.0, mosaic=1.0)
+        # train(
+        #     data_path="waymo_cluster_night.yaml",
+        #     use_dist=True,
+        #     dist=0.01,
+        #     max_dist=MAX_DIST_WAYMO,
+        #     seed=s,
+        # )
+        # train(
+        #     data_path="waymo_cluster_night.yaml",
+        #     use_dist=True,
+        #     dist=0.05,
+        #     max_dist=MAX_DIST_WAYMO,
+        #     seed=s,
+        # )
+        # train(
+        #     data_path="waymo_cluster_night.yaml",
+        #     use_dist=True,
+        #     dist=0.1,
+        #     max_dist=MAX_DIST_WAYMO,
+        #     seed=s,
+        # )
+        # train(
+        #     data_path="waymo_cluster_night.yaml",
+        #     use_dist=True,
+        #     dist=0.5,
+        #     max_dist=MAX_DIST_WAYMO,
+        #     seed=s,
+        # )
+        # train(
+        #     data_path="waymo_cluster_night.yaml",
+        #     use_dist=True,
+        #     dist=1.0,
+        #     max_dist=MAX_DIST_WAYMO,
+        #     seed=s,
+        # )
