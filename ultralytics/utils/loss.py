@@ -534,12 +534,9 @@ class v8DetectionLoss:
         if not ref_masks.sum():
             return torch.tensor(0.0, device=self.device)
 
-        loss_ref = self.bce(refined_preds_flat[ref_masks], ref_targets[ref_masks]).sum() / (
-            ref_targets[ref_masks].sum() + eps
-        )
+        ref_targets_sum = max(ref_targets[ref_masks].sum(), 1)
 
-        if loss_ref > 10:
-            breakpoint()
+        loss_ref = self.bce(refined_preds_flat[ref_masks], ref_targets[ref_masks]).sum() / ref_targets_sum
 
         return loss_ref
 
