@@ -506,9 +506,10 @@ class TemporalYOLODataset(YOLODataset):
 
                 raise ValueError(
                     f"Not enough global frames available in video {vid_id} with length {len(images_indices)}."
-                    f"Found {len(available_global)} frames and index is {index}."
-                    f"Available frames: {available_global}."
-                    f"Sequence indices: {sequence_indices}."
+                    f"Found {len(available_global)} frames and index is {index}. "
+                    f"Available frames: {available_global}. "
+                    f"Sequence indices: {sequence_indices}. "
+                    f"Image indices: {images_indices}. "
                 )
 
         # Get frame data using parent implementation
