@@ -2142,24 +2142,25 @@ class FeatureSelectionModule(nn.Module):
         batch_selected_predictions = []
         batch_selected_indices = []
 
+        # extract boxes and scores for all frames
+        boxes = predictions[:, :, :4]  # [batch_size, num_anchors, 4]
+        scores = predictions[:, :, 4:]  # [batch_size, num_anchors, num_classes]
+        max_scores, cls_ids = scores.max(dim=2)  # [batch_size, num_anchors]
+
         # Process each frame in the batch
         for b in range(batch_size):
-            boxes = predictions[b, :, :4]
-            scores = predictions[b, :, 4:]
-            max_scores, cls_ids = scores.max(dim=1)
-
             # Stage 1: Pre-selection by score
-            if len(max_scores) > self.topk_pre:
-                topk_values, topk_indices = torch.topk(max_scores, self.topk_pre)
+            if max_scores[b].shape[0] > self.topk_pre:
+                topk_values, topk_indices = torch.topk(max_scores[b], self.topk_pre)
             else:
-                topk_indices = torch.arange(len(max_scores), device=device)
-                topk_values = max_scores[topk_indices]
+                topk_indices = torch.arange(max_scores[b].shape[0], device=device)
+                topk_values = max_scores[b][topk_indices]
 
             # Stage 2: NMS
             nms_indices = batched_nms(
-                boxes[topk_indices],
+                boxes[b][topk_indices],
                 topk_values,
-                cls_ids[topk_indices],
+                cls_ids[b][topk_indices],
                 iou_threshold=self.nms_thresh_train if self.training else self.nms_thresh_val,
             )
 
@@ -2169,8 +2170,8 @@ class FeatureSelectionModule(nn.Module):
             # Store selected features (variable length per frame)
             all_selected_cls_features.append(vid_features[b, final_indices])
             all_selected_reg_features.append(reg_features[b, final_indices])
-            all_selected_boxes.append(boxes[final_indices])
-            all_selected_scores.append(max_scores[final_indices])
+            all_selected_boxes.append(boxes[b, final_indices])
+            all_selected_scores.append(max_scores[b, final_indices])
 
             batch_selected_predictions.append(predictions[b, final_indices])
             batch_selected_indices.append(final_indices)
