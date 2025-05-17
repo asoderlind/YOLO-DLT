@@ -391,6 +391,7 @@ class TemporalYOLODataset(YOLODataset):
 
         self.dataset_idx_to_video_id: dict[int, int] = {}  # Maps dataset image index to video id
         # Parse filenames to extract video and frame IDs
+        breakpoint()
         for idx, path in enumerate(self.im_files):
             vid_id, _ = self._parse_path(path)
             self.video_to_index[vid_id].append(idx)
