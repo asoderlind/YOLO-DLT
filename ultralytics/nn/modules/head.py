@@ -3,6 +3,7 @@
 
 import copy
 import math
+import time
 
 import torch
 import torch.nn as nn
@@ -262,6 +263,8 @@ class TemporalDetect(Detect):
     def forward(self, x: list[torch.Tensor]):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
 
+        start_time = time.time()
+
         # loop over detection layers (usually 3, 80x80, 40x40, 20x20)
         before_fsm_vid_feats: list[torch.Tensor] = []
         before_fsm_reg_feats: list[torch.Tensor] = []
@@ -307,6 +310,7 @@ class TemporalDetect(Detect):
         # selected_scores: [1, total_detections]
         # pred_res: len batch_size [ <= topk_post, 4 + num_classes]
         # pred_idx: len batch_size [<= topk_post]
+        fsm_start = time.time()
         (
             selected_cls_feats,
             selected_reg_feats,
@@ -315,14 +319,17 @@ class TemporalDetect(Detect):
             pred_res,
             pred_idx,
         ) = self.fsm(raw_predictions, flat_vid_features, flat_reg_features)  # type: ignore[misc]
+        fsm_time = time.time() - fsm_start
 
         # Apply temporal aggregation
         match self.fam_mode:
             case "cls":
                 # final_cls_preds: [1, topk_post, num_classes]
+                fam_start = time.time()
                 final_cls_preds, final_reg_preds = self._forward_cls(
                     selected_cls_feats, selected_reg_feats, selected_scores
                 )
+                fam_time = time.time() - fam_start
             case "reg":
                 final_cls_preds, final_reg_preds, key_frame_indices = self._forward_reg(
                     selected_cls_feats, selected_reg_feats, selected_scores, selected_indices
@@ -345,7 +352,10 @@ class TemporalDetect(Detect):
         # key_frame_batch_indices = torch.arange(0, batch_size, self.temporal_window + 1, device=x[0].device)
         # x = [x[i][key_frame_batch_indices] for i in range(len(x))]
 
+        total_time = time.time() - start_time
+
         if self.training:  # Training path
+            LOGGER.info(f"FAM time: {fam_time:.2f}s, FMS time: {fsm_time:.2f}s, Total time: {total_time:.2f}s")
             return (
                 x,
                 final_cls_preds,  # [1, topk_post, num_classes]
