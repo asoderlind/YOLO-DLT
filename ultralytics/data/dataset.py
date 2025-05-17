@@ -2,6 +2,7 @@
 
 import json
 import random
+import time
 from collections import defaultdict
 from itertools import repeat
 from multiprocessing.pool import ThreadPool
@@ -463,12 +464,15 @@ class TemporalYOLODataset(YOLODataset):
         Returns temporal information including main frame and reference frames.
         Handles training and validation modes with different global frame sampling strategies.
         """
+        start_time = time.time()
         # Get video information
         vid_id = self.dataset_idx_to_video_id[index]
         images_indices = self.video_to_index[vid_id]
         sequence_indices: list[int] = []
 
+        index_start = time.time()
         index = self.get_valid_index(index)
+        index_time = (time.time() - index_start) * 1000  # in ms
 
         # Ensure valid index if using local frames
         if self.lframe > 0:
@@ -476,6 +480,7 @@ class TemporalYOLODataset(YOLODataset):
             for i in range(self.lframe):
                 sequence_indices.append(index - i * self.temporal_stride)
 
+        gframe_start = time.time()
         # Add global frames if needed
         if self.gframe > 0:
             # For global frames, we need to exclude any local frames already added
@@ -515,6 +520,7 @@ class TemporalYOLODataset(YOLODataset):
                     f"Sequence indices: {sequence_indices}. "
                     f"Image indices: {images_indices}. "
                 )
+        gframe_time = (time.time() - gframe_start) * 1000  # in ms
 
         # Get frame data using parent implementation
         batch: list[BaseDatasetItem] = []
@@ -522,6 +528,15 @@ class TemporalYOLODataset(YOLODataset):
             item = super().__getitem__(idx)
             batch.append(item)
 
+        total_time = (time.time() - start_time) * 1000  # in ms
+
+        if self.mode == "train":
+            print(
+                f"INFO: {colorstr('train')} {colorstr('index', 'yellow')}: {index} "
+                f"{colorstr('index_time', 'yellow')}: {index_time:.1f}ms "
+                f"{colorstr('gframe_time', 'yellow')}: {gframe_time:.1f}ms "
+                f"{colorstr('total_time', 'yellow')}: {total_time:.1f}ms"
+            )
         return batch
 
     @staticmethod
