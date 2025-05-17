@@ -503,10 +503,11 @@ class TemporalYOLODataset(YOLODataset):
                     f"ERROR: Not enough global frames available in video {vid_id}. "
                     f"Requested {self.gframe}, but only {len(available_global)} available."
                 )
-                breakpoint()
+
                 raise ValueError(
                     f"Not enough global frames available in video {vid_id} with length {len(images_indices)}."
                     f"Found {len(available_global)} frames and index is {index}."
+                    f"Available frames: {available_global}."
                 )
 
         # Get frame data using parent implementation
