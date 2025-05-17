@@ -305,8 +305,7 @@ class TemporalYOLODataset(YOLODataset):
         random.seed(self.hyp.get("seed", 0))
 
         self._build_video_index()  # map frames to videos
-        if self.mode == "val":
-            breakpoint()
+
         self._validate_video_lengths()  # check if videos are long enough
 
     def _validate_video_lengths(self, len_warn_thresh: int = 50) -> None:
@@ -393,8 +392,7 @@ class TemporalYOLODataset(YOLODataset):
 
         self.dataset_idx_to_video_id: dict[int, int] = {}  # Maps dataset image index to video id
         # Parse filenames to extract video and frame IDs
-        if self.mode == "val":
-            breakpoint()
+
         for idx, path in enumerate(self.im_files):
             vid_id, _ = self._parse_path(path)
             self.video_to_index[vid_id].append(idx)
