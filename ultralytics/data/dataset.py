@@ -530,12 +530,12 @@ class TemporalYOLODataset(YOLODataset):
 
         total_time = (time.time() - start_time) * 1000  # in ms
 
-        if self.mode == "train":
-            print(
-                f"INDEX TIME: {index_time:.2f} ms "
-                f"GLOBAL FRAME TIME: {gframe_time:.2f} ms "
-                f"TOTAL DATA TIME: {total_time:.2f} ms "
-            )
+        # if self.mode == "train":
+        #     print(
+        #         f"INDEX TIME: {index_time:.2f} ms "
+        #         f"GLOBAL FRAME TIME: {gframe_time:.2f} ms "
+        #         f"TOTAL DATA TIME: {total_time:.2f} ms "
+        #     )
         return batch
 
     @staticmethod

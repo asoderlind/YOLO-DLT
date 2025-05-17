@@ -372,7 +372,7 @@ class v8DetectionLoss:
                 eps,
             )
             loss_time = (time.time() - loss_time_start) * 1000  # in ms
-            print(f"TEMPORAL CLS LOSS TIME: {loss_time:.2f} ms")
+            # print(f"TEMPORAL CLS LOSS TIME: {loss_time:.2f} ms")
         # if self.fam_mode in ["reg", "both_combined", "both_separate"]:
         #     loss_idx = 4 if self.fam_mode == "reg" else 5
         #     loss[loss_idx] = self._calculate_temporal_reg_loss(

@@ -355,7 +355,7 @@ class TemporalDetect(Detect):
         total_time = (time.time() - start_time) * 1000.0  # in ms
 
         if self.training:  # Training path
-            LOGGER.info(f"FAM time: {fam_time:.2f}ms, FSM time: {fsm_time:.2f}ms, Total time: {total_time:.2f}ms")
+            # LOGGER.info(f"FAM time: {fam_time:.2f}ms, FSM time: {fsm_time:.2f}ms, Total time: {total_time:.2f}ms")
             return (
                 x,
                 final_cls_preds,  # [1, topk_post, num_classes]
