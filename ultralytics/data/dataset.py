@@ -532,10 +532,9 @@ class TemporalYOLODataset(YOLODataset):
 
         if self.mode == "train":
             print(
-                f"INFO: {colorstr('train')} {colorstr('index', 'yellow')}: {index} "
-                f"{colorstr('index_time', 'yellow')}: {index_time:.1f}ms "
-                f"{colorstr('gframe_time', 'yellow')}: {gframe_time:.1f}ms "
-                f"{colorstr('total_time', 'yellow')}: {total_time:.1f}ms"
+                f"INDEX TIME: {index_time:.2f} ms "
+                f"GLOBAL FRAME TIME: {gframe_time:.2f} ms "
+                f"TOTAL DATA TIME: {total_time:.2f} ms "
             )
         return batch
 
