@@ -305,6 +305,8 @@ class TemporalYOLODataset(YOLODataset):
         random.seed(self.hyp.get("seed", 0))
 
         self._build_video_index()  # map frames to videos
+        if self.mode == "val":
+            breakpoint()
         self._validate_video_lengths()  # check if videos are long enough
 
     def _validate_video_lengths(self, len_warn_thresh: int = 50) -> None:
