@@ -319,7 +319,7 @@ class TemporalDetect(Detect):
             pred_res,
             pred_idx,
         ) = self.fsm(raw_predictions, flat_vid_features, flat_reg_features)  # type: ignore[misc]
-        fsm_time = time.time() - fsm_start
+        fsm_time = (time.time() - fsm_start) * 1000.0  # in ms
 
         # Apply temporal aggregation
         match self.fam_mode:
@@ -329,7 +329,7 @@ class TemporalDetect(Detect):
                 final_cls_preds, final_reg_preds = self._forward_cls(
                     selected_cls_feats, selected_reg_feats, selected_scores
                 )
-                fam_time = time.time() - fam_start
+                fam_time = (time.time() - fam_start) * 1000.0  # in ms
             case "reg":
                 final_cls_preds, final_reg_preds, key_frame_indices = self._forward_reg(
                     selected_cls_feats, selected_reg_feats, selected_scores, selected_indices
@@ -352,10 +352,10 @@ class TemporalDetect(Detect):
         # key_frame_batch_indices = torch.arange(0, batch_size, self.temporal_window + 1, device=x[0].device)
         # x = [x[i][key_frame_batch_indices] for i in range(len(x))]
 
-        total_time = time.time() - start_time
+        total_time = (time.time() - start_time) * 1000.0  # in ms
 
         if self.training:  # Training path
-            LOGGER.info(f"FAM time: {fam_time:.2f}s, FMS time: {fsm_time:.2f}s, Total time: {total_time:.2f}s")
+            LOGGER.info(f"FAM time: {fam_time:.2f}ms, FSM time: {fsm_time:.2f}ms, Total time: {total_time:.2f}ms")
             return (
                 x,
                 final_cls_preds,  # [1, topk_post, num_classes]
