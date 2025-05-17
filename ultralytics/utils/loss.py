@@ -1,5 +1,7 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
+import time
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -356,6 +358,7 @@ class v8DetectionLoss:
 
         # Temporal cls loss
         if self.temporal and self.fam_mode in ["cls", "both_combined", "both_separate"]:
+            loss_time_start = time.time()
             loss[4] = self._calculate_temporal_cls_loss_iou_based(
                 refined_cls_preds,
                 pred_res,
@@ -368,6 +371,8 @@ class v8DetectionLoss:
                 dtype,
                 eps,
             )
+            loss_time = (time.time() - loss_time_start) * 1000  # in ms
+            print(f"TEMPORAL CLS LOSS TIME: {loss_time:.2f} ms")
         # if self.fam_mode in ["reg", "both_combined", "both_separate"]:
         #     loss_idx = 4 if self.fam_mode == "reg" else 5
         #     loss[loss_idx] = self._calculate_temporal_reg_loss(
