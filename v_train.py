@@ -129,15 +129,54 @@ def train_model_v(
 # Example usage
 if __name__ == "__main__":
     train_model_v(
-        name="waymo_night-yolo11nv-16_gframe-0.005_lr0-5_temporal_cls",
+        name="waymo_night-yolo11nv-4_gframe-0.005_lr0-5_temporal_cls",
         model="dlt-models/yolo11n-temporal.yaml",
         model_load_path="runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt",
-        gframe=16,
-        epochs=109,
+        gframe=4,
+        epochs=10,
         cos_lr=True,
         data="waymo_night.yaml",
         lr0=0.005,
         temporal_cls=0.5,
+        batch=1,
+        temporal_freeze=True,
+    )
+    train_model_v(
+        name="waymo_night-yolo11nv-4_gframe-0.01_lr0-5_temporal_cls",
+        model="dlt-models/yolo11n-temporal.yaml",
+        model_load_path="runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt",
+        gframe=4,
+        epochs=10,
+        cos_lr=True,
+        data="waymo_night.yaml",
+        lr0=0.01,
+        temporal_cls=0.5,
+        batch=1,
+        temporal_freeze=True,
+    )
+    train_model_v(
+        name="waymo_night-yolo11nv-4_gframe-0.005_lr0-8_temporal_cls",
+        model="dlt-models/yolo11n-temporal.yaml",
+        model_load_path="runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt",
+        gframe=4,
+        epochs=10,
+        cos_lr=True,
+        data="waymo_night.yaml",
+        lr0=0.005,
+        temporal_cls=8.0,
+        batch=1,
+        temporal_freeze=True,
+    )
+    train_model_v(
+        name="waymo_night-yolo11nv-4_gframe-0.01_lr0-10_temporal_cls",
+        model="dlt-models/yolo11n-temporal.yaml",
+        model_load_path="runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt",
+        gframe=4,
+        epochs=10,
+        cos_lr=True,
+        data="waymo_night.yaml",
+        lr0=0.01,
+        temporal_cls=10.0,
         batch=1,
         temporal_freeze=True,
     )
