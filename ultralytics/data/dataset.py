@@ -386,6 +386,8 @@ class TemporalYOLODataset(YOLODataset):
         Create mapping of videos to frames and vice versa.
         """
 
+        self.im_files.sort()  # Sort image files to ensure consistent ordering
+
         # video id to a list of tuples of frame id and index in the dataset
         self.video_to_index: defaultdict[int, list[int]] = defaultdict(list[int])
 
