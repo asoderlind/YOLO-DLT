@@ -489,7 +489,7 @@ class TemporalYOLODataset(YOLODataset):
 
             # Only sample if we have enough frames
             if len(available_global) >= self.gframe or (
-                len(available_global) == self.gframe - 1 and len(available_global) == 1
+                len(available_global) == self.gframe - 1 and len(sequence_indices) == 1
             ):
                 # if we have val with gframe == 0 we add the current index manually so we subtract 1
                 efective_gframe = self.gframe - 1 if self.lframe == 0 and self.mode == "val" else self.gframe
