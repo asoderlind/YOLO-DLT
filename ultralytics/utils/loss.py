@@ -538,6 +538,9 @@ class v8DetectionLoss:
             ref_targets[ref_masks].sum() + eps
         )
 
+        if loss_ref > 10:
+            breakpoint()
+
         return loss_ref
 
     # def _calculate_temporal_cls_loss(
