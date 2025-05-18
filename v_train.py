@@ -136,10 +136,10 @@ if __name__ == "__main__":
         epochs=10,
         cos_lr=True,
         data="waymo_night.yaml",
-        lr0=0.005,
+        lr0=0.01,
         temporal_cls=0.0,
         batch=1,
-        temporal_freeze=True,
+        # temporal_freeze=True,
         close_mosaic=0,
     )
     # train_model_v(
