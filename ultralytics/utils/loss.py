@@ -1,6 +1,5 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
-import time
 
 import torch
 import torch.nn as nn
@@ -277,46 +276,47 @@ class v8DetectionLoss:
     def __call__(self, preds, batch, **kwargs):
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
         eps = 1e-7
-        if not self.temporal:
-            feats = preds[1] if isinstance(preds, tuple) else preds
-            loss = torch.zeros(4, device=self.device)  # box, cls, dfl, con
-        else:
-            loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal_cls
-            start_index = 0 if len(preds) == 5 else 1  # 5 outputs during training, 6 during validation
-            feats = preds[start_index]
-            refined_cls_preds: torch.Tensor = preds[start_index + 1]
-            # refined_reg_preds = preds[start_index + 2] NOT USED FOR NOW
-            pred_res: list[torch.Tensor] = preds[start_index + 3]  # len batch_size [ <= topk_post, 4 + nc]
-            pred_idx: torch.Tensor = preds[start_index + 4]  # len batch_size [<= topk_post]
-            # match self.fam_mode:
-            #     case "cls":
-            #         loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal_cls
-            #         start_index = 0 if len(preds) == 4 else 1  # 4 outputs during training, 5 during validation
-            #         feats = preds[start_index]
-            #         refined_cls_preds = preds[start_index + 1]
-            #         _ = preds[start_index + 2]  # skip reg preds
-            #         refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
-            #     case "reg":
-            #         loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal reg
-            #         start_index = 0 if len(preds) == 4 else 1
-            #         feats = preds[start_index]
-            #         _ = preds[start_index + 1]  # skip cls preds
-            #         refined_reg_preds = preds[start_index + 2]
-            #         refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
-            #     case _:  # both cls and reg
-            #         loss = torch.zeros(6, device=self.device)  # box, cls, dfl, con, temporal_cls, temporal_reg
-            #         start_index = 0 if len(preds) == 4 else 1
-            #         feats = preds[start_index]
-            #         refined_cls_preds = preds[start_index + 1]
-            #         refined_reg_preds = preds[start_index + 2]
-            #         refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
+        # if not self.temporal:
+        # TODO: SET BACK TO TEMPORAL
+        feats = preds[1] if isinstance(preds, tuple) else preds
+        loss = torch.zeros(4, device=self.device)  # box, cls, dfl, con
+        # else:
+        #     loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal_cls
+        #     start_index = 0 if len(preds) == 5 else 1  # 5 outputs during training, 6 during validation
+        #     feats = preds[start_index]
+        #     refined_cls_preds: torch.Tensor = preds[start_index + 1]
+        #     # refined_reg_preds = preds[start_index + 2] NOT USED FOR NOW
+        #     pred_res: list[torch.Tensor] = preds[start_index + 3]  # len batch_size [ <= topk_post, 4 + nc]
+        #     pred_idx: torch.Tensor = preds[start_index + 4]  # len batch_size [<= topk_post]
+        # match self.fam_mode:
+        #     case "cls":
+        #         loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal_cls
+        #         start_index = 0 if len(preds) == 4 else 1  # 4 outputs during training, 5 during validation
+        #         feats = preds[start_index]
+        #         refined_cls_preds = preds[start_index + 1]
+        #         _ = preds[start_index + 2]  # skip reg preds
+        #         refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
+        #     case "reg":
+        #         loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal reg
+        #         start_index = 0 if len(preds) == 4 else 1
+        #         feats = preds[start_index]
+        #         _ = preds[start_index + 1]  # skip cls preds
+        #         refined_reg_preds = preds[start_index + 2]
+        #         refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
+        #     case _:  # both cls and reg
+        #         loss = torch.zeros(6, device=self.device)  # box, cls, dfl, con, temporal_cls, temporal_reg
+        #         start_index = 0 if len(preds) == 4 else 1
+        #         feats = preds[start_index]
+        #         refined_cls_preds = preds[start_index + 1]
+        #         refined_reg_preds = preds[start_index + 2]
+        #         refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
 
-            # Reference frames batch_idx are set < 0 in the temporal collate function
-            key_frame_mask = batch["batch_idx"] >= 0
-            # Filter out the reference frames from the batch
-            batch["batch_idx"] = batch["batch_idx"][key_frame_mask]
-            batch["cls"] = batch["cls"][key_frame_mask]
-            batch["bboxes"] = batch["bboxes"][key_frame_mask]
+        # # Reference frames batch_idx are set < 0 in the temporal collate function
+        # key_frame_mask = batch["batch_idx"] >= 0
+        # # Filter out the reference frames from the batch
+        # batch["batch_idx"] = batch["batch_idx"][key_frame_mask]
+        # batch["cls"] = batch["cls"][key_frame_mask]
+        # batch["bboxes"] = batch["bboxes"][key_frame_mask]
 
         pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
             (self.reg_max * 4, self.nc), 1
@@ -356,23 +356,23 @@ class v8DetectionLoss:
         # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
         loss[1] = self.bce(pred_scores, target_scores.to(dtype)).sum() / (target_scores_sum + eps)  # BCE
 
-        # Temporal cls loss
-        if self.temporal and self.fam_mode in ["cls", "both_combined", "both_separate"]:
-            loss_time_start = time.time()
-            loss[4] = self._calculate_temporal_cls_loss_iou_based(
-                refined_cls_preds,
-                pred_res,
-                pred_idx,
-                target_scores,
-                fg_mask,
-                gt_labels,
-                gt_bboxes,
-                batch_size,
-                dtype,
-                eps,
-            )
-            loss_time = (time.time() - loss_time_start) * 1000  # in ms
-            # print(f"TEMPORAL CLS LOSS TIME: {loss_time:.2f} ms")
+        # # Temporal cls loss
+        # if self.temporal and self.fam_mode in ["cls", "both_combined", "both_separate"]:
+        #     loss_time_start = time.time()
+        #     loss[4] = self._calculate_temporal_cls_loss_iou_based(
+        #         refined_cls_preds,
+        #         pred_res,
+        #         pred_idx,
+        #         target_scores,
+        #         fg_mask,
+        #         gt_labels,
+        #         gt_bboxes,
+        #         batch_size,
+        #         dtype,
+        #         eps,
+        #     )
+        #     loss_time = (time.time() - loss_time_start) * 1000  # in ms
+        # print(f"TEMPORAL CLS LOSS TIME: {loss_time:.2f} ms")
         # if self.fam_mode in ["reg", "both_combined", "both_separate"]:
         #     loss_idx = 4 if self.fam_mode == "reg" else 5
         #     loss[loss_idx] = self._calculate_temporal_reg_loss(
@@ -442,7 +442,8 @@ class v8DetectionLoss:
         loss[3] *= self.hyp.lambda_c  # consistency gain
         if self.temporal:
             if self.fam_mode == "cls":
-                loss[4] *= self.hyp.temporal_cls
+                pass
+                # loss[4] *= self.hyp.temporal_cls
             elif self.fam_mode == "reg":
                 loss[4] *= self.hyp.temporal_reg
             else:  # both_combined, both_separate
