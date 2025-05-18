@@ -129,6 +129,17 @@ def train_model_v(
 # Example usage
 if __name__ == "__main__":
     train_model_v(
+        name="waymo_night-yolo11n-test",
+        model="dlt-models/yolo11n.yaml",
+        batch=4,
+        epochs=10,
+        data="waymo_night.yaml",
+        device="cuda",
+        lr0=0.01,
+        optimizer="SGD",
+        close_mosaic=0,
+    )
+    train_model_v(
         name="waymo_night-yolo11n-4_gframe-0.005_lr0-0_temporal_cls",
         model="dlt-models/yolo11n-temporal.yaml",
         model_load_path="runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt",
