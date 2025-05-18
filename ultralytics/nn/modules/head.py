@@ -364,7 +364,8 @@ class TemporalDetect(Detect):
                 pred_idx,  # [batch_size, topk_post]
             )
 
-        y = self._update_predictions_with_refined_classes(raw_predictions, final_cls_preds, pred_idx)
+        # y = self._update_predictions_with_refined_classes(raw_predictions, final_cls_preds, pred_idx)
+        y = raw_predictions
         return (
             y
             if self.export
