@@ -276,18 +276,17 @@ class v8DetectionLoss:
     def __call__(self, preds, batch, **kwargs):
         """Calculate the sum of the loss for box, cls and dfl multiplied by batch size."""
         eps = 1e-7
-        # if not self.temporal:
-        # TODO: SET BACK TO TEMPORAL
-        feats = preds[1] if isinstance(preds, tuple) else preds
-        loss = torch.zeros(4, device=self.device)  # box, cls, dfl, con
-        # else:
-        #     loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal_cls
-        #     start_index = 0 if len(preds) == 5 else 1  # 5 outputs during training, 6 during validation
-        #     feats = preds[start_index]
-        #     refined_cls_preds: torch.Tensor = preds[start_index + 1]
-        #     # refined_reg_preds = preds[start_index + 2] NOT USED FOR NOW
-        #     pred_res: list[torch.Tensor] = preds[start_index + 3]  # len batch_size [ <= topk_post, 4 + nc]
-        #     pred_idx: torch.Tensor = preds[start_index + 4]  # len batch_size [<= topk_post]
+        if not self.temporal:
+            feats = preds[1] if isinstance(preds, tuple) else preds
+            loss = torch.zeros(4, device=self.device)  # box, cls, dfl, con
+        else:
+            loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal_cls
+            start_index = 0 if len(preds) == 5 else 1  # 5 outputs during training, 6 during validation
+            feats = preds[start_index]
+            refined_cls_preds: torch.Tensor = preds[start_index + 1]
+            # refined_reg_preds = preds[start_index + 2] NOT USED FOR NOW
+            pred_res: list[torch.Tensor] = preds[start_index + 3]  # len batch_size [ <= topk_post, 4 + nc]
+            pred_idx: torch.Tensor = preds[start_index + 4]  # len batch_size [<= topk_post]
         # match self.fam_mode:
         #     case "cls":
         #         loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal_cls
@@ -356,21 +355,21 @@ class v8DetectionLoss:
         # loss[1] = self.varifocal_loss(pred_scores, target_scores, target_labels) / target_scores_sum  # VFL way
         loss[1] = self.bce(pred_scores, target_scores.to(dtype)).sum() / (target_scores_sum + eps)  # BCE
 
-        # # Temporal cls loss
-        # if self.temporal and self.fam_mode in ["cls", "both_combined", "both_separate"]:
-        #     loss_time_start = time.time()
-        #     loss[4] = self._calculate_temporal_cls_loss_iou_based(
-        #         refined_cls_preds,
-        #         pred_res,
-        #         pred_idx,
-        #         target_scores,
-        #         fg_mask,
-        #         gt_labels,
-        #         gt_bboxes,
-        #         batch_size,
-        #         dtype,
-        #         eps,
-        #     )
+        # Temporal cls loss
+        if self.temporal and self.fam_mode in ["cls", "both_combined", "both_separate"]:
+            # loss_time_start = time.time()
+            loss[4] = self._calculate_temporal_cls_loss_iou_based(
+                refined_cls_preds,
+                pred_res,
+                pred_idx,
+                target_scores,
+                fg_mask,
+                gt_labels,
+                gt_bboxes,
+                batch_size,
+                dtype,
+                eps,
+            )
         #     loss_time = (time.time() - loss_time_start) * 1000  # in ms
         # print(f"TEMPORAL CLS LOSS TIME: {loss_time:.2f} ms")
         # if self.fam_mode in ["reg", "both_combined", "both_separate"]:
