@@ -128,6 +128,30 @@ def train_model_v(
 
 # Example usage
 if __name__ == "__main__":
+    train_model_v(
+        name="waymo-yolo11n-night-200e-16_gframe-0.01_lr0-5_temporal_cls-regular_dl-refine",
+        model="dlt-models/yolo11n-temporal.yaml",
+        # model_load_path="runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt",
+        # gframe=4,
+        epochs=200,
+        cos_lr=True,
+        data="waymo_night.yaml",
+        lr0=0.01,
+        temporal_cls=5.0,
+        batch=16,
+    )
+    train_model_v(
+        name="bdd100k_night-yolo11n-night-200e-16_gframe-0.01_lr0-5_temporal_cls-regular_dl-refine",
+        model="dlt-models/yolo11n-temporal.yaml",
+        # model_load_path="runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt",
+        # gframe=4,
+        epochs=200,
+        cos_lr=True,
+        data="bdd100k_night.yaml",
+        lr0=0.01,
+        temporal_cls=5.0,
+        batch=16,
+    )
     # train_model_v(
     #     name="waymo_night-yolo11n-16_gframe-0.005_lr0-5_temporal_cls-regular_dl",
     #     model="dlt-models/yolo11n-temporal.yaml",
@@ -193,17 +217,17 @@ if __name__ == "__main__":
     #     batch=16,
     #     # temporal_freeze=True,
     # )
-    train_model_v(
-        name="bdd100k_night-yolo11n-full_training-200e-16_gframe-0.005_lr0-5_temporal_cls-regular_dl",
-        model="dlt-models/yolo11n-temporal.yaml",
-        # model_load_path="runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt",
-        # gframe=4,
-        epochs=200,
-        cos_lr=True,
-        data="bdd100k_night.yaml",
-        temporal_cls=5.0,
-        batch=16,
-    )
+    # train_model_v(
+    #     name="bdd100k_night-yolo11n-full_training-200e-16_gframe-0.005_lr0-5_temporal_cls-regular_dl",
+    #     model="dlt-models/yolo11n-temporal.yaml",
+    #     # model_load_path="runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt",
+    #     # gframe=4,
+    #     epochs=200,
+    #     cos_lr=True,
+    #     data="bdd100k_night.yaml",
+    #     temporal_cls=5.0,
+    #     batch=16,
+    # )
     # train_model_v(
     #     name="waymo_night-yolo11nv-4_gframe-0.005_lr0-5_temporal_cls",
     #     model="dlt-models/yolo11n-temporal.yaml",
