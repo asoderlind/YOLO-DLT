@@ -150,7 +150,7 @@ if __name__ == "__main__":
         lr0=0.005,
         temporal_cls=5.0,
         batch=16,
-        # temporal_freeze=True,
+        temporal_freeze=True,
     )
     # train_model_v(
     #     name="waymo_night-yolo11nv-4_gframe-0.005_lr0-5_temporal_cls",
