@@ -3,13 +3,14 @@ from ultralytics import YOLO
 model = YOLO("dlt-models/yolo11n-temporal.yaml")  # .load(
 #     "runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt"
 # )
+# model = YOLO("dlt-models/yolo11n.yaml")
 model.train(
-    data="waymo16.yaml",
+    data="waymo_night.yaml",
     epochs=1,
-    batch=1,
+    batch=16,
     device="mps",
     gframe=4,
-    temporal_freeze=True,
+    # temporal_freeze=True,
 )
 
 # model = YOLO("runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt")
