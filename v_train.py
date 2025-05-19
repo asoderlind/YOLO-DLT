@@ -140,7 +140,7 @@ if __name__ == "__main__":
     #     close_mosaic=0,
     # )
     train_model_v(
-        name="waymo_night-yolo11n-4_gframe-0.005_lr0-5_temporal_cls",
+        name="waymo_night-yolo11n-16_gframe-0.005_lr0-5_temporal_cls-regular_dl",
         model="dlt-models/yolo11n-temporal.yaml",
         model_load_path="runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt",
         # gframe=4,
