@@ -10,7 +10,7 @@ import torch
 from PIL import Image
 from torch.utils.data import dataloader, distributed
 
-from ultralytics.data.dataset import GroundingDataset, YOLODataset, YOLOMultiModalDataset
+from ultralytics.data.dataset import GroundingDataset, TemporalYOLODataset, YOLODataset, YOLOMultiModalDataset
 from ultralytics.data.loaders import (
     LOADERS,
     LoadImagesAndVideos,
@@ -104,7 +104,9 @@ def build_yolo_dataset(
 
     match dataset_type:
         case "default":
-            dataset = YOLODataset
+            # TODO: REMOVE THIS DEBUG AFTER TESTING
+            # dataset = YOLODataset
+            dataset = TemporalYOLODataset
         case "multi_modal":
             dataset = YOLOMultiModalDataset
         case "temporal":
