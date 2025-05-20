@@ -387,6 +387,7 @@ class TemporalYOLODataset(YOLODataset):
         """
 
         self.im_files.sort()  # Sort image files to ensure consistent ordering
+        self.labels.sort(key=lambda x: x["im_file"])  # Sort labels to match image files
 
         def check_order():
             for i in range(len(self.im_files)):
