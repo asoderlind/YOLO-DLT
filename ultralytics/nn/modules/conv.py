@@ -594,7 +594,7 @@ class LDConv(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # N is num_param.
-        offset: torch.Tensor = self.p_conv(x)
+        offset: torch.Tensor = self.p_conv(x)  # [b, 2N, h, w]
         dtype = offset.data.type()
         N = offset.size(1) // 2
         # (b, 2N, h, w)
@@ -665,7 +665,9 @@ class LDConv(nn.Module):
     # no zero-padding
     def _get_p_0(self, h: int, w: int, N: int, dtype) -> torch.Tensor:
         p_0_x, p_0_y = torch.meshgrid(
-            torch.arange(0, h * self.stride, self.stride), torch.arange(0, w * self.stride, self.stride), indexing="ij"
+            torch.arange(0, h * self.stride, self.stride, device=self.p_conv.weight.device),
+            torch.arange(0, w * self.stride, self.stride, device=self.p_conv.weight.device),
+            indexing="ij",
         )
 
         p_0_x = torch.flatten(p_0_x).view(1, 1, h, w).repeat(1, N, 1, 1)
