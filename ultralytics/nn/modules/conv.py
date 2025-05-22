@@ -585,10 +585,7 @@ class LDConv(nn.Module):
         self.p_conv = nn.Conv2d(in_c, 2 * num_param, kernel_size=3, padding=1, stride=stride)
         nn.init.constant_(self.p_conv.weight, 0)
         self.p_conv.register_full_backward_hook(self._set_lr)
-
-        # Register buffer for p_n only
-        self.register_buffer("p_n", None)
-        self._initialized = False
+        self.register_buffer("p_n", self._get_p_n(N=self.num_param))
 
     @staticmethod
     def _set_lr(module, grad_input, grad_output):
@@ -596,102 +593,122 @@ class LDConv(nn.Module):
         grad_output = (grad_output[i] * 0.1 for i in range(len(grad_output)))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        B, C, H, W = x.shape
+        # N is num_param.
+        offset: torch.Tensor = self.p_conv(x)
+        dtype = offset.data.type()
+        N = offset.size(1) // 2
+        # (b, 2N, h, w)
+        p = self._get_p(offset, dtype)
 
-        # Initialize p_n on first use
-        if not self._initialized:
-            device = x.device
-            dtype = x.dtype
-            self.p_n = self._get_p_n(N=self.num_param, device=device, dtype=dtype)
-            self._initialized = True
+        # (b, h, w, 2N)
+        p = p.contiguous().permute(0, 2, 3, 1)
+        q_lt = p.detach().floor()
+        q_rb = q_lt + 1
 
-        # Get offsets from p_conv
-        offset = self.p_conv(x)  # (B, 2*num_param, h_out, w_out)
-        _, _, h_out, w_out = offset.shape
+        q_lt = torch.cat(
+            [torch.clamp(q_lt[..., :N], 0, x.size(2) - 1), torch.clamp(q_lt[..., N:], 0, x.size(3) - 1)], dim=-1
+        ).long()
+        q_rb = torch.cat(
+            [torch.clamp(q_rb[..., :N], 0, x.size(2) - 1), torch.clamp(q_rb[..., N:], 0, x.size(3) - 1)], dim=-1
+        ).long()
+        q_lb = torch.cat([q_lt[..., :N], q_rb[..., N:]], dim=-1)
+        q_rt = torch.cat([q_rb[..., :N], q_lt[..., N:]], dim=-1)
 
-        # Create base grid for the output size
-        device = x.device
-        dtype = x.dtype
+        # clip p
+        p = torch.cat([torch.clamp(p[..., :N], 0, x.size(2) - 1), torch.clamp(p[..., N:], 0, x.size(3) - 1)], dim=-1)
 
-        # Create normalized coordinates for grid_sample
-        y_coords = torch.arange(0, h_out * self.stride, self.stride, device=device, dtype=dtype)
-        x_coords = torch.arange(0, w_out * self.stride, self.stride, device=device, dtype=dtype)
+        # bilinear kernel (b, h, w, N)
+        g_lt = (1 + (q_lt[..., :N].type_as(p) - p[..., :N])) * (1 + (q_lt[..., N:].type_as(p) - p[..., N:]))
+        g_rb = (1 - (q_rb[..., :N].type_as(p) - p[..., :N])) * (1 - (q_rb[..., N:].type_as(p) - p[..., N:]))
+        g_lb = (1 + (q_lb[..., :N].type_as(p) - p[..., :N])) * (1 - (q_lb[..., N:].type_as(p) - p[..., N:]))
+        g_rt = (1 - (q_rt[..., :N].type_as(p) - p[..., :N])) * (1 + (q_rt[..., N:].type_as(p) - p[..., N:]))
 
-        # Normalize to [-1, 1] for grid_sample
-        y_coords = 2.0 * y_coords / (H - 1) - 1.0
-        x_coords = 2.0 * x_coords / (W - 1) - 1.0
+        # resampling the features based on the modified coordinates.
+        x_q_lt = self._get_x_q(x, q_lt, N)
+        x_q_rb = self._get_x_q(x, q_rb, N)
+        x_q_lb = self._get_x_q(x, q_lb, N)
+        x_q_rt = self._get_x_q(x, q_rt, N)
 
-        grid_y, grid_x = torch.meshgrid(y_coords, x_coords, indexing="ij")
-        base_grid = torch.stack([grid_x, grid_y], dim=-1)  # (h_out, w_out, 2)
+        # bilinear
+        x_offset = (
+            g_lt.unsqueeze(dim=1) * x_q_lt
+            + g_rb.unsqueeze(dim=1) * x_q_rb
+            + g_lb.unsqueeze(dim=1) * x_q_lb
+            + g_rt.unsqueeze(dim=1) * x_q_rt
+        )
 
-        # Reshape offset to (B, num_param, h_out, w_out, 2)
-        offset = rearrange(offset, "b (n c) h w -> b n h w c", c=2)
-
-        # Normalize offsets to [-1, 1] range
-        offset_y = offset[..., 0:1] * 2.0 / (H - 1)
-        offset_x = offset[..., 1:2] * 2.0 / (W - 1)
-        offset_norm = torch.cat([offset_x, offset_y], dim=-1)
-
-        # Reshape p_n for broadcasting
-        p_n_reshaped = self.p_n.view(1, self.num_param, 1, 1, 2)
-        p_n_norm = p_n_reshaped * 2.0 / torch.tensor([W - 1, H - 1], device=device, dtype=dtype)
-
-        # Create sampling grids for each offset
-        # base_grid: (h_out, w_out, 2) -> (1, 1, h_out, w_out, 2)
-        # p_n_norm: (1, num_param, 1, 1, 2)
-        # offset_norm: (B, num_param, h_out, w_out, 2)
-        sampling_grids = base_grid.unsqueeze(0).unsqueeze(0) + p_n_norm + offset_norm
-
-        # Clamp to valid range
-        sampling_grids = torch.clamp(sampling_grids, -1.0, 1.0)
-
-        # Sample features using grid_sample
-        # We need to sample num_param times from the input
-        sampled_features = []
-
-        for i in range(self.num_param):
-            grid_i = sampling_grids[:, i, :, :, :]  # (B, h_out, w_out, 2)
-            sampled_i = F.grid_sample(
-                x, grid_i, mode="bilinear", padding_mode="border", align_corners=True
-            )  # (B, C, h_out, w_out)
-            sampled_features.append(sampled_i)
-
-        # Stack along spatial dimension (like the original)
-        # (B, C, num_param, h_out, w_out) -> (B, C, num_param * h_out, w_out)
-        sampled = torch.stack(sampled_features, dim=2)
-        sampled = rearrange(sampled, "b c n h w -> b c (n h) w")
-
-        # Apply final convolution
-        out = self.conv(sampled)
+        x_offset = self._reshape_x_offset(x_offset, self.num_param)
+        out = self.conv(x_offset)
 
         return out
 
-    def _get_p_n(self, N: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
-        base_int = round(math.sqrt(N))
-        row_number = N // base_int
-        mod_number = N % base_int
-
-        p_n_x, p_n_y = torch.meshgrid(
-            torch.arange(0, row_number, device=device, dtype=dtype),
-            torch.arange(0, base_int, device=device, dtype=dtype),
-            indexing="ij",
-        )
+    # generating the inital sampled shapes for the LDConv with different sizes.
+    def _get_p_n(self, N: int) -> torch.Tensor:
+        base_int = round(math.sqrt(self.num_param))
+        row_number = self.num_param // base_int
+        mod_number = self.num_param % base_int
+        p_n_x, p_n_y = torch.meshgrid(torch.arange(0, row_number), torch.arange(0, base_int), indexing="ij")
         p_n_x = torch.flatten(p_n_x)
         p_n_y = torch.flatten(p_n_y)
-
         if mod_number > 0:
             mod_p_n_x, mod_p_n_y = torch.meshgrid(
-                torch.arange(row_number, row_number + 1, device=device, dtype=dtype),
-                torch.arange(0, mod_number, device=device, dtype=dtype),
-                indexing="ij",
+                torch.arange(row_number, row_number + 1), torch.arange(0, mod_number), indexing="ij"
             )
+
             mod_p_n_x = torch.flatten(mod_p_n_x)
             mod_p_n_y = torch.flatten(mod_p_n_y)
             p_n_x, p_n_y = torch.cat((p_n_x, mod_p_n_x)), torch.cat((p_n_y, mod_p_n_y))
-
-        # Return as (N, 2) shape for easier manipulation
-        p_n = torch.stack([p_n_x, p_n_y], dim=-1)
+        p_n = torch.cat([p_n_x, p_n_y], 0)
+        p_n = p_n.view(1, 2 * N, 1, 1)
         return p_n
+
+    # no zero-padding
+    def _get_p_0(self, h: int, w: int, N: int, dtype) -> torch.Tensor:
+        p_0_x, p_0_y = torch.meshgrid(
+            torch.arange(0, h * self.stride, self.stride), torch.arange(0, w * self.stride, self.stride), indexing="ij"
+        )
+
+        p_0_x = torch.flatten(p_0_x).view(1, 1, h, w).repeat(1, N, 1, 1)
+        p_0_y = torch.flatten(p_0_y).view(1, 1, h, w).repeat(1, N, 1, 1)
+
+        # Use the dtype directly
+        p_0 = torch.cat([p_0_x, p_0_y], 1).to(dtype=dtype)
+
+        return p_0
+
+    def _get_p(self, offset: torch.Tensor, dtype: str) -> torch.Tensor:
+        N, h, w = offset.size(1) // 2, offset.size(2), offset.size(3)
+
+        # Get the actual dtype object instead of the string
+        actual_dtype = offset.dtype
+
+        # Pass the actual dtype
+        p_0 = self._get_p_0(h, w, N, actual_dtype)
+        p = p_0 + self.p_n + offset  # type: ignore[operator]
+        return p
+
+    def _get_x_q(self, x: torch.Tensor, q: torch.Tensor, N: int) -> torch.Tensor:
+        b, h, w, _ = q.size()
+        padded_w = x.size(3)
+        c = x.size(1)
+        # (b, c, h*w)
+        x = x.contiguous().view(b, c, -1)
+
+        # (b, h, w, N)
+        index = q[..., :N] * padded_w + q[..., N:]  # offset_x*w + offset_y
+        # (b, c, h*w*N)
+        index = index.contiguous().unsqueeze(dim=1).expand(-1, c, -1, -1, -1).contiguous().view(b, c, -1)
+
+        x_offset = x.gather(dim=-1, index=index).contiguous().view(b, c, h, w, N)
+
+        return x_offset
+
+    #  Stacking resampled features in the row direction.
+    @staticmethod
+    def _reshape_x_offset(x_offset: torch.Tensor, num_param: int) -> torch.Tensor:
+        # b, c, h, w, n = x_offset.size()
+        x_offset = rearrange(x_offset, "b c h w n -> b c (h n) w")
+        return x_offset
 
 
 class HybridConv(nn.Module):
