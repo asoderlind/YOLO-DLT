@@ -586,9 +586,8 @@ class LDConv(nn.Module):
         nn.init.constant_(self.p_conv.weight, 0)
         self.p_conv.register_full_backward_hook(self._set_lr)
 
-        # Register buffers for both p_n and p_0 base coordinates
+        # Register buffer for p_n only
         self.register_buffer("p_n", None)
-        self.register_buffer("p_0_base", None)
         self._initialized = False
 
     @staticmethod
@@ -596,44 +595,36 @@ class LDConv(nn.Module):
         grad_input = (grad_input[i] * 0.1 for i in range(len(grad_input)))
         grad_output = (grad_output[i] * 0.1 for i in range(len(grad_output)))
 
-    def _initialize_buffers(self, x: torch.Tensor, h: int, w: int):
-        """Initialize buffers on first forward pass"""
-        device = x.device
-        dtype = x.dtype
-        N = self.num_param
-
-        # Initialize p_n
-        self.p_n = self._get_p_n(N=N, device=device, dtype=dtype)
-
-        # Pre-compute base coordinates that can be reused
-        # Store normalized coordinates for grid_sample
-        y_coords = torch.arange(0, h * self.stride, self.stride, device=device, dtype=dtype)
-        x_coords = torch.arange(0, w * self.stride, self.stride, device=device, dtype=dtype)
-
-        # Normalize to [-1, 1] for grid_sample
-        y_coords = 2.0 * y_coords / (x.size(2) - 1) - 1.0
-        x_coords = 2.0 * x_coords / (x.size(3) - 1) - 1.0
-
-        grid_y, grid_x = torch.meshgrid(y_coords, x_coords, indexing="ij")
-
-        # Shape: (1, h, w, 2)
-        self.p_0_base = torch.stack([grid_x, grid_y], dim=-1).unsqueeze(0)
-
-        self._initialized = True
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, C, H, W = x.shape
-        h, w = H // self.stride, W // self.stride
 
-        # Initialize on first use
+        # Initialize p_n on first use
         if not self._initialized:
-            self._initialize_buffers(x, h, w)
+            device = x.device
+            dtype = x.dtype
+            self.p_n = self._get_p_n(N=self.num_param, device=device, dtype=dtype)
+            self._initialized = True
 
-        # Get offsets
-        offset = self.p_conv(x)  # (B, 2*num_param, h, w)
+        # Get offsets from p_conv
+        offset = self.p_conv(x)  # (B, 2*num_param, h_out, w_out)
+        _, _, h_out, w_out = offset.shape
 
-        # Use grid_sample for efficient bilinear interpolation
-        # Reshape offset to (B, num_param, h, w, 2)
+        # Create base grid for the output size
+        device = x.device
+        dtype = x.dtype
+
+        # Create normalized coordinates for grid_sample
+        y_coords = torch.arange(0, h_out * self.stride, self.stride, device=device, dtype=dtype)
+        x_coords = torch.arange(0, w_out * self.stride, self.stride, device=device, dtype=dtype)
+
+        # Normalize to [-1, 1] for grid_sample
+        y_coords = 2.0 * y_coords / (H - 1) - 1.0
+        x_coords = 2.0 * x_coords / (W - 1) - 1.0
+
+        grid_y, grid_x = torch.meshgrid(y_coords, x_coords, indexing="ij")
+        base_grid = torch.stack([grid_x, grid_y], dim=-1)  # (h_out, w_out, 2)
+
+        # Reshape offset to (B, num_param, h_out, w_out, 2)
         offset = rearrange(offset, "b (n c) h w -> b n h w c", c=2)
 
         # Normalize offsets to [-1, 1] range
@@ -641,33 +632,34 @@ class LDConv(nn.Module):
         offset_x = offset[..., 1:2] * 2.0 / (W - 1)
         offset_norm = torch.cat([offset_x, offset_y], dim=-1)
 
-        # Expand p_0_base for batch size
-        base_grid = self.p_0_base.expand(B, -1, -1, -1)  # (B, h, w, 2)
-
         # Reshape p_n for broadcasting
         p_n_reshaped = self.p_n.view(1, self.num_param, 1, 1, 2)
-        p_n_norm = p_n_reshaped * 2.0 / torch.tensor([W - 1, H - 1], device=x.device, dtype=x.dtype)
+        p_n_norm = p_n_reshaped * 2.0 / torch.tensor([W - 1, H - 1], device=device, dtype=dtype)
 
         # Create sampling grids for each offset
-        # (B, num_param, h, w, 2)
-        sampling_grids = base_grid.unsqueeze(1) + p_n_norm + offset_norm
+        # base_grid: (h_out, w_out, 2) -> (1, 1, h_out, w_out, 2)
+        # p_n_norm: (1, num_param, 1, 1, 2)
+        # offset_norm: (B, num_param, h_out, w_out, 2)
+        sampling_grids = base_grid.unsqueeze(0).unsqueeze(0) + p_n_norm + offset_norm
 
         # Clamp to valid range
         sampling_grids = torch.clamp(sampling_grids, -1.0, 1.0)
 
         # Sample features using grid_sample
-        # First, expand input for each sampling point
-        x_expanded = x.unsqueeze(1).expand(-1, self.num_param, -1, -1, -1)
+        # We need to sample num_param times from the input
+        sampled_features = []
 
-        # Reshape for grid_sample
-        x_reshaped = rearrange(x_expanded, "b n c h w -> (b n) c h w")
-        grid_reshaped = rearrange(sampling_grids, "b n h w c -> (b n) h w c")
+        for i in range(self.num_param):
+            grid_i = sampling_grids[:, i, :, :, :]  # (B, h_out, w_out, 2)
+            sampled_i = F.grid_sample(
+                x, grid_i, mode="bilinear", padding_mode="border", align_corners=True
+            )  # (B, C, h_out, w_out)
+            sampled_features.append(sampled_i)
 
-        # Perform bilinear sampling
-        sampled = F.grid_sample(x_reshaped, grid_reshaped, mode="bilinear", padding_mode="border", align_corners=True)
-
-        # Reshape back
-        sampled = rearrange(sampled, "(b n) c h w -> b c (n h) w", b=B, n=self.num_param)
+        # Stack along spatial dimension (like the original)
+        # (B, C, num_param, h_out, w_out) -> (B, C, num_param * h_out, w_out)
+        sampled = torch.stack(sampled_features, dim=2)
+        sampled = rearrange(sampled, "b c n h w -> b c (n h) w")
 
         # Apply final convolution
         out = self.conv(sampled)
