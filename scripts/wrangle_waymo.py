@@ -22,6 +22,7 @@ MAX_DISTANCE = 85.0
 IMAGE_WIDTH = 1920
 IMAGE_HEIGHT = 1280
 DEFAULT_DATASET_PATH = "/mnt/machine-learning-storage/ML1/ClusterOutput/MLC-499/Datasets/GENAI-6807_Waymo/"
+# test comment
 # DEFAULT_DATASET_PATH = "../yolo-testing/datasets/"
 
 
@@ -160,7 +161,7 @@ def read(
     return df
 
 
-def get_stats_df(split: str, include_day: bool) -> pd.DataFrame:
+def get_stats_df(split: str, include_day: bool, include_dusk_dawn: bool) -> pd.DataFrame:
     stats_night_df = read(
         split=split,
         tag="stats",
@@ -174,7 +175,7 @@ def get_stats_df(split: str, include_day: bool) -> pd.DataFrame:
 
     stats[f"night_images_{split}"] = len(stats_night_df)  # type: ignore
 
-    if not include_day:
+    if not include_day or not include_dusk_dawn:
         return stats_night_df
 
     stats_dusk_dawn_df = read(
@@ -191,7 +192,7 @@ def get_stats_df(split: str, include_day: bool) -> pd.DataFrame:
     stats[f"dawn_dusk_images_{split}"] = len(stats_dusk_dawn_df)  # type: ignore
 
     # We don't need to pad the validation set with day data
-    if split == "validation":
+    if split == "validation" or include_dusk_dawn:
         return pd.concat([stats_night_df, stats_dusk_dawn_df])
 
     day_head = 20656  # pad out to 50k
@@ -216,11 +217,13 @@ def get_stats_df(split: str, include_day: bool) -> pd.DataFrame:
     return stats_df
 
 
-def get_dataframes(split: str, include_day: bool, verbose: bool, save_checkpoint: bool = False):
+def get_dataframes(
+    split: str, include_day: bool, include_dusk_dawn: bool, verbose: bool, save_checkpoint: bool = False
+):
     if verbose:
         print("getting stats")
 
-    stats_df: pd.DataFrame = get_stats_df(split=split, include_day=include_day)
+    stats_df: pd.DataFrame = get_stats_df(split=split, include_day=include_day, include_dusk_dawn=include_dusk_dawn)
     segment_context_names: list[str] = stats_df["key.segment_context_name"].unique().tolist()
     if verbose:
         print(f"Found {len(segment_context_names)} unique segment context names.")
@@ -282,7 +285,7 @@ def get_dataframes(split: str, include_day: bool, verbose: bool, save_checkpoint
         print("Getting projected LiDAR boxes")
 
     projected_lidar_box_df: pd.DataFrame = read(
-        split="training",
+        split=split,
         tag="projected_lidar_box",
         filters=[
             ("key.camera_name", "==", 1),
@@ -324,7 +327,7 @@ def get_dataframes(split: str, include_day: bool, verbose: bool, save_checkpoint
         lidar_box_df.to_parquet(f"lidar_box_df_checkpoint_{split}.parquet")
         camera_to_lidar_box_association_df.to_parquet(f"camera_to_lidar_box_association_df_checkpoint_{split}.parquet")
         projected_lidar_box_df.to_parquet(f"projected_lidar_box_df_checkpoint_{split}.parquet")
-        camera_image_df.to_parquet(f"camera_image_df_{split}.parquet")
+        camera_image_df.to_parquet(f"camera_image_df_checkpoint_{split}.parquet")
 
     return (
         camera_box_df,
@@ -408,6 +411,32 @@ def calculate_vectorized_iou(camera_boxes: pd.DataFrame, projected_boxes: pd.Dat
 def optimized_find_projected_matches(
     unmatched_camera_boxes: pd.DataFrame, projected_lidar_box_df: pd.DataFrame
 ) -> pd.DataFrame:
+    # map unique timestamps in projected_lidar_box_df to the closest timestamp projected_lidar_box_df
+    projected_timestamps = set(projected_lidar_box_df["key.frame_timestamp_micros"])
+    camera_timestamps = set(unmatched_camera_boxes["key.frame_timestamp_micros"])
+
+    timestamps_only_in_projected = projected_timestamps - camera_timestamps
+    projected_lidar_box_unique_timestamp_mask = projected_lidar_box_df["key.frame_timestamp_micros"].isin(
+        timestamps_only_in_projected
+    )
+    timestamps_not_only_in_projected = projected_lidar_box_df[~projected_lidar_box_unique_timestamp_mask][
+        "key.frame_timestamp_micros"
+    ].unique()
+
+    timestamp_mapping = {}
+    for unique_timestamp in timestamps_only_in_projected:
+        # start diff at very large number
+        diff = 1e10
+        for timestamp in timestamps_not_only_in_projected:
+            new_diff = abs(unique_timestamp - timestamp)
+            if new_diff < diff:
+                diff = new_diff
+                timestamp_mapping[unique_timestamp] = timestamp
+    # Apply the mapping to the DataFrame
+    projected_lidar_box_df["key.frame_timestamp_micros"] = projected_lidar_box_df["key.frame_timestamp_micros"].replace(
+        timestamp_mapping
+    )
+
     # Pre-group projected boxes by timestamp AND type
     projected_boxes_grouped = projected_lidar_box_df.groupby(
         ["key.frame_timestamp_micros", "[ProjectedLiDARBoxComponent].type"]
@@ -429,7 +458,13 @@ def optimized_find_projected_matches(
             projected_boxes_group = projected_boxes_grouped.get_group((timestamp, box_type))
         except KeyError:
             # No projected boxes for this frame and type
-            continue
+            # find the closest projected_boxes_group timestamp within 1 second
+            diffs = [abs(timestamp - k[0]) if k[1] == box_type else 1e12 for k in projected_boxes_grouped.groups.keys()]
+            closest_index = np.argmin(diffs)
+            if diffs[closest_index] > 1_000_000:  # 1 second in microseconds
+                continue
+            closest_key = list(projected_boxes_grouped.groups.keys())[closest_index]
+            projected_boxes_group = projected_boxes_grouped.get_group(closest_key)
 
         if projected_boxes_group.empty:
             continue
@@ -446,7 +481,7 @@ def optimized_find_projected_matches(
         best_match_scores = np.max(iou_matrix, axis=1)
 
         # Only keep matches above the threshold
-        threshold = 0.5
+        threshold = 0.3
         valid_matches = best_match_scores >= threshold
 
         # Create match records for valid matches
@@ -742,6 +777,7 @@ def save_as_yolo_format(
 def wrangle_data(
     split: str = "training",
     include_day: bool = False,
+    include_dusk_dawn: bool = False,
     verbose: bool = True,
     save_checkpoint: bool = False,
     load_from_checkpoint: bool = False,
@@ -759,16 +795,19 @@ def wrangle_data(
         ) = get_dataframes(
             split=split,
             include_day=include_day,
+            include_dusk_dawn=include_dusk_dawn,
             verbose=verbose,
             save_checkpoint=save_checkpoint,
         )
     else:
         print("loading the checkpointed dataframes...")
-        camera_box_df = pd.read_parquet("camera_box_df_checkpoint.parquet")
-        lidar_box_df = pd.read_parquet("lidar_box_df_checkpoint.parquet")
-        camera_to_lidar_box_association_df = pd.read_parquet("camera_to_lidar_box_association_df_checkpoint.parquet")
-        projected_lidar_box_df = pd.read_parquet("projected_lidar_box_df_checkpoint.parquet")
-        camera_image_df = pd.read_parquet("camera_image_df.parquet")
+        camera_box_df = pd.read_parquet(f"camera_box_df_checkpoint_{split}.parquet")
+        lidar_box_df = pd.read_parquet(f"lidar_box_df_checkpoint_{split}.parquet")
+        camera_to_lidar_box_association_df = pd.read_parquet(
+            f"camera_to_lidar_box_association_df_checkpoint_{split}.parquet"
+        )
+        projected_lidar_box_df = pd.read_parquet(f"projected_lidar_box_df_checkpoint_{split}.parquet")
+        camera_image_df = pd.read_parquet(f"scripts/camera_image_df_checkpoint_{split}.parquet")
         print("Loaded dataframes from checkpoint.")
 
     # drop rows with [CameraBoxComponent].type that is 0 or 3
@@ -777,6 +816,17 @@ def wrangle_data(
     # Remap the types so that 1 -> 0, 2 -> 1, 4 -> 2
     camera_box_df["[CameraBoxComponent].type"] = camera_box_df["[CameraBoxComponent].type"].replace({1: 0, 2: 1, 4: 2})
 
+    type_mask = projected_lidar_box_df["[ProjectedLiDARBoxComponent].type"].isin([0, 3])
+    projected_lidar_box_df = projected_lidar_box_df[~type_mask]
+    # Remap the types so that 1 -> 0, 2 -> 1, 4 -> 2
+    projected_lidar_box_df["[ProjectedLiDARBoxComponent].type"] = projected_lidar_box_df[
+        "[ProjectedLiDARBoxComponent].type"
+    ].replace({1: 0, 2: 1, 4: 2})
+    type_mask = lidar_box_df["[LiDARBoxComponent].type"].isin([0, 3])
+    lidar_box_df = lidar_box_df[~type_mask]
+    # Remap the types so that 1 -> 0, 2 -> 1, 4 -> 2
+    lidar_box_df["[LiDARBoxComponent].type"] = lidar_box_df["[LiDARBoxComponent].type"].replace({1: 0, 2: 1, 4: 2})
+
     print("Starting to associate distances...")
     camera_boxes_with_distance_df = optimized_associate_distances(
         camera_box_df,
@@ -784,6 +834,16 @@ def wrangle_data(
         lidar_box_df,
         projected_lidar_box_df,
     )
+
+    # print stats about how many distances we have now per class
+    dist_mask = camera_boxes_with_distance_df["distance"] > 0
+    print(
+        camera_boxes_with_distance_df[dist_mask]
+        .groupby("[CameraBoxComponent].type")["distance"]
+        .agg(["count", "mean", "std", "min", "max"])
+        .round(2)
+    )
+    # print stats about how many distances we have now per class
 
     # Merge the camera boxes with distance and the camera image data
     # Group them per image
@@ -831,6 +891,7 @@ def wrangle_data(
 def waymo(
     include_day_train: bool = False,
     include_day_val: bool = False,
+    include_dusk_dawn_train: bool = False,
     verbose: bool = True,
     save_checkpoint: bool = False,
     load_from_checkpoint: bool = False,
@@ -842,6 +903,8 @@ def waymo(
             dataset_name = "waymo_day"
         elif include_day_train:
             dataset_name = "waymo"
+        elif include_dusk_dawn_train:
+            dataset_name = "waymo_dark"
         elif include_day_val:
             print("WARNING: You have chosen day data only for validation set, are you sure?")
             dataset_name = "waymo_day_val"
@@ -851,6 +914,7 @@ def waymo(
         wrangle_data(
             split="training",
             include_day=include_day_train,
+            include_dusk_dawn=include_dusk_dawn_train,
             verbose=verbose,
             save_checkpoint=save_checkpoint,
             load_from_checkpoint=load_from_checkpoint,
@@ -884,6 +948,13 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Include daytime images in training dataset",
+    )
+
+    parser.add_argument(
+        "--include-dusk-dawn-train",
+        action="store_true",
+        default=False,
+        help="Include dusk/dawn images in training dataset",
     )
 
     parser.add_argument(
@@ -933,6 +1004,7 @@ if __name__ == "__main__":
     waymo(
         include_day_train=args.include_day_train,
         include_day_val=args.include_day_val,
+        include_dusk_dawn_train=args.include_dusk_dawn_train,
         verbose=args.verbose,
         save_checkpoint=args.save_checkpoint,
         load_from_checkpoint=args.load_from_checkpoint,
