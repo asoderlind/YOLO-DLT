@@ -207,8 +207,9 @@ if __name__ == "__main__":
     train_model(
         name="waymo_dark-yolo11n-cache",
         model="yolo11n.yaml",
-        dataset="waymo_dark.yaml",
+        data="waymo_dark.yaml",
         epochs=1,
-        batch_size=16,
+        batch=16,
         use_dist=True,
+        project=CLUSTER_OUTPUT_PATH,
     )
