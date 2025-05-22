@@ -272,12 +272,12 @@ if __name__ == "__main__":
 
     # cache the dataset
     train_model(
-        name="waymo_cluster_night-yolo11n-cache",
-        model="yolo11n.yaml",
-        data=waymo_night,
-        project=CLUSTER_OUTPUT_PATH,
+        name="bdd100k_night-yolo11n-ldconv-test",
+        model="dlt-models/yolo11n-LDConv.yaml",
+        data="bdd100k_night.yaml",
+        # project=CLUSTER_OUTPUT_PATH,
         epochs=1,
-        use_dist=True,
+        # use_dist=True,
     )
 
     # # cache the dataset
