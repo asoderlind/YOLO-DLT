@@ -684,6 +684,7 @@ class LDConv(nn.Module):
 
         # Pass the actual dtype
         p_0 = self._get_p_0(h, w, N, actual_dtype)
+        breakpoint()
         p = p_0 + self.p_n + offset  # type: ignore[operator]
         return p
 
