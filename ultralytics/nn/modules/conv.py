@@ -603,8 +603,8 @@ class LDConv(nn.Module):
         # (b, 2N, h, w)
         get_p_start = time.time()
         p = self._get_p(offset, dtype)
-        get_p_total = time.time() - get_p_start
-        print(f"get_p time: {get_p_total:.4f}s")
+        get_p_total = (time.time() - get_p_start) * 1000
+        print(f"get_p time: {get_p_total:.4f}ms")
 
         # (b, h, w, 2N)
         permute_start = time.time()
@@ -630,8 +630,8 @@ class LDConv(nn.Module):
         g_lb = (1 + (q_lb[..., :N].type_as(p) - p[..., :N])) * (1 - (q_lb[..., N:].type_as(p) - p[..., N:]))
         g_rt = (1 - (q_rt[..., :N].type_as(p) - p[..., :N])) * (1 + (q_rt[..., N:].type_as(p) - p[..., N:]))
 
-        permute_total = time.time() - permute_start
-        print(f"permute time: {permute_total:.4f}s")
+        permute_total = (time.time() - permute_start) * 1000
+        print(f"permute time: {permute_total:.4f}ms")
 
         # resampling the features based on the modified coordinates.
         resample_start = time.time()
@@ -639,8 +639,8 @@ class LDConv(nn.Module):
         x_q_rb = self._get_x_q(x, q_rb, N)
         x_q_lb = self._get_x_q(x, q_lb, N)
         x_q_rt = self._get_x_q(x, q_rt, N)
-        resample_total = time.time() - resample_start
-        print(f"resample time: {resample_total:.4f}s")
+        resample_total = (time.time() - resample_start) * 1000
+        print(f"resample time: {resample_total:.4f}ms")
 
         # bilinear
         biliniar_start = time.time()
@@ -650,14 +650,14 @@ class LDConv(nn.Module):
             + g_lb.unsqueeze(dim=1) * x_q_lb
             + g_rt.unsqueeze(dim=1) * x_q_rt
         )
-        biliniar_total = time.time() - biliniar_start
-        print(f"biliniar time: {biliniar_total:.4f}s")
+        biliniar_total = (time.time() - biliniar_start) * 1000
+        print(f"biliniar time: {biliniar_total:.4f}ms")
 
         reshape_x_offset_start = time.time()
         x_offset = self._reshape_x_offset(x_offset, self.num_param)
         out = self.conv(x_offset)
-        reshape_x_offset_total = time.time() - reshape_x_offset_start
-        print(f"reshape_x_offset time: {reshape_x_offset_total:.4f}s")
+        reshape_x_offset_total = (time.time() - reshape_x_offset_start) * 1000
+        print(f"reshape_x_offset time: {reshape_x_offset_total:.4f}ms")
 
         return out
 
