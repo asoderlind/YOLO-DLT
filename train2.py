@@ -276,6 +276,7 @@ if __name__ == "__main__":
         model="dlt-models/yolo11n-LDConv.yaml",
         data="bdd100k_night.yaml",
         # project=CLUSTER_OUTPUT_PATH,
+        project="",
         epochs=1,
         # use_dist=True,
     )
