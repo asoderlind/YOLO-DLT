@@ -4,7 +4,7 @@ from tqdm import tqdm
 from notebooks.utils import get_dln_model, enhance_image
 import cv2
 
-dataset = "bdd100k_night"
+dataset = "bdd100k_night-dln"
 
 # Define paths
 dataset_path = f"../yolo-testing/datasets/{dataset}/images"
@@ -21,6 +21,37 @@ for format in formats:
     raw_val_images += glob.glob(f"{dataset_path}/val/*.{format}")
 
 print(f"Found {len(raw_train_images)} training images and {len(raw_val_images)} validation images.")
+
+# Get enhanced image lists
+enhanced_train_images = glob.glob(f"{target_train_folder}/*")
+enhanced_val_images = glob.glob(f"{target_val_folder}/*")
+print(
+    f"Found {len(enhanced_train_images)} enhanced training images and {len(enhanced_val_images)} enhanced validation images."
+)
+
+# Check if the number of enhanced images matches the number of raw images
+if len(enhanced_train_images) != len(raw_train_images):
+    print(
+        f"Warning: {len(raw_train_images) - len(enhanced_train_images)} training images are missing in the enhanced folder."
+    )
+
+if len(enhanced_val_images) != len(raw_val_images):
+    print(
+        f"Warning: {len(raw_val_images) - len(enhanced_val_images)} validation images are missing in the enhanced folder."
+    )
+
+# Only keep the images that are not already enhanced
+raw_train_images = [img for img in raw_train_images if img not in enhanced_train_images]
+raw_val_images = [img for img in raw_val_images if img not in enhanced_val_images]
+
+print(f"After filtering, {len(raw_train_images)} training images and {len(raw_val_images)} validation images remain.")
+
+prompt = input(
+    f"Do you want to enhance {len(raw_train_images)} training images and {len(raw_val_images)} validation images? (y/n): "
+)
+if prompt.lower() != "y":
+    print("Exiting without enhancing images.")
+    exit()
 
 # Create target directories if they don't exist
 if not os.path.exists(target_train_folder):
