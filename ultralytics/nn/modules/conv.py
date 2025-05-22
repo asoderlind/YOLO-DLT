@@ -606,9 +606,47 @@ class LDConv(nn.Module):
         get_p_total = (time.time() - get_p_start) * 1000
         print(f"get_p time: {get_p_total:.4f}ms")
 
-        # (b, h, w, 2N)
         permute_start = time.time()
-        p = p.contiguous().permute(0, 2, 3, 1)
+        # Split into x and y components without permute
+        p_x = p[:, :N, :, :]  # [b, N, h, w]
+        p_y = p[:, N:, :, :]  # [b, N, h, w]
+
+        # Floor coordinates
+        # 1. why torch.clamp thing here?
+        # 2. why is x indexed by 3?
+        # 3. why long?
+        q_lt_x = torch.clamp(p_x.detach().floor(), 0, x.size(3) - 1).long()  # [b, N, h, w]
+        q_lt_y = torch.clamp(p_y.detach().floor(), 0, x.size(2) - 1).long()  # [b, N, h, w]
+
+        q_rb_x = torch.clamp(q_lt_x + 1, 0, x.size(3) - 1).long()  # [b, N, h, w]
+        q_rb_y = torch.clamp(q_lt_y + 1, 0, x.size(2) - 1).long()  # [b, N, h, w]
+
+        # Clip p
+        # 1. why torch.clamp thing here?
+        p_x = torch.clamp(p_x, 0, x.size(3) - 1)  # [b, N, h, w]
+        p_y = torch.clamp(p_y, 0, x.size(2) - 1)  # [b, N, h, w]
+
+        # Compute bilinear weights directly
+        g_lt = (1 + (q_lt_x.float() - p_x)) * (1 + (q_lt_y.float() - p_y))
+        g_rb = (1 - (q_rb_x.float() - p_x)) * (1 - (q_rb_y.float() - p_y))
+        g_lb = (1 + (q_lt_x.float() - p_x)) * (1 - (q_rb_y.float() - p_y))
+        g_rt = (1 - (q_rb_x.float() - p_x)) * (1 + (q_lt_y.float() - p_y))
+
+        # Sample features
+        x_lt, x_rb, x_lb, x_rt = self._sample_features_vectorized(x, q_lt_y, q_lt_x, q_rb_y, q_rb_x)
+
+        x_offset = (
+            g_lt.unsqueeze(dim=1) * x_lt
+            + g_rb.unsqueeze(dim=1) * x_rb
+            + g_lb.unsqueeze(dim=1) * x_lb
+            + g_rt.unsqueeze(dim=1) * x_rt
+        )  # [b, c, n, h, w]
+
+        # Reshape and apply final convolution
+        # What's the reason for this reshape? is there an equivalent in the original implementation?
+        x_offset = rearrange(x_offset, "b c n h w -> b c (h n) w", n=N)
+        return self.conv(x_offset)
+        p = p.contiguous().permute(0, 2, 3, 1)  # (b, h, w, 2N)
         q_lt = p.detach().floor()
         q_rb = q_lt + 1
 
@@ -660,6 +698,40 @@ class LDConv(nn.Module):
         print(f"reshape_x_offset time: {reshape_x_offset_total:.4f}ms")
 
         return out
+
+    def _sample_features_vectorized(
+        self, x: torch.Tensor, q_lt_y: torch.Tensor, q_lt_x: torch.Tensor, q_rb_y: torch.Tensor, q_rb_x: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Vectorized sampling of all four corner points"""
+        b, c, h, w = x.size()
+        N = q_lt_y.size(1)
+
+        # Flatten spatial dimensions for efficient indexing
+        x_flat = x.view(b, c, -1)  # (b, c, h*w)
+
+        # Compute flat indices
+        # Are these correct? especially flat lb
+        flat_lt = q_lt_y * w + q_lt_x  # (b, N, h, w)
+        flat_rb = q_rb_y * w + q_rb_x  # (b, N, h, w)
+        flat_lb = q_rb_y * w + q_lt_x  # (b, N, h, w)
+        flat_rt = q_lt_y * w + q_rb_x  # (b, N, h, w)
+
+        # Reshape for gathering
+        flat_lt = flat_lt.view(b, -1)  # (b, N*h*w)
+        flat_rb = flat_rb.view(b, -1)
+        flat_lb = flat_lb.view(b, -1)
+        flat_rt = flat_rt.view(b, -1)
+
+        # Batch gather
+        batch_idx = torch.arange(b, device=x.device)[:, None].expand(b, flat_lt.size(1))  # (b, N*h*w)
+
+        # Sample all points
+        x_lt = x_flat[batch_idx, :, flat_lt].view(b, c, N, q_lt_y.size(2), q_lt_y.size(3))  # [b, c, N, h, w]
+        x_rb = x_flat[batch_idx, :, flat_rb].view(b, c, N, q_lt_y.size(2), q_lt_y.size(3))
+        x_lb = x_flat[batch_idx, :, flat_lb].view(b, c, N, q_lt_y.size(2), q_lt_y.size(3))
+        x_rt = x_flat[batch_idx, :, flat_rt].view(b, c, N, q_lt_y.size(2), q_lt_y.size(3))
+
+        return x_lt, x_rb, x_lb, x_rt
 
     # generating the inital sampled shapes for the LDConv with different sizes.
     def _get_p_n(self, N: int) -> torch.Tensor:
