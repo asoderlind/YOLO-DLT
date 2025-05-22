@@ -25,7 +25,11 @@ if __name__ == "__main__":
     ###################
 
     for s in [0, 1, 2]:
-        eval_model(f"{CLUSTER_OUTPUT_PATH}/bdd100k_night_cluster-yolo11n-seed-{s}/weights/best.pt", "bdd100k_night_cluster.yaml")
+        eval_model(
+            f"{CLUSTER_OUTPUT_PATH}/bdd100k_night_cluster-yolo11n-seed-{s}/weights/best.pt",
+            "bdd100k_night_cluster.yaml",
+            project=CLUSTER_OUTPUT_PATH,
+        )
 
     ##########
     # EXDARK #
@@ -108,7 +112,7 @@ if __name__ == "__main__":
     #########
     # WAYMO #
     #########
-    '''
+    """
     eval_model(
         "runs/detect/waymo-noConf.yaml-dlt-models-yolo11n.yaml-100e-noPre-SGD-dist-scale0.0-mosaic1.0-c-d0.05_/weights/best.pt",
         "waymo-noConf.yaml",
@@ -170,4 +174,4 @@ if __name__ == "__main__":
         True,
         max_dist=85,
     )
-    '''
+    """
