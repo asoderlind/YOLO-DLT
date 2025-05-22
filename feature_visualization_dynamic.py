@@ -7,8 +7,18 @@ import glob
 from notebooks.utils import enhance_image, get_dln_model
 import os
 import random
+from train_conf import DEVICE
 
-device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu")
+
+def compare_images(image1, image2):
+    fig, axs = plt.subplots(1, 2, figsize=(5, 5))
+    axs[0].imshow(image1)
+    axs[0].axis("off")
+    axs[0].set_title("Input")
+    axs[1].imshow(image2)
+    axs[1].axis("off")
+    axs[1].set_title("Output")
+    plt.show()
 
 
 def get_edge_map(img):
@@ -39,10 +49,10 @@ def show_loss(imgs, model, dataset, img_name):
     imgs = imgs / 255.0  # normalize the image
     imgs = imgs.unsqueeze(0)  # add batch dimension
     imgs = imgs.permute(0, 3, 1, 2)  # change the order of the dimensions
-    imgs = imgs.to(device)
+    imgs = imgs.to(DEVICE)
 
     enhanced_imgs = dln(imgs)  # shape [bs, 3, h, w]
-    enhanced_imgs = enhanced_imgs.to(device)
+    enhanced_imgs = enhanced_imgs.to(DEVICE)
 
     predictions = model.model.model[0](imgs)  # shape [bs, 16, h/2, w/2]
 
@@ -223,7 +233,7 @@ img_enhanced = enhance_image(img_filename, dln)
 # compare_images(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), img_enhanced)
 
 for target_checkpoint in target_checkpoints:
-    model = YOLO(target_checkpoint).to(device)
+    model = YOLO(target_checkpoint).to(DEVICE)
     model.info()
     show_loss(img, model, dataset, name)
     # visualize_features(dataset, name, model, [img, img_enhanced])
