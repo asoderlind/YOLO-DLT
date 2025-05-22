@@ -585,7 +585,8 @@ class LDConv(nn.Module):
         self.p_conv = nn.Conv2d(in_c, 2 * num_param, kernel_size=3, padding=1, stride=stride)
         nn.init.constant_(self.p_conv.weight, 0)
         self.p_conv.register_full_backward_hook(self._set_lr)
-        self.register_buffer("p_n", self._get_p_n(N=self.num_param))
+        # self.register_buffer("p_n", self._get_p_n(N=self.num_param))
+        self.register_buffer("p_n", None)
 
     @staticmethod
     def _set_lr(module, grad_input, grad_output):
@@ -643,21 +644,30 @@ class LDConv(nn.Module):
         return out
 
     # generating the inital sampled shapes for the LDConv with different sizes.
-    def _get_p_n(self, N: int) -> torch.Tensor:
+    def _get_p_n(self, N: int, device: torch.device | None = None, dtype: torch.dtype | None = None) -> torch.Tensor:
         base_int = round(math.sqrt(self.num_param))
         row_number = self.num_param // base_int
         mod_number = self.num_param % base_int
-        p_n_x, p_n_y = torch.meshgrid(torch.arange(0, row_number), torch.arange(0, base_int), indexing="ij")
+
+        # Create on specified device
+        p_n_x, p_n_y = torch.meshgrid(
+            torch.arange(0, row_number, device=device, dtype=dtype),
+            torch.arange(0, base_int, device=device, dtype=dtype),
+            indexing="ij",
+        )
         p_n_x = torch.flatten(p_n_x)
         p_n_y = torch.flatten(p_n_y)
+
         if mod_number > 0:
             mod_p_n_x, mod_p_n_y = torch.meshgrid(
-                torch.arange(row_number, row_number + 1), torch.arange(0, mod_number), indexing="ij"
+                torch.arange(row_number, row_number + 1, device=device, dtype=dtype),
+                torch.arange(0, mod_number, device=device, dtype=dtype),
+                indexing="ij",
             )
-
             mod_p_n_x = torch.flatten(mod_p_n_x)
             mod_p_n_y = torch.flatten(mod_p_n_y)
             p_n_x, p_n_y = torch.cat((p_n_x, mod_p_n_x)), torch.cat((p_n_y, mod_p_n_y))
+
         p_n = torch.cat([p_n_x, p_n_y], 0)
         p_n = p_n.view(1, 2 * N, 1, 1)
         return p_n
@@ -678,14 +688,15 @@ class LDConv(nn.Module):
 
     def _get_p(self, offset: torch.Tensor, dtype: str) -> torch.Tensor:
         N, h, w = offset.size(1) // 2, offset.size(2), offset.size(3)
+        actual_dtype = dtype
+        device = offset.device
 
-        # Get the actual dtype object instead of the string
-        actual_dtype = offset.dtype
+        # Lazy initialization of p_n on the same device as offset
+        if self.p_n is None:
+            self.p_n = self._get_p_n(N=self.num_param, device=device, dtype=actual_dtype)
 
-        # Pass the actual dtype
         p_0 = self._get_p_0(h, w, N, actual_dtype)
-        breakpoint()
-        p = p_0 + self.p_n + offset  # type: ignore[operator]
+        p = p_0 + self.p_n + offset
         return p
 
     def _get_x_q(self, x: torch.Tensor, q: torch.Tensor, N: int) -> torch.Tensor:
