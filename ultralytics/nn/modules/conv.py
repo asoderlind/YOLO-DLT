@@ -604,7 +604,7 @@ class LDConv(nn.Module):
         get_p_start = time.time()
         p = self._get_p(offset, dtype)
         get_p_total = (time.time() - get_p_start) * 1000
-        print(f"get_p time: {get_p_total:.4f}ms")
+        # print(f"get_p time: {get_p_total:.4f}ms")
 
         permute_start = time.time()
         # Split into x and y components without permute
@@ -627,10 +627,10 @@ class LDConv(nn.Module):
         p_y = torch.clamp(p_y, 0, x.size(2) - 1)  # [b, N, h, w]
 
         # Compute bilinear weights directly
-        g_lt = (1 + (q_lt_x.float() - p_x)) * (1 + (q_lt_y.float() - p_y))
-        g_rb = (1 - (q_rb_x.float() - p_x)) * (1 - (q_rb_y.float() - p_y))
-        g_lb = (1 + (q_lt_x.float() - p_x)) * (1 - (q_rb_y.float() - p_y))
-        g_rt = (1 - (q_rb_x.float() - p_x)) * (1 + (q_lt_y.float() - p_y))
+        g_lt = (1 + (q_lt_x - p_x)) * (1 + (q_lt_y - p_y))
+        g_rb = (1 - (q_rb_x - p_x)) * (1 - (q_rb_y - p_y))
+        g_lb = (1 + (q_lt_x - p_x)) * (1 - (q_rb_y - p_y))
+        g_rt = (1 - (q_rb_x - p_x)) * (1 + (q_lt_y - p_y))
 
         # Sample features
         x_lt, x_rb, x_lb, x_rt = self._sample_features_vectorized(x, q_lt_y, q_lt_x, q_rb_y, q_rb_x)
