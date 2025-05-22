@@ -48,8 +48,7 @@ def train(
     hsv_v = 0.0 if use_fe else 0.4
 
     if name is None:
-        name = f"{data_no_yaml}-c{class_string}-{model_no_yaml}-{epochs}e-{seed}s-{'dist' if use_dist else 'noDist'}-d={dist}-{'fe' if use_fe else 'noFe'}-lc={lambda_c}_"
-        name = name.replace("/", "-")
+        name = f"{data_no_yaml}/{model_no_yaml}-c{class_string}-{epochs}e-{'dist' if use_dist else 'noDist'}-d={dist}-{'fe' if use_fe else 'noFe'}-lc={lambda_c}-s={seed}_"
         last_weight = f"{project}/{name}/weights/last.pt"
         if os.path.exists(last_weight):
             model = YOLO(last_weight)
@@ -90,35 +89,21 @@ if __name__ == "__main__":
 
     # exDark
 
-    for data in ["exDark-yolo-dln.yaml", "exDark-yolo-mbllen.yaml"]:
+    """
+    for data in ["exDark-yolo-mbllen.yaml"]:
         # All loss
-        for lambda_c in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]:
-            for s in [1, 2]:
+        for lambda_c in [1.0]:
+            for s in [2]:
                 train(
                     data_path=data,
                     use_fe=True,
                     lambda_c=lambda_c,
                     seed=s
                 )
+    """
 
     # BDD100k-night
-
-    """
-    for s in [0, 1, 2]:
-        # Baseline
-        train(
-            data_path="bdd100k_night-dln.yaml",
-            use_fe=False,
-            lambda_c=0.0,
-            seed=s,
-        )
-        # DLN
-        train(
-            data_path="bdd100k_night-dln.yaml",
-            use_fe=True,
-            lambda_c=0.3,
-            seed=s,
-        )
+    for s in [2]:
         # MBLLEN
         train(
             data_path="bdd100k_night-mbllen.yaml",
@@ -126,7 +111,6 @@ if __name__ == "__main__":
             lambda_c=0.1,
             seed=s,
         )
-    """
 
     ############
     # Distance #
@@ -139,46 +123,46 @@ if __name__ == "__main__":
 
     # Waymo-night
 
-    for s in [1, 2]:
-        train(
-            data_path="waymo_cluster_night.yaml",
-            use_dist=False,
-            dist=0.00,
-            max_dist=MAX_DIST_WAYMO,
-            seed=s,
-        )
-        # train(
-        #     data_path="waymo_cluster_night.yaml",
-        #     use_dist=True,
-        #     dist=0.01,
-        #     max_dist=MAX_DIST_WAYMO,
-        #     seed=s,
-        # )
-        # train(
-        #     data_path="waymo_cluster_night.yaml",
-        #     use_dist=True,
-        #     dist=0.05,
-        #     max_dist=MAX_DIST_WAYMO,
-        #     seed=s,
-        # )
-        # train(
-        #     data_path="waymo_cluster_night.yaml",
-        #     use_dist=True,
-        #     dist=0.1,
-        #     max_dist=MAX_DIST_WAYMO,
-        #     seed=s,
-        # )
-        # train(
-        #     data_path="waymo_cluster_night.yaml",
-        #     use_dist=True,
-        #     dist=0.5,
-        #     max_dist=MAX_DIST_WAYMO,
-        #     seed=s,
-        # )
-        # train(
-        #     data_path="waymo_cluster_night.yaml",
-        #     use_dist=True,
-        #     dist=1.0,
-        #     max_dist=MAX_DIST_WAYMO,
-        #     seed=s,
-        # )
+    # for s in [1, 2]:
+    # train(
+    #   data_path="waymo_cluster_night.yaml",
+    #   use_dist=False,
+    #    dist=0.00,
+    #    max_dist=MAX_DIST_WAYMO,
+    #    seed=s,
+    # )
+    # train(
+    #     data_path="waymo_cluster_night.yaml",
+    #     use_dist=True,
+    #     dist=0.01,
+    #     max_dist=MAX_DIST_WAYMO,
+    #     seed=s,
+    # )
+    # train(
+    #     data_path="waymo_cluster_night.yaml",
+    #     use_dist=True,
+    #     dist=0.05,
+    #     max_dist=MAX_DIST_WAYMO,
+    #     seed=s,
+    # )
+    # train(
+    #     data_path="waymo_cluster_night.yaml",
+    #     use_dist=True,
+    #     dist=0.1,
+    #     max_dist=MAX_DIST_WAYMO,
+    #     seed=s,
+    # )
+    # train(
+    #     data_path="waymo_cluster_night.yaml",
+    #     use_dist=True,
+    #     dist=0.5,
+    #     max_dist=MAX_DIST_WAYMO,
+    #     seed=s,
+    # )
+    # train(
+    #     data_path="waymo_cluster_night.yaml",
+    #     use_dist=True,
+    #     dist=1.0,
+    #     max_dist=MAX_DIST_WAYMO,
+    #     seed=s,
+    # )
