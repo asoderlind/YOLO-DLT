@@ -161,7 +161,7 @@ def read(
     return df
 
 
-def get_stats_df(split: str, include_day: bool) -> pd.DataFrame:
+def get_stats_df(split: str, include_day: bool, include_dusk_dawn: bool) -> pd.DataFrame:
     stats_night_df = read(
         split=split,
         tag="stats",
@@ -175,7 +175,7 @@ def get_stats_df(split: str, include_day: bool) -> pd.DataFrame:
 
     stats[f"night_images_{split}"] = len(stats_night_df)  # type: ignore
 
-    if not include_day:
+    if not include_day or not include_dusk_dawn:
         return stats_night_df
 
     stats_dusk_dawn_df = read(
@@ -192,7 +192,7 @@ def get_stats_df(split: str, include_day: bool) -> pd.DataFrame:
     stats[f"dawn_dusk_images_{split}"] = len(stats_dusk_dawn_df)  # type: ignore
 
     # We don't need to pad the validation set with day data
-    if split == "validation":
+    if split == "validation" or include_dusk_dawn:
         return pd.concat([stats_night_df, stats_dusk_dawn_df])
 
     day_head = 20656  # pad out to 50k
@@ -217,11 +217,13 @@ def get_stats_df(split: str, include_day: bool) -> pd.DataFrame:
     return stats_df
 
 
-def get_dataframes(split: str, include_day: bool, verbose: bool, save_checkpoint: bool = False):
+def get_dataframes(
+    split: str, include_day: bool, include_dusk_dawn: bool, verbose: bool, save_checkpoint: bool = False
+):
     if verbose:
         print("getting stats")
 
-    stats_df: pd.DataFrame = get_stats_df(split=split, include_day=include_day)
+    stats_df: pd.DataFrame = get_stats_df(split=split, include_day=include_day, include_dusk_dawn=include_dusk_dawn)
     segment_context_names: list[str] = stats_df["key.segment_context_name"].unique().tolist()
     if verbose:
         print(f"Found {len(segment_context_names)} unique segment context names.")
@@ -775,6 +777,7 @@ def save_as_yolo_format(
 def wrangle_data(
     split: str = "training",
     include_day: bool = False,
+    include_dusk_dawn: bool = False,
     verbose: bool = True,
     save_checkpoint: bool = False,
     load_from_checkpoint: bool = False,
@@ -792,6 +795,7 @@ def wrangle_data(
         ) = get_dataframes(
             split=split,
             include_day=include_day,
+            include_dusk_dawn=include_dusk_dawn,
             verbose=verbose,
             save_checkpoint=save_checkpoint,
         )
@@ -887,6 +891,7 @@ def wrangle_data(
 def waymo(
     include_day_train: bool = False,
     include_day_val: bool = False,
+    include_dusk_dawn_train: bool = False,
     verbose: bool = True,
     save_checkpoint: bool = False,
     load_from_checkpoint: bool = False,
@@ -898,6 +903,8 @@ def waymo(
             dataset_name = "waymo_day"
         elif include_day_train:
             dataset_name = "waymo"
+        elif include_dusk_dawn_train:
+            dataset_name = "waymo_dark"
         elif include_day_val:
             print("WARNING: You have chosen day data only for validation set, are you sure?")
             dataset_name = "waymo_day_val"
@@ -907,6 +914,7 @@ def waymo(
         wrangle_data(
             split="training",
             include_day=include_day_train,
+            include_dusk_dawn=include_dusk_dawn_train,
             verbose=verbose,
             save_checkpoint=save_checkpoint,
             load_from_checkpoint=load_from_checkpoint,
@@ -940,6 +948,13 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
         help="Include daytime images in training dataset",
+    )
+
+    parser.add_argument(
+        "--include-dusk-dawn-train",
+        action="store_true",
+        default=False,
+        help="Include dusk/dawn images in training dataset",
     )
 
     parser.add_argument(
@@ -989,6 +1004,7 @@ if __name__ == "__main__":
     waymo(
         include_day_train=args.include_day_train,
         include_day_val=args.include_day_val,
+        include_dusk_dawn_train=args.include_dusk_dawn_train,
         verbose=args.verbose,
         save_checkpoint=args.save_checkpoint,
         load_from_checkpoint=args.load_from_checkpoint,
