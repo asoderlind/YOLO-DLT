@@ -222,7 +222,7 @@ class BaseValidator:
             if self.args.save_results:
                 import csv
 
-                with open(str(self.save_dir / "results.csv"), "w", newline="") as f:
+                with open(str(self.save_dir / "results_val.csv"), "w", newline="") as f:
                     writer = csv.writer(f)
 
                     # Write header
