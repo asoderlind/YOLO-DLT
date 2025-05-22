@@ -586,10 +586,8 @@ class LDConv(nn.Module):
         nn.init.constant_(self.p_conv.weight, 0)
         self.p_conv.register_full_backward_hook(self._set_lr)
 
-        # Initialize p_n as a parameter or buffer
-        # We'll create it properly when we know the device (during first forward pass)
+        # Don't initialize p_n yet - we need to know the device
         self.register_buffer("p_n", None)
-        self._p_n_initialized = False
 
     @staticmethod
     def _set_lr(module, grad_input, grad_output):
@@ -597,21 +595,18 @@ class LDConv(nn.Module):
         grad_output = (grad_output[i] * 0.1 for i in range(len(grad_output)))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Initialize p_n on first forward pass when we know the device
-        if not self._p_n_initialized or self.p_n is None:
+        # Initialize p_n on first forward pass
+        if self.p_n is None:
             self.p_n = self._get_p_n(N=self.num_param, device=x.device, dtype=x.dtype)
-            self._p_n_initialized = True
 
         # N is num_param.
         offset: torch.Tensor = self.p_conv(x)
-        dtype = offset.dtype
-        device = offset.device
         N = offset.size(1) // 2
 
         # (b, 2N, h, w)
-        p = self._get_p(offset, dtype, device)
+        p = self._get_p(offset)
 
-        # Rest of forward pass remains the same...
+        # (b, h, w, 2N)
         p = p.contiguous().permute(0, 2, 3, 1)
         q_lt = p.detach().floor()
         q_rb = q_lt + 1
@@ -653,13 +648,12 @@ class LDConv(nn.Module):
 
         return out
 
-    # generating the inital sampled shapes for the LDConv with different sizes.
     def _get_p_n(self, N: int, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
         base_int = round(math.sqrt(self.num_param))
         row_number = self.num_param // base_int
         mod_number = self.num_param % base_int
 
-        # Create tensors directly on the correct device
+        # Create tensors directly on the correct device with correct dtype
         p_n_x, p_n_y = torch.meshgrid(
             torch.arange(0, row_number, device=device, dtype=dtype),
             torch.arange(0, base_int, device=device, dtype=dtype),
@@ -682,7 +676,6 @@ class LDConv(nn.Module):
         p_n = p_n.view(1, 2 * N, 1, 1)
         return p_n
 
-    # no zero-padding
     def _get_p_0(self, h: int, w: int, N: int, dtype: torch.dtype, device: torch.device) -> torch.Tensor:
         # Create tensors directly on the correct device
         p_0_x, p_0_y = torch.meshgrid(
@@ -697,13 +690,21 @@ class LDConv(nn.Module):
         p_0 = torch.cat([p_0_x, p_0_y], 1)
         return p_0
 
-    def _get_p(self, offset: torch.Tensor, dtype: torch.dtype, device: torch.device) -> torch.Tensor:
+    def _get_p(self, offset: torch.Tensor) -> torch.Tensor:
         N, h, w = offset.size(1) // 2, offset.size(2), offset.size(3)
 
-        # Create p_0 directly on the correct device
+        # Use offset's device and dtype directly
+        device = offset.device
+        dtype = offset.dtype
+
+        # Create p_0 on the same device as offset
         p_0 = self._get_p_0(h, w, N, dtype, device)
 
-        # p_n should already be on the correct device from initialization
+        # Debug info
+        # print(f"Debug - offset: device={offset.device}, dtype={offset.dtype}")
+        # print(f"Debug - p_0: device={p_0.device}, dtype={p_0.dtype}")
+        # print(f"Debug - p_n: device={self.p_n.device}, dtype={self.p_n.dtype}")
+
         p = p_0 + self.p_n + offset
         return p
 
@@ -723,7 +724,6 @@ class LDConv(nn.Module):
 
         return x_offset
 
-    #  Stacking resampled features in the row direction.
     @staticmethod
     def _reshape_x_offset(x_offset: torch.Tensor, num_param: int) -> torch.Tensor:
         b, c, h, w, n = x_offset.size()
