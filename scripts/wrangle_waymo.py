@@ -175,7 +175,7 @@ def get_stats_df(split: str, include_day: bool, include_dusk_dawn: bool) -> pd.D
 
     stats[f"night_images_{split}"] = len(stats_night_df)  # type: ignore
 
-    if not include_day or not include_dusk_dawn:
+    if not include_day and not include_dusk_dawn:
         return stats_night_df
 
     stats_dusk_dawn_df = read(
