@@ -219,6 +219,27 @@ class BaseValidator:
                 stats = self.eval_json(stats)  # update stats
             if self.args.plots or self.args.save_json:
                 LOGGER.info(f"Results saved to {colorstr('bold', self.save_dir)}")
+            if self.args.save_results:
+                import csv
+
+                with open(str(self.save_dir / "results.csv"), "w", newline="") as f:
+                    writer = csv.writer(f)
+
+                    # Write header
+                    header = ["class", "images", "instances"] + list(self.metrics.keys)
+                    writer.writerow(header)
+
+                    # Write per-class results (only if we have valid data and multiple classes)
+                    if self.nt_per_class.sum() > 0 and self.nc > 1 and len(self.stats):
+                        for i, c in enumerate(self.metrics.ap_class_index):
+                            class_row = [self.names[c], self.nt_per_image[c], self.nt_per_class[c]] + list(
+                                self.metrics.class_result(i)
+                            )
+                            writer.writerow(class_row)
+                    # Write overall results
+                    overall_row = ["all", self.seen, self.nt_per_class.sum()] + list(self.metrics.mean_results())
+                    writer.writerow(overall_row)
+
             return stats
 
     def match_predictions(self, pred_classes, true_classes, true_distances, iou, use_scipy=False):
