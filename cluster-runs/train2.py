@@ -42,6 +42,7 @@ def train_model(
     lr0=LR0,
     optimizer=OPTIMIZER,
     momentum=MOMENTUM,
+    project=CLUSTER_OUTPUT_PATH,
     classes=None,
     **kwargs,
 ):
@@ -100,6 +101,7 @@ def train_model(
         name=final_name,
         iou_type=iou_type,
         warmup_bias_lr=warmup_bias_lr,
+        project=project,
         classes=classes,
         **kwargs,  # Pass any additional kwargs to train
     )
@@ -174,6 +176,30 @@ def run_seeded_train(
             classes=classes,
             seed=i,
             **kwargs,
+        )
+
+
+def run_seeded_val(
+    iterations: int = 3,
+    name="{data}-{model}-{fe}-{augment}-{epochs}e",
+    data="bdd100k_night.yaml",
+    project=CLUSTER_OUTPUT_PATH,
+    batch=BATCH,
+    device=DEVICE,
+    classes=None,
+    **kwargs,
+):
+    for i in range(iterations):
+        model_path = f"{project}/{name}-seed-{i}/weights/last.pt"
+        model = YOLO(model_path)
+        model.val(
+            data=data,
+            project=project,
+            name=f"{name}-seed-{i}",
+            batch=batch,
+            device=device,
+            classes=classes,
+            kwargs=kwargs,
         )
 
 
