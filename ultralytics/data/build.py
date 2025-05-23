@@ -104,14 +104,13 @@ def build_yolo_dataset(
 
     match dataset_type:
         case "default":
-            # TODO: REMOVE THIS DEBUG AFTER TESTING
-            # dataset = YOLODataset
-            dataset = TemporalYOLODataset
+            dataset = YOLODataset
+            # dataset = TemporalYOLODataset
         case "multi_modal":
             dataset = YOLOMultiModalDataset
         case "temporal":
-            # dataset = TemporalYOLODataset
-            dataset = YOLODataset
+            dataset = TemporalYOLODataset
+            # dataset = YOLODataset
         case _:
             raise ValueError(f"Unknown dataset type: {dataset_type}")
 
