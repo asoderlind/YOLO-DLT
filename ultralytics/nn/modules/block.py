@@ -8,7 +8,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.ops import batched_nms
 
-from ultralytics.utils import LOGGER
 from ultralytics.utils.torch_utils import fuse_conv_and_bn
 
 from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, RFAConv, autopad
@@ -2027,95 +2026,80 @@ class FeatureSelectionModule(nn.Module):
 
     def _threshold_selection(
         self, raw_preds: torch.Tensor, vid_features: torch.Tensor, reg_features: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, list[torch.Tensor], list[torch.Tensor]]:
         """
-        Select features using simple confidence threshold and top-k selection.
-        """
+        Select features using confidence threshold (YOLOV++ Thresh method).
+        Maintains dense foreground predictions for better label assignment compatibility.
 
-        predictions = raw_preds.permute(0, 2, 1)
+        Key differences from NMS method:
+        - No NMS applied - keeps all detections above threshold
+        - Variable output size per frame (typically <100 vs fixed 30 for NMS)
+        - Better compatibility with dense label assignment strategies
+
+        Args:
+            raw_preds (torch.Tensor): Raw predictions from the model [batch_size, 4 + num_classes, num_anchors]
+            vid_features (torch.Tensor): Video features [batch_size, num_anchors, cls_ch]
+            reg_features (torch.Tensor): Regression features [batch_size, num_anchors, reg_ch]
+        """
+        predictions = raw_preds.permute(0, 2, 1)  # [batch, num_anchors, 4+nc]
         batch_size = raw_preds.shape[0]
-        device = raw_preds.device
 
-        # Initialize tensors
-        selected_cls_features = torch.zeros(
-            batch_size, self.target_count, vid_features.shape[-1], device=device, dtype=raw_preds.dtype
-        )
-        selected_reg_features = torch.zeros(
-            batch_size, self.target_count, reg_features.shape[-1], device=device, dtype=raw_preds.dtype
-        )
-        selected_boxes = torch.zeros(batch_size, self.target_count, 4, device=device, dtype=raw_preds.dtype)
-        selected_scores = torch.zeros(batch_size, self.target_count, device=device, dtype=raw_preds.dtype)
-        selected_indices = torch.zeros(batch_size, self.target_count, dtype=torch.long, device=device)
+        # Collect all selected features across the batch (variable length per frame)
+        all_selected_cls_features: list[torch.Tensor] = []
+        all_selected_reg_features: list[torch.Tensor] = []
+        all_selected_boxes: list[torch.Tensor] = []
+        all_selected_scores: list[torch.Tensor] = []
+        batch_selected_predictions: list[torch.Tensor] = []
+        batch_selected_indices: list[torch.Tensor] = []
 
-        # Process each batch
+        # Process each frame in the batch
         for b in range(batch_size):
-            # Extract boxes and scores
-            boxes = predictions[b, :, :4]
-            scores = predictions[b, :, 4:]
+            # Extract boxes and scores for this frame
+            boxes = predictions[b, :, :4]  # [num_anchors, 4]
+            scores = predictions[b, :, 4:]  # [num_anchors, num_classes]
 
-            # Get max scores and class IDs
-            max_scores, _ = scores.max(dim=1)
+            # Get max class confidence (equivalent to cls_score in YOLOV++)
+            max_scores, _ = scores.max(dim=1)  # [num_anchors]
 
-            # Apply threshold
-            thresh_mask = max_scores > self.conf_thresh
+            # YOLOV++ uses obj_score * cls_score, but YOLO11 only has class scores
+            # So we use max_class_score directly as confidence
+            confidence_scores = max_scores
+
+            # Apply confidence threshold (this is the core "Thresh" operation)
+            thresh_mask = confidence_scores >= self.conf_thresh
             thresh_indices = torch.where(thresh_mask)[0]
 
-            # Handle target count
-            if len(thresh_indices) < self.target_count:
-                # Add additional indices if needed
-                remaining_indices = torch.where(~thresh_mask)[0]
+            # Key difference from our current implementation:
+            # We don't force a fixed target_count - we keep all above threshold
+            if len(thresh_indices) == 0:
+                # Handle edge case: no detections above threshold
+                # Take the single highest scoring detection to ensure we have something
+                _, highest_idx = confidence_scores.max(0)
+                thresh_indices = highest_idx.unsqueeze(0)
 
-                if not len(remaining_indices) > 0:
-                    # We should never reach this point, but if we do fail early
-                    raise ValueError("No remaining indices to select from.You must have set the target count too high.")
+            # Store selected features (variable length per frame, like YOLOV++)
+            all_selected_cls_features.append(vid_features[b, thresh_indices])
+            all_selected_reg_features.append(reg_features[b, thresh_indices])
+            all_selected_boxes.append(boxes[thresh_indices])
+            all_selected_scores.append(confidence_scores[thresh_indices])
 
-                remaining_scores = max_scores[remaining_indices]
-                needed = self.target_count - len(thresh_indices)
+            # Store for loss calculation
+            batch_selected_predictions.append(predictions[b, thresh_indices])
+            batch_selected_indices.append(thresh_indices)
 
-                if len(remaining_scores) >= needed:
-                    _, topk_indices = torch.topk(remaining_scores, needed)
-                    additional_indices = remaining_indices[topk_indices]
-                    thresh_indices = torch.cat([thresh_indices, additional_indices])
-                else:
-                    # Handle case where we don't have enough remaining scores
-                    # We should never reach this point, but if we do, we need to pad
-                    LOGGER.warning(
-                        "Not enough remaining scores to reach target count. Padding with highest scoring index."
-                        " Double check your target count unless it is the init pass."
-                    )
-                    _, topk_indices = torch.topk(remaining_scores, len(remaining_scores))
-                    additional_indices = remaining_indices[topk_indices]
-                    thresh_indices = torch.cat([thresh_indices, additional_indices])
-                    # Pad with repeats of the highest scoring index to reach target count
-                    highest_idx = thresh_indices[max_scores[thresh_indices].argmax()].item()
-                    padding = torch.full(
-                        (self.target_count - len(thresh_indices),), highest_idx, dtype=torch.long, device=device
-                    )
-                    thresh_indices = torch.cat([thresh_indices, padding])
-
-            elif len(thresh_indices) > self.target_count:
-                # Take top-k if we have too many
-                thresh_scores = max_scores[thresh_indices]
-                _, topk_indices = torch.topk(thresh_scores, self.target_count)
-                thresh_indices = thresh_indices[topk_indices]
-
-            assert len(thresh_indices) == self.target_count, (
-                f"Expected {self.target_count} indices, got {len(thresh_indices)}"
-            )
-
-            # Fill tensors with selected indices
-            selected_indices[b] = thresh_indices
-            selected_cls_features[b] = vid_features[b, thresh_indices]
-            selected_reg_features[b] = reg_features[b, thresh_indices]
-            selected_boxes[b] = boxes[thresh_indices]
-            selected_scores[b] = max_scores[thresh_indices]
+        # Concatenate all features across frames (following YOLOV++ style)
+        concat_cls_features = torch.cat(all_selected_cls_features, dim=0).unsqueeze(0)  # [1, total_detections, cls_ch]
+        concat_reg_features = torch.cat(all_selected_reg_features, dim=0).unsqueeze(0)  # [1, total_detections, reg_ch]
+        concat_boxes = torch.cat(all_selected_boxes, dim=0).unsqueeze(0)  # [1, total_detections, 4]
+        concat_scores = torch.cat(all_selected_scores, dim=0).unsqueeze(0)  # [1, total_detections]
 
         return (
-            selected_cls_features,  # [batch_size, target_count, cls_ch]
-            selected_reg_features,  # [batch_size, target_count, reg_ch]
-            selected_boxes,  # [batch_size, target_count, 4]
-            selected_scores,  # [batch_size, target_count]
-            selected_indices,  # [batch_size, target_count]
+            concat_cls_features,  # [1, total_detections, cls_ch]
+            concat_reg_features,  # [1, total_detections, reg_ch]
+            concat_boxes,  # [1, total_detections, 4]
+            concat_scores,  # [1, total_detections]
+            batch_selected_predictions,  # len batch_size, [variable_count, 4+nc]
+            batch_selected_indices,  # len batch_size, [variable_count]
         )
 
     def _nms_selection(
