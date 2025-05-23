@@ -208,18 +208,18 @@ if __name__ == "__main__":
     run_seeded_train(
         name="waymo_dark-yolo11n-bic-carepc3k2",
         model="dlt-models/yolo11n-bic-carepc3k2.yaml",
-        dataset="waymo_dark.yaml",
+        data="waymo_dark.yaml",
     )
     run_seeded_train(
         name="waymo_dark-yolo11n-bic-rfac3k2",
         model="dlt-models/yolo11n-bic-rfac3k2.yaml",
-        dataset="waymo_dark.yaml",
+        data="waymo_dark.yaml",
     )
-    run_seeded_train(
-        name="waymo_dark-yolo11n-bic-ldc3k2",
-        model="dlt-models/yolo11n-bic-ldc3k2.yaml",
-        dataset="waymo_dark.yaml",
-    )
+    # run_seeded_train(
+    #     name="waymo_dark-yolo11n-bic-ldc3k2",
+    #     model="dlt-models/yolo11n-bic-ldc3k2.yaml",
+    #     data="waymo_dark.yaml",
+    # )
 
     run_seeded_val(
         name="waymo_dark-yolo11n-bic-carepc3k2",
@@ -232,8 +232,8 @@ if __name__ == "__main__":
         classes=classes,
     )
 
-    run_seeded_val(
-        name="waymo_dark-yolo11n-bic-ldc3k2",
-        data="waymo_dark.yaml",
-        classes=classes,
-    )
+    # run_seeded_val(
+    #     name="waymo_dark-yolo11n-bic-ldc3k2",
+    #     data="waymo_dark.yaml",
+    #     classes=classes,
+    # )

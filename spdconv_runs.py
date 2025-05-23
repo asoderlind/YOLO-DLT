@@ -208,12 +208,12 @@ if __name__ == "__main__":
     run_seeded_train(
         name="waymo_dark-yolo11n-spdconv1-bic-repc3k2",
         model="dlt-models/yolo11n-spdconv1-bic-repc3k2.yaml",
-        dataset="waymo_dark.yaml",
+        data="waymo_dark.yaml",
     )
     run_seeded_train(
         name="waymo_dark-yolo11n-spdconv-bic-repc3k2",
         model="dlt-models/yolo11n-spdconv-bic-repc3k2.yaml",
-        dataset="waymo_dark.yaml",
+        data="waymo_dark.yaml",
     )
 
     run_seeded_val(
