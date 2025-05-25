@@ -123,6 +123,11 @@ def train_model(
 
 # Example usage
 if __name__ == "__main__":
+    train_model(
+        name="waymo_dark-yolo11n",
+        model="yolo11n.yaml",
+        data="waymo_dark.yaml",
+    )
     # train_model(name="bdd100k_night-yolo11n-cl", model="runs/detect/bdd100k_night-yolo11n-cl/weights/last.pt", resume=True)
     # train_model(name="bdd100k_night-yolo11n-simsppf", model="dlt-models/yolo11n-SimSPPF.yaml")
     # train_model(name="bdd100k_night-yolo11n-se", model="runs/detect/bdd100k_night-yolo11n-se/weights/last.pt", resume=True)
@@ -185,50 +190,50 @@ if __name__ == "__main__":
     #     model="runs/detect/bdd100k_night-yolo11n-spdconv-fa/weights/last.pt",
     #     resume=True,
     # )
-    train_model(
-        name="bdd100k_night-yolo11n-spdconv-full-mosaic",
-        model="dlt-models/yolo11n-SPDConv-3.yaml",
-        close_mosaic=0,
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-spdconv-cl",
-        model="runs/detect/bdd100k_night-yolo11n-spdconv-cl/weights/last.pt",
-        resume=True,
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-spdconv-fa-cl",
-        model="dlt-models/yolo11n-spdconv-fa-cl.yaml",
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-gc+newconv",
-        model="dlt-models/yolo11n-GC+NewConv.yaml",
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-spdconv-augs",
-        model="dlt-models/yolo11n-SPDConv-3.yaml",
-        degrees=15,
-        shear=10,
-        crop=0.75,
-        hsv_v=0.6,
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-final-ciou",
-        model="runs/detect/bdd100k_night-yolo11n-final-ciou/weights/last.pt",
-        resume=True,
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-final-1",
-        model="runs/detect/bdd100k_night-yolo11n-final-1/weights/last.pt",
-        resume=True,
-        iou_type="thiou",
-    )
-    train_model(
-        name="bdd100k_night-yolo11n-siou",
-        model="runs/detect/bdd100k_night-yolo11n-siou/weights/last.pt",
-        resume=True,
-        iou_type="siou",
-    )
-    train_model(name="bdd100k_night-yolo11n-isiou", model="yolo11n.yaml", iou_type="isiou")
-    train_model(name="bdd100k_night-yolo11n-ciou+nwd", model="yolo11n.yaml", iou_type="ciou+nwd")
-    train_model(name="bdd100k_night-yolo11n-progressive-spdconv-2", model="dlt-models/yolo11n-ProgSPDConv-2.yaml")
-    train_model(name="bdd100k_night-yolo11n-nwd", model="yolo11n.yaml", iou_type="nwd")
+    # train_model(
+    #     name="bdd100k_night-yolo11n-spdconv-full-mosaic",
+    #     model="dlt-models/yolo11n-SPDConv-3.yaml",
+    #     close_mosaic=0,
+    # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-spdconv-cl",
+    #     model="runs/detect/bdd100k_night-yolo11n-spdconv-cl/weights/last.pt",
+    #     resume=True,
+    # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-spdconv-fa-cl",
+    #     model="dlt-models/yolo11n-spdconv-fa-cl.yaml",
+    # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-gc+newconv",
+    #     model="dlt-models/yolo11n-GC+NewConv.yaml",
+    # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-spdconv-augs",
+    #     model="dlt-models/yolo11n-SPDConv-3.yaml",
+    #     degrees=15,
+    #     shear=10,
+    #     crop=0.75,
+    #     hsv_v=0.6,
+    # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-final-ciou",
+    #     model="runs/detect/bdd100k_night-yolo11n-final-ciou/weights/last.pt",
+    #     resume=True,
+    # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-final-1",
+    #     model="runs/detect/bdd100k_night-yolo11n-final-1/weights/last.pt",
+    #     resume=True,
+    #     iou_type="thiou",
+    # )
+    # train_model(
+    #     name="bdd100k_night-yolo11n-siou",
+    #     model="runs/detect/bdd100k_night-yolo11n-siou/weights/last.pt",
+    #     resume=True,
+    #     iou_type="siou",
+    # )
+    # train_model(name="bdd100k_night-yolo11n-isiou", model="yolo11n.yaml", iou_type="isiou")
+    # train_model(name="bdd100k_night-yolo11n-ciou+nwd", model="yolo11n.yaml", iou_type="ciou+nwd")
+    # train_model(name="bdd100k_night-yolo11n-progressive-spdconv-2", model="dlt-models/yolo11n-ProgSPDConv-2.yaml")
+    # train_model(name="bdd100k_night-yolo11n-nwd", model="yolo11n.yaml", iou_type="nwd")
