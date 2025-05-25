@@ -1978,8 +1978,7 @@ class FeatureSelectionModule(nn.Module):
 
     def __init__(
         self,
-        fsm_type: FSM_TYPE = "thresh",
-        thresh_count: int = 85,
+        fsm_type: FSM_TYPE = "nms",
         conf_thresh: float = 0.001,
         nms_thresh_train: float = 0.75,
         nms_thresh_val: float = 0.5,
@@ -2001,7 +2000,6 @@ class FeatureSelectionModule(nn.Module):
         """
         super().__init__()
         self.fsm_type = fsm_type
-        self.target_count = thresh_count
         self.conf_thresh = conf_thresh
         self.nms_thresh_train = nms_thresh_train
         self.nms_thresh_val = nms_thresh_val

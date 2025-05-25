@@ -185,7 +185,7 @@ class TemporalDetect(Detect):
 
     temporal_window = 2  # default temporal window
 
-    def __init__(self, nc=80, ch=(), fam_mode: DETECT_FAM_MODE = "both_separate", fsm_type: FSM_TYPE = "thresh"):
+    def __init__(self, nc=80, ch=(), fam_mode: DETECT_FAM_MODE = "cls", fsm_type: FSM_TYPE = "nms"):
         """Initialize the YOLO Temporal detection layer with specified number of classes and channels."""
         super().__init__(nc, ch)
 
@@ -353,7 +353,6 @@ class TemporalDetect(Detect):
                     selected_reg_feats,
                     selected_scores,
                 )
-                breakpoint()
             case "both_combined":
                 final_cls_preds, final_reg_preds = self._forward_both_combined(
                     selected_cls_feats,
