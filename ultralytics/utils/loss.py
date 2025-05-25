@@ -441,13 +441,12 @@ class v8DetectionLoss:
         loss[3] *= self.hyp.lambda_c  # consistency gain
         if self.temporal:
             if self.fam_mode == "cls":
-                pass
-                # loss[4] *= self.hyp.temporal_cls
+                loss[4] *= self.hyp.temporal_cls
             elif self.fam_mode == "reg":
                 loss[4] *= self.hyp.temporal_reg
             else:  # both_combined, both_separate
                 loss[4] *= self.hyp.temporal_cls
-                loss[5] *= self.hyp.temporal_reg
+                # loss[5] *= self.hyp.temporal_reg
 
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
 

@@ -1743,7 +1743,8 @@ class TemporalAttention(nn.Module):
 
         # PART 2: AFFINITY MANNER (A.M.) - Section with confidence-weighted attention
         # Compute attention scores for classification branch
-        attn_cls: torch.Tensor = (q_cls @ k_cls.transpose(-2, -1)) * self.scale * cls_score
+        cls_mult = self.scale * cls_score if self.mode in ["both", "cls"] else self.scale
+        attn_cls: torch.Tensor = (q_cls @ k_cls.transpose(-2, -1)) * cls_mult
         attn_cls = attn_cls.softmax(dim=-1)
         attn_cls = self.attn_drop(attn_cls)
 
