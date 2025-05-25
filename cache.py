@@ -211,5 +211,5 @@ if __name__ == "__main__":
         epochs=1,
         batch=16,
         use_dist=True,
-        project=CLUSTER_OUTPUT_PATH,
+        # project=CLUSTER_OUTPUT_PATH,
     )
