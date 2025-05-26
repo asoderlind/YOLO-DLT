@@ -9,8 +9,8 @@
 #     └── coco128  ← downloads here (7 MB)
 
 # Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
-# path: /mnt/machine-learning-storage/ML1/ClusterOutput/MLC-499/Datasets/GENAI-6807_Waymo/waymo_dark # dataset root dir
-path: ../datasets/waymo_dark # dataset root dir
+path: /mnt/machine-learning-storage/ML1/ClusterOutput/MLC-499/Datasets/GENAI-6807_Waymo/waymo_dark # dataset root dir
+# path: ../datasets/waymo_dark # dataset root dir
 train: images/training # train images (relative to 'path') 69863 images
 val: images/validation # val images (relative to 'path') 10000 images
 #test: images/test
