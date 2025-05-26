@@ -130,7 +130,7 @@ def train_model_v(
 if __name__ == "__main__":
     train_model_v(
         name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.05_lr0_0.005_thresh",
-        model="dlt-models/yolo11n-temporal-thresh-0.005.yaml",
+        model="dlt-models/yolo11n-temporal.yaml",
         model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
         # gframe=16,
         batch=16,
