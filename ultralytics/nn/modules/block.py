@@ -1984,6 +1984,7 @@ class FeatureSelectionModule(nn.Module):
         nms_thresh_val: float = 0.5,
         topk_pre: int = 750,
         topk_post: int = 30,
+        max_thresh_proposals_per_frame: int = 85,
     ):
         """
         Initialize the Feature Selection Module.
@@ -2005,6 +2006,7 @@ class FeatureSelectionModule(nn.Module):
         self.nms_thresh_val = nms_thresh_val
         self.topk_pre = topk_pre
         self.topk_post = topk_post
+        self.max_thresh_proposals_per_frame = max_thresh_proposals_per_frame
 
     def __call__(
         self, raw_preds: torch.Tensor, vid_features: torch.Tensor, reg_features: torch.Tensor
@@ -2068,9 +2070,16 @@ class FeatureSelectionModule(nn.Module):
             thresh_mask = confidence_scores >= self.conf_thresh
             thresh_indices = torch.where(thresh_mask)[0]
 
+            # CRITICAL: Limit maximum selections per frame
+            if len(thresh_indices) > self.max_thresh_proposals_per_frame:  # e.g., 100-150
+                # Take top-k by confidence from thresh selections
+                thresh_scores = max_scores[b, thresh_indices]
+                _, topk_among_thresh = torch.topk(thresh_scores, self.max_thresh_proposals_per_frame)
+                thresh_indices = thresh_indices[topk_among_thresh]
+
             # Key difference from our current implementation:
             # We don't force a fixed target_count - we keep all above threshold
-            if len(thresh_indices) == 0:
+            elif len(thresh_indices) == 0:
                 # Handle edge case: no detections above threshold
                 # Take the single highest scoring detection to ensure we have something
                 _, highest_idx = confidence_scores.max(0)
