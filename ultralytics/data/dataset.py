@@ -317,16 +317,16 @@ class TemporalYOLODataset(YOLODataset):
         local_span = (self.lframe - 1) * self.temporal_stride + 1
         base_min_vid_len = max(local_span, self.lframe + self.gframe)
 
-        # Mode-specific keyframe position requirements
-        if self.mode == "val":
-            # Online: frames must come before keyframe
-            local_frames_before = max(0, (self.lframe - 1) * self.temporal_stride)
-            min_frames_before_keyframe = max(local_frames_before, max(0, self.lframe - 1) + self.gframe)
-            mode_str = "validation (online)"
-        else:
-            # Training: keyframe just needs local span before it
-            min_frames_before_keyframe = max(0, (self.lframe - 1) * self.temporal_stride)
-            mode_str = "training"
+        # # Mode-specific keyframe position requirements
+        # if self.mode == "val":
+        #     # Online: frames must come before keyframe
+        #     local_frames_before = max(0, (self.lframe - 1) * self.temporal_stride)
+        #     min_frames_before_keyframe = max(local_frames_before, max(0, self.lframe - 1) + self.gframe)
+        #     mode_str = "validation (online)"
+        # else:
+        # Training: keyframe just needs local span before it
+        min_frames_before_keyframe = max(0, (self.lframe - 1) * self.temporal_stride)
+        mode_str = "training" if self.mode == "train" else "validation (online)"
 
         short_videos: list[int] = []
         limited_videos: list[tuple[int, int]] = []
@@ -453,13 +453,13 @@ class TemporalYOLODataset(YOLODataset):
         frame_position = index - first_index
 
         # Calculate minimum frames needed before keyframe based on mode
-        if self.mode == "val":
-            # Validation: need frames for both local sequence AND global frames before keyframe
-            local_frames_before = max(0, (self.lframe - 1) * self.temporal_stride)
-            min_frames_before = max(local_frames_before, max(0, self.lframe + self.gframe) - 1)
-        else:
-            # Training: only need local span before keyframe (global can come from anywhere)
-            min_frames_before = max(0, (self.lframe - 1) * self.temporal_stride)
+        # if self.mode == "val":
+        #     # Validation: need frames for both local sequence AND global frames before keyframe
+        #     local_frames_before = max(0, (self.lframe - 1) * self.temporal_stride)
+        #     min_frames_before = max(local_frames_before, max(0, self.lframe + self.gframe) - 1)
+        # else:
+        # Training: only need local span before keyframe (global can come from anywhere)
+        min_frames_before = max(0, (self.lframe - 1) * self.temporal_stride)
 
         # Check if current position has enough frames before it
         if frame_position >= min_frames_before:
@@ -498,22 +498,23 @@ class TemporalYOLODataset(YOLODataset):
             local_set = set(sequence_indices)
 
             # Different sampling strategy for validation vs training
-            if self.mode == "val":
-                # For validation, only sample from frames before the current index
-                available_global = [idx for idx in images_indices if idx not in local_set and idx < index]
-                if self.lframe == 0:
-                    sequence_indices.append(index)  # Add the current index as a global frame
-            else:
-                # For training, sample from all frames in video except local frames
-                available_global = [idx for idx in images_indices if idx not in local_set]
+            # if self.mode == "val":
+            #     # For validation, only sample from frames before the current index
+            #     available_global = [idx for idx in images_indices if idx not in local_set and idx < index]
+            #     if self.lframe == 0:
+            #         sequence_indices.append(index)  # Add the current index as a global frame
+            # else:
+            # For training, sample from all frames in video except local frames
+            available_global = [idx for idx in images_indices if idx not in local_set]
 
             # Only sample if we have enough frames
             if len(available_global) >= self.gframe or (
                 len(available_global) == self.gframe - 1 and len(sequence_indices) == 1
             ):
-                # if we have val with gframe == 0 we add the current index manually so we subtract 1
-                efective_gframe = self.gframe - 1 if self.lframe == 0 and self.mode == "val" else self.gframe
-                global_indices = random.sample(available_global, efective_gframe)
+                # # if we have val with gframe == 0 we add the current index manually so we subtract 1
+                # efective_gframe = self.gframe - 1 if self.lframe == 0 and self.mode == "val" else self.gframe
+                effective_gframe = self.gframe
+                global_indices = random.sample(available_global, effective_gframe)
                 sequence_indices.extend(global_indices)
 
             else:
@@ -558,6 +559,10 @@ class TemporalYOLODataset(YOLODataset):
 
         flat_batch = batch[0]
         return YOLODataset.collate_fn(flat_batch)
+
+    def __len__(self):
+        # trick the dataloader to return the number of videos
+        return len(self.im_files) // (self.gframe + self.lframe)
 
 
 class YOLOMultiModalDataset(YOLODataset):

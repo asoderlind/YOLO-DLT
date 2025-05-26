@@ -155,6 +155,9 @@ class BaseTrainer:
         if RANK in {-1, 0}:
             callbacks.add_integration_callbacks(self)
 
+        # Temporal check
+        self.is_temporal = self.args.gframe > 0 or self.args.lframe > 0
+
     def add_callback(self, event: str, callback):
         """Appends the given callback."""
         self.callbacks[event].append(callback)
@@ -327,9 +330,19 @@ class BaseTrainer:
                 self.plot_training_labels()
 
         # Optimizer
-        self.accumulate = max(round(self.args.nbs / self.batch_size), 1)  # accumulate loss before optimizing
-        weight_decay = self.args.weight_decay * self.batch_size * self.accumulate / self.args.nbs  # scale weight_decay
-        iterations = math.ceil(len(self.train_loader.dataset) / max(self.batch_size, self.args.nbs)) * self.epochs
+        effective_batch_size = self.batch_size if not self.is_temporal else (self.args.gframe + self.args.lframe)
+        self.accumulate = max(round(self.args.nbs / effective_batch_size), 1)  # accumulate loss before optimizing
+        weight_decay = (
+            self.args.weight_decay * effective_batch_size * self.accumulate / self.args.nbs
+        )  # scale weight_decay
+        if self.is_temporal:
+            # Compensate for temporal dataset length tampering
+            dataset_len = len(self.train_loader.dataset.im_files)
+            iterations = math.ceil(dataset_len / max(effective_batch_size, self.args.nbs)) * self.epochs
+        else:
+            iterations = (
+                math.ceil(len(self.train_loader.dataset) / max(effective_batch_size, self.args.nbs)) * self.epochs
+            )
         self.optimizer = self.build_optimizer(
             model=self.model,
             name=self.args.optimizer,
@@ -351,7 +364,7 @@ class BaseTrainer:
             self._setup_ddp(world_size)
         self._setup_train(world_size)
 
-        nb = len(self.train_loader)  # number of batches
+        nb = len(self.train_loader)
         nw = max(round(self.args.warmup_epochs * nb), 100) if self.args.warmup_epochs > 0 else -1  # warmup iterations
         last_opt_step = -1
         self.epoch_time = None
