@@ -133,6 +133,7 @@ if __name__ == "__main__":
         model="dlt-models/yolo11n-temporal.yaml",
         model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
         gframe=16,
+        batch=1,
         # batch=16,
         epochs=80,
         warmup_epochs=8,
