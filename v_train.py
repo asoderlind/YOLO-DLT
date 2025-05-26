@@ -129,8 +129,24 @@ def train_model_v(
 # Example usage
 if __name__ == "__main__":
     train_model_v(
-        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.6_nms-default_dl",
+        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.5_nms-temporal_dl",
         model="dlt-models/yolo11n-temporal.yaml",
+        model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
+        # gframe=16,
+        batch=16,
+        epochs=80,
+        warmup_epochs=8,
+        cos_lr=True,
+        data="waymo_dark.yaml",
+        dataset_type="temporal",
+        lr0=0.005,
+        nbs=16,
+        temporal_freeze=True,
+    )
+
+    train_model_v(
+        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.4_nms-default_dl",
+        model="dlt-models/yolo11n-temporal-nms-0.4.yaml",
         model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
         # gframe=16,
         batch=16,
