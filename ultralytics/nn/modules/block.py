@@ -2067,13 +2067,13 @@ class FeatureSelectionModule(nn.Module):
             confidence_scores = max_scores
 
             # Apply confidence threshold (this is the core "Thresh" operation)
-            thresh_mask = confidence_scores >= self.conf_thresh
-            thresh_indices = torch.where(thresh_mask)[0]
+            thresh_mask = confidence_scores >= self.conf_thresh  # [num_anchors]
+            thresh_indices = torch.where(thresh_mask)[0]  # [num_selected_anchors]
 
             # CRITICAL: Limit maximum selections per frame
             if len(thresh_indices) > self.max_thresh_proposals_per_frame:  # e.g., 100-150
                 # Take top-k by confidence from thresh selections
-                thresh_scores = max_scores[b, thresh_indices]
+                thresh_scores = max_scores[thresh_indices]
                 _, topk_among_thresh = torch.topk(thresh_scores, self.max_thresh_proposals_per_frame)
                 thresh_indices = thresh_indices[topk_among_thresh]
 
