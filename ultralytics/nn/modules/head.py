@@ -185,11 +185,21 @@ class TemporalDetect(Detect):
 
     temporal_window = 2  # default temporal window
 
-    def __init__(self, nc=80, ch=(), fam_mode: DETECT_FAM_MODE = "cls", fsm_type: FSM_TYPE = "nms"):
+    def __init__(
+        self,
+        nc=80,
+        ch=(),
+        fam_mode: DETECT_FAM_MODE = "cls",
+        fsm_type: FSM_TYPE = "nms",
+        fsm_param: float | None = None,
+    ):
         """Initialize the YOLO Temporal detection layer with specified number of classes and channels."""
         super().__init__(nc, ch)
 
-        self.fsm = FeatureSelectionModule(fsm_type=fsm_type)
+        if fsm_param is None:
+            fsm_param = 0.75 if fsm_type == "nms" else 0.001
+
+        self.fsm = FeatureSelectionModule(fsm_type=fsm_type, nms_thresh_train=fsm_param, conf_thresh=fsm_param)
 
         # separate reg and cls convs from the final pred layer
         reg_ch = max(16, ch[0] // 4, self.reg_max * 4)
