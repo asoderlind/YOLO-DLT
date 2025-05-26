@@ -139,4 +139,5 @@ if __name__ == "__main__":
         cos_lr=True,
         data="waymo_dark.yaml",
         lr0=0.005,
+        nbs=16,
     )
