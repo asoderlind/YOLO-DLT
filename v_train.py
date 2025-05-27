@@ -145,6 +145,75 @@ if __name__ == "__main__":
     #     temporal_freeze=True,
     # )
 
+    # train_model_v(
+    #     name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.01_thresh-default_dl",
+    #     model="dlt-models/yolo11n-temporal-thresh-0.01.yaml",
+    #     model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
+    #     # gframe=16,
+    #     batch=16,
+    #     epochs=80,
+    #     warmup_epochs=8,
+    #     cos_lr=True,
+    #     data="waymo_dark.yaml",
+    #     lr0=0.005,
+    #     nbs=16,
+    #     temporal_freeze=True,
+    # )
+
+    # train_model_v(
+    #     name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.4_nms-default_dl",
+    #     model="dlt-models/yolo11n-temporal-nms-0.4.yaml",
+    #     model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
+    #     # gframe=16,
+    #     batch=16,
+    #     epochs=80,
+    #     warmup_epochs=8,
+    #     cos_lr=True,
+    #     data="waymo_dark.yaml",
+    #     lr0=0.005,
+    #     nbs=16,
+    #     temporal_freeze=True,
+    # )
+
+    # train_model_v(
+    #     name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.7_nms-default_dl",
+    #     model="dlt-models/yolo11n-temporal-nms-0.7.yaml",
+    #     model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
+    #     # gframe=16,
+    #     batch=16,
+    #     epochs=80,
+    #     warmup_epochs=8,
+    #     cos_lr=True,
+    #     data="waymo_dark.yaml",
+    #     lr0=0.005,
+    #     nbs=16,
+    #     temporal_freeze=True,
+    # )
+
+    train_model_v(
+        name="waymo_dark-yolo11n-temporal_dl",
+        model="yolo11n.yaml",
+        batch=1,
+        gframe=16,
+        epochs=200,
+        data="waymo_dark.yaml",
+    )
+
+    train_model_v(
+        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.4_nms-0.4_nms_val-default_dl",
+        model="dlt-models/yolo11n-temporal-nms-0.4.yaml",
+        model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
+        # gframe=16,
+        batch=16,
+        epochs=80,
+        warmup_epochs=8,
+        cos_lr=True,
+        data="waymo_dark.yaml",
+        lr0=0.005,
+        nbs=16,
+        temporal_freeze=True,
+    )
+
     train_model_v(
         name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.01_thresh-default_dl",
         model="dlt-models/yolo11n-temporal-thresh-0.01.yaml",
@@ -161,8 +230,8 @@ if __name__ == "__main__":
     )
 
     train_model_v(
-        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.4_nms-default_dl",
-        model="dlt-models/yolo11n-temporal-nms-0.4.yaml",
+        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.02_thresh-default_dl",
+        model="dlt-models/yolo11n-temporal-thresh-0.02.yaml",
         model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
         # gframe=16,
         batch=16,
@@ -176,8 +245,8 @@ if __name__ == "__main__":
     )
 
     train_model_v(
-        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.7_nms-default_dl",
-        model="dlt-models/yolo11n-temporal-nms-0.7.yaml",
+        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.05_thresh-default_dl",
+        model="dlt-models/yolo11n-temporal-thresh-0.05.yaml",
         model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
         # gframe=16,
         batch=16,
@@ -190,32 +259,32 @@ if __name__ == "__main__":
         temporal_freeze=True,
     )
 
-    train_model_v(
-        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.001_thresh-default_dl",
-        model="dlt-models/yolo11n-temporal-thresh-0.001.yaml",
-        model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
-        # gframe=16,
-        batch=16,
-        epochs=80,
-        warmup_epochs=8,
-        cos_lr=True,
-        data="waymo_dark.yaml",
-        lr0=0.005,
-        nbs=16,
-        temporal_freeze=True,
-    )
+    # train_model_v(
+    #     name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.001_thresh-default_dl",
+    #     model="dlt-models/yolo11n-temporal-thresh-0.001.yaml",
+    #     model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
+    #     # gframe=16,
+    #     batch=16,
+    #     epochs=80,
+    #     warmup_epochs=8,
+    #     cos_lr=True,
+    #     data="waymo_dark.yaml",
+    #     lr0=0.005,
+    #     nbs=16,
+    #     temporal_freeze=True,
+    # )
 
-    train_model_v(
-        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.005_thresh-default_dl",
-        model="dlt-models/yolo11n-temporal-thresh-0.005.yaml",
-        model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
-        # gframe=16,
-        batch=16,
-        epochs=80,
-        warmup_epochs=8,
-        cos_lr=True,
-        data="waymo_dark.yaml",
-        lr0=0.005,
-        nbs=16,
-        temporal_freeze=True,
-    )
+    # train_model_v(
+    #     name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.005_thresh-default_dl",
+    #     model="dlt-models/yolo11n-temporal-thresh-0.005.yaml",
+    #     model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
+    #     # gframe=16,
+    #     batch=16,
+    #     epochs=80,
+    #     warmup_epochs=8,
+    #     cos_lr=True,
+    #     data="waymo_dark.yaml",
+    #     lr0=0.005,
+    #     nbs=16,
+    #     temporal_freeze=True,
+    # )
