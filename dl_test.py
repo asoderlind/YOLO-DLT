@@ -1,6 +1,6 @@
 from ultralytics import YOLO
 
-model = YOLO("dlt-models/yolo11n-temporal.yaml").load("runs/detect/waymo_dark-yolo11n3/weights/last.pt")
+model = YOLO("dlt-models/yolo11n-temporal-thresh-0.01.yaml").load("waymo_dark-yolo11n.pt")
 # model2 = YOLO("dlt-models/yolo11n.yaml").load("waymo_dark-yolo11n.pt")
 model.train(
     data="waymo_night.yaml",
