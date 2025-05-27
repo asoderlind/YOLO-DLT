@@ -21,7 +21,7 @@ if __name__ == "__main__":
     for s in [0, 1, 2]:
         for dist in [0.01, 0.05, 0.1, 0.5, 1.0]:
             eval_model(
-                f"{CLUSTER_OUTPUT_PATH}/waymo_dark/yolo11n.yaml-c-200e-dist-d={dist}-noFe-lc=0.5-s={s}_",
+                f"{CLUSTER_OUTPUT_PATH}/waymo_dark/yolo11n.yaml-c-200e-dist-d={dist}-noFe-lc=0.5-s={s}_/weights/best.pt",
                 "waymo_dark.yaml",
                 use_dist=True,
                 max_dist=MAX_DIST_WAYMO,
