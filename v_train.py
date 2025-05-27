@@ -190,14 +190,14 @@ if __name__ == "__main__":
     #     temporal_freeze=True,
     # )
 
-    train_model_v(
-        name="waymo_dark-yolo11n-temporal_dl",
-        model="yolo11n.yaml",
-        batch=1,
-        gframe=16,
-        epochs=200,
-        data="waymo_dark.yaml",
-    )
+    # train_model_v(
+    #     name="waymo_dark-yolo11n-temporal_dl",
+    #     model="yolo11n.yaml",
+    #     batch=1,
+    #     gframe=16,
+    #     epochs=200,
+    #     data="waymo_dark.yaml",
+    # )
 
     train_model_v(
         name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.4_nms-0.4_nms_val-default_dl",
