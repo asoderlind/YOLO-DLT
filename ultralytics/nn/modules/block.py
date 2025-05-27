@@ -1981,7 +1981,7 @@ class FeatureSelectionModule(nn.Module):
         fsm_type: FSM_TYPE = "nms",
         conf_thresh: float = 0.001,
         nms_thresh_train: float = 0.75,
-        nms_thresh_val: float = 0.5,
+        nms_thresh_val: float = 0.4,
         topk_pre: int = 750,
         topk_post: int = 30,
         max_thresh_proposals_per_frame: int = 85,
