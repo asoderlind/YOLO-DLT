@@ -139,6 +139,7 @@ def train_model(
 
 
 def run_seeded_train(
+    start_itr=0,
     iterations: int = 3,
     name="{data}-{model}-{fe}-{augment}-{epochs}e",
     model=MODEL,
@@ -157,26 +158,48 @@ def run_seeded_train(
     classes=None,
     **kwargs,
 ):
-    for i in range(iterations):
-        train_model(
-            name=f"{name}-seed-{i}",
-            model=model,
-            data=data,
-            batch=batch,
-            epochs=epochs,
-            device=device,
-            use_fe=use_fe,
-            augment=augment,
-            pretrained=pretrained,
-            iou_type=iou_type,
-            warmup_bias_lr=warmup_bias_lr,
-            lr0=lr0,
-            optimizer=optimizer,
-            momentum=momentum,
-            classes=classes,
-            seed=i,
-            **kwargs,
-        )
+    if start_itr == 0:
+        for i in range(iterations):
+            train_model(
+                name=f"{name}-seed-{i}",
+                model=model,
+                data=data,
+                batch=batch,
+                epochs=epochs,
+                device=device,
+                use_fe=use_fe,
+                augment=augment,
+                pretrained=pretrained,
+                iou_type=iou_type,
+                warmup_bias_lr=warmup_bias_lr,
+                lr0=lr0,
+                optimizer=optimizer,
+                momentum=momentum,
+                classes=classes,
+                seed=i,
+                **kwargs,
+            )
+    else:
+        for i in range(start_itr, start_itr + iterations):
+            train_model(
+                name=f"{name}-seed-{i}",
+                model=model,
+                data=data,
+                batch=batch,
+                epochs=epochs,
+                device=device,
+                use_fe=use_fe,
+                augment=augment,
+                pretrained=pretrained,
+                iou_type=iou_type,
+                warmup_bias_lr=warmup_bias_lr,
+                lr0=lr0,
+                optimizer=optimizer,
+                momentum=momentum,
+                classes=classes,
+                seed=i,
+                **kwargs,
+            )
 
 
 def run_seeded_val(
