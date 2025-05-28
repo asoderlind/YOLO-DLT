@@ -8,6 +8,10 @@ __pycache__/
 
 feature_visualization
 
+sample_images/2015_01899.jpg
+sample_images/2015_01901.jpg
+sample_images/2015_01906.jpg
+
 # Distribution / packaging
 .Python
 build/

@@ -4,7 +4,8 @@ from colors import BLUE_EDGE, RED_EDGE
 
 def plot_dist_gain_graphs(metrics):
     # Data
-    lambda_dist = [0.01, 0.05, 0.10, 0.5, 1.0]
+    lambda_dist_map = [0.0, 0.01, 0.05, 0.10, 0.5, 1.0]
+    lambda_dist_eA = [0.01, 0.05, 0.10, 0.5, 1.0]
 
     # Plot setup
 
@@ -17,8 +18,8 @@ def plot_dist_gain_graphs(metrics):
         for model, values in data.items():
             map50 = values["map50"]
             e_A = values["e_A"]
-            axs[0].plot(lambda_dist, map50, marker="o", color=BLUE_EDGE, label=model)
-            axs[1].plot(lambda_dist, e_A, marker="o", color=RED_EDGE, label=model)
+            axs[0].plot(lambda_dist_map, map50, marker="o", color=BLUE_EDGE, label=model)
+            axs[1].plot(lambda_dist_eA, e_A, marker="o", color=RED_EDGE, label=model)
 
         # Plot ε_A
         axs[1].set_xlabel("$\lambda_{dist}$")
@@ -38,7 +39,7 @@ if __name__ == "__main__":
     metrics = {
         "KITTI": {
             "yolo11n-dist": {
-                "map50": [83.9, 84.6, 84.9, 83.4, 79.5],
+                "map50": [84.2, 83.9, 84.6, 84.9, 83.4, 79.5],
                 "e_A": [2.20, 1.60, 1.50, 1.19, 1.21],
             },
             # "yolo11n-SPDConv3-dist": {
@@ -48,8 +49,8 @@ if __name__ == "__main__":
         },
         "Waymo-night": {
             "yolo11n-dist": {
-                "map50": [55.2, 55.1, 54.9, 50.4, 51.0],
-                "e_A": [20.6, 22.0, 22.3, 21.1, 20.6],
+                "map50": [58.8, 57.7, 57.3, 57.6, 54.6, 54.0],
+                "e_A": [19.5, 19.6, 20.2, 19.70, 19.73],
             },
             # "yolo11n-SPDConv3-dist": {
             #    "map50": [55.4, 55.0, 55.8, 53.8, 50.7],

@@ -15,6 +15,7 @@ from train_conf import (
     EPOCHS,
     SEED,
     MAX_DIST_WAYMO,
+    CLUSTER_BDDK_WEIGHT_PATH,
 )
 
 
@@ -100,7 +101,6 @@ if __name__ == "__main__":
                     lambda_c=lambda_c,
                     seed=s
                 )
-    """
 
     # BDD100k-night
     for s in [2]:
@@ -111,6 +111,7 @@ if __name__ == "__main__":
             lambda_c=0.1,
             seed=s,
         )
+    """
 
     ############
     # Distance #
@@ -123,46 +124,52 @@ if __name__ == "__main__":
 
     # Waymo-night
 
-    # for s in [1, 2]:
-    # train(
-    #   data_path="waymo_cluster_night.yaml",
-    #   use_dist=False,
-    #    dist=0.00,
-    #    max_dist=MAX_DIST_WAYMO,
-    #    seed=s,
-    # )
-    # train(
-    #     data_path="waymo_cluster_night.yaml",
-    #     use_dist=True,
-    #     dist=0.01,
-    #     max_dist=MAX_DIST_WAYMO,
-    #     seed=s,
-    # )
-    # train(
-    #     data_path="waymo_cluster_night.yaml",
-    #     use_dist=True,
-    #     dist=0.05,
-    #     max_dist=MAX_DIST_WAYMO,
-    #     seed=s,
-    # )
-    # train(
-    #     data_path="waymo_cluster_night.yaml",
-    #     use_dist=True,
-    #     dist=0.1,
-    #     max_dist=MAX_DIST_WAYMO,
-    #     seed=s,
-    # )
-    # train(
-    #     data_path="waymo_cluster_night.yaml",
-    #     use_dist=True,
-    #     dist=0.5,
-    #     max_dist=MAX_DIST_WAYMO,
-    #     seed=s,
-    # )
-    # train(
-    #     data_path="waymo_cluster_night.yaml",
-    #     use_dist=True,
-    #     dist=1.0,
-    #     max_dist=MAX_DIST_WAYMO,
-    #     seed=s,
-    # )
+    for s in [0]:
+        train(
+            model_path=CLUSTER_BDDK_WEIGHT_PATH,
+            data_path="waymo_cluster_night.yaml",
+            use_dist=False,
+            dist=0.00,
+            max_dist=MAX_DIST_WAYMO,
+            seed=s,
+            warmup_epochs=5,
+            lr0=0.005,
+            epochs=50,
+        )
+        """
+        train(
+            data_path="waymo_cluster_night.yaml",
+            use_dist=True,
+            dist=0.01,
+            max_dist=MAX_DIST_WAYMO,
+            seed=s,
+        )
+        train(
+            data_path="waymo_cluster_night.yaml",
+            use_dist=True,
+            dist=0.05,
+            max_dist=MAX_DIST_WAYMO,
+            seed=s,
+        )
+        train(
+            data_path="waymo_cluster_night.yaml",
+            use_dist=True,
+            dist=0.1,
+            max_dist=MAX_DIST_WAYMO,
+            seed=s,
+        )
+        train(
+            data_path="waymo_cluster_night.yaml",
+            use_dist=True,
+            dist=0.5,
+            max_dist=MAX_DIST_WAYMO,
+            seed=s,
+        )
+        train(
+            data_path="waymo_cluster_night.yaml",
+            use_dist=True,
+            dist=1.0,
+            max_dist=MAX_DIST_WAYMO,
+            seed=s,
+        )
+        """

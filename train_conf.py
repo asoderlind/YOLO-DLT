@@ -16,5 +16,6 @@ WARMUP_BIAS_LR = 0.0
 PRETRAINED = False
 EPOCHS = 200
 CLUSTER_OUTPUT_PATH = "/mnt/machine-learning-storage/ML1/ClusterOutput/MLC-499/Runs"
+CLUSTER_BDDK_WEIGHT_PATH = "/mnt/machine-learning-storage/ML1/ClusterOutput/MLC-499/Runs/bdd100k_night_cluster-yolo11n-bic-repc3k2-seed-0/weights/last.pt"
 SEED = 0
 MAX_DIST_WAYMO = 85
