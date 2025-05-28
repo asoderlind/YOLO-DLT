@@ -16,6 +16,7 @@ from train_conf import (
     SEED,
     MAX_DIST_WAYMO,
     CLUSTER_BDDK_WEIGHT_PATH,
+    CLUSTER_OUTPUT_PATH,
 )
 
 
@@ -136,6 +137,7 @@ if __name__ == "__main__":
             warmup_epochs=5,
             lr0=0.005,
             epochs=50,
+            project=CLUSTER_OUTPUT_PATH,
         )
         """
         train(
