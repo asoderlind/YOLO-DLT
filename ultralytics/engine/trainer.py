@@ -315,12 +315,16 @@ class BaseTrainer:
             self.args.batch = self.batch_size = self.auto_batch()
 
         # Dataloaders
+        breakpoint()
         batch_size = self.batch_size // max(world_size, 1)
         self.train_loader = self.get_dataloader(self.trainset, batch_size=batch_size, rank=LOCAL_RANK, mode="train")
         if RANK in {-1, 0}:
             # Note: When training DOTA dataset, double batch size could get OOM on images with >2000 objects.
             self.test_loader = self.get_dataloader(
-                self.testset, batch_size=batch_size if self.args.task == "obb" else batch_size * 2, rank=-1, mode="val"
+                self.testset,
+                batch_size=batch_size if self.args.task == "obb" or self.is_temporal else batch_size * 2,
+                rank=-1,
+                mode="val",
             )
             self.validator = self.get_validator()
             metric_keys = self.validator.metrics.keys + self.label_loss_items(prefix="val")
