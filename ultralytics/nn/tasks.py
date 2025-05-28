@@ -85,6 +85,7 @@ from ultralytics.nn.modules import (
     WorldDetect,
     v10Detect,
 )
+from ultralytics.nn.modules.head import EOVODDetect
 from ultralytics.nn.modules.utils import TEMPORAL_MAPPING
 from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, colorstr, emojis, yaml_load
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
@@ -112,7 +113,7 @@ from ultralytics.utils.torch_utils import (
 class BaseModel(torch.nn.Module):
     """The BaseModel class serves as a base class for all the models in the Ultralytics YOLO family."""
 
-    def forward(self, x, *args, **kwargs):
+    def forward(self, x, *args, **kwargs):  # x is the batch dict during training
         """
         Perform forward pass of the model for either training or inference.
 
@@ -311,7 +312,8 @@ class BaseModel(torch.nn.Module):
         """
         if getattr(self, "criterion", None) is None:
             self.criterion = self.init_criterion()
-
+        if isinstance(self.model[-1], EOVODDetect):
+            self.model[-1].batch = batch
         preds = self.forward(batch["img"]) if preds is None else preds
         return self.criterion(preds, batch, **kwargs)
 
