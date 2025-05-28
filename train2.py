@@ -294,14 +294,13 @@ if __name__ == "__main__":
     bdd100k = "bdd100k_cluster.yaml"
 
     # cache the dataset
-    train_model(
-        name="bdd100k_night-yolo11n-ldconv-test",
-        model="dlt-models/yolo11n-LDConv.yaml",
+    run_seeded_train(
+        start_itr=3,
+        iterations=2,
+        name="bdd100k_night-yolo11n-itr-test",
+        model="yolo11n.yaml",
         data="bdd100k_night.yaml",
-        # project=CLUSTER_OUTPUT_PATH,
         project="",
-        epochs=1,
-        # use_dist=True,
     )
 
     # # cache the dataset
