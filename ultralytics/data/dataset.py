@@ -484,7 +484,15 @@ class TemporalYOLODataset(YOLODataset):
         sequence_indices: list[int] = []
 
         index_start = time.time()
+        original_index = index  # Store original index for logging
         index = self.get_valid_index(index)
+
+        original_index = index
+        index = self.get_valid_index(index)
+
+        if index != original_index:
+            LOGGER.debug(f"Index correction: {original_index} -> {index}")
+
         index_time = (time.time() - index_start) * 1000  # in ms
 
         # Ensure valid index if using local frames
