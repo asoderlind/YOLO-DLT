@@ -315,7 +315,6 @@ class BaseTrainer:
             self.args.batch = self.batch_size = self.auto_batch()
 
         # Dataloaders
-        breakpoint()
         batch_size = self.batch_size // max(world_size, 1)
         self.train_loader = self.get_dataloader(self.trainset, batch_size=batch_size, rank=LOCAL_RANK, mode="train")
         if RANK in {-1, 0}:
