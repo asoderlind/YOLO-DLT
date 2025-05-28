@@ -16,6 +16,7 @@ from train_conf import (
     SEED,
     MAX_DIST_WAYMO,
     CLUSTER_BDDK_WEIGHT_PATH,
+    CLUSTER_OUTPUT_PATH,
 )
 
 
@@ -24,6 +25,7 @@ def train(
     model_path: str = MODEL,
     seed: int = SEED,
     epochs: int = EPOCHS,
+    lr0: float = LR0,
     optimizer: str = OPTIMIZER,
     name=None,
     project="runs/detect",
@@ -66,7 +68,7 @@ def train(
             device=DEVICE,
             batch=BATCH,
             momentum=MOMENTUM,
-            lr0=LR0,
+            lr0=lr0,
             iou_type=IOU_TYPE,
             warmup_bias_lr=WARMUP_BIAS_LR,
             optimizer=optimizer,
@@ -135,6 +137,7 @@ if __name__ == "__main__":
             warmup_epochs=5,
             lr0=0.005,
             epochs=50,
+            project=CLUSTER_OUTPUT_PATH,
         )
         """
         train(
