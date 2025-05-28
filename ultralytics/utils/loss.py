@@ -287,35 +287,6 @@ class v8DetectionLoss:
             # refined_reg_preds = preds[start_index + 2] NOT USED FOR NOW
             pred_res: list[torch.Tensor] = preds[start_index + 3]  # len batch_size [ <= topk_post, 4 + nc]
             pred_idx: torch.Tensor = preds[start_index + 4]  # len batch_size [<= topk_post]
-        # match self.fam_mode:
-        #     case "cls":
-        #         loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal_cls
-        #         start_index = 0 if len(preds) == 4 else 1  # 4 outputs during training, 5 during validation
-        #         feats = preds[start_index]
-        #         refined_cls_preds = preds[start_index + 1]
-        #         _ = preds[start_index + 2]  # skip reg preds
-        #         refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
-        #     case "reg":
-        #         loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal reg
-        #         start_index = 0 if len(preds) == 4 else 1
-        #         feats = preds[start_index]
-        #         _ = preds[start_index + 1]  # skip cls preds
-        #         refined_reg_preds = preds[start_index + 2]
-        #         refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
-        #     case _:  # both cls and reg
-        #         loss = torch.zeros(6, device=self.device)  # box, cls, dfl, con, temporal_cls, temporal_reg
-        #         start_index = 0 if len(preds) == 4 else 1
-        #         feats = preds[start_index]
-        #         refined_cls_preds = preds[start_index + 1]
-        #         refined_reg_preds = preds[start_index + 2]
-        #         refined_indices = preds[start_index + 3]  # which indices out of sum(h_i * w_i) should be used
-
-        # # Reference frames batch_idx are set < 0 in the temporal collate function
-        # key_frame_mask = batch["batch_idx"] >= 0
-        # # Filter out the reference frames from the batch
-        # batch["batch_idx"] = batch["batch_idx"][key_frame_mask]
-        # batch["cls"] = batch["cls"][key_frame_mask]
-        # batch["bboxes"] = batch["bboxes"][key_frame_mask]
 
         pred_distri, pred_scores = torch.cat([xi.view(feats[0].shape[0], self.no, -1) for xi in feats], 2).split(
             (self.reg_max * 4, self.nc), 1
