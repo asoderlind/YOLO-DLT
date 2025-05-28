@@ -1,6 +1,8 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
+import csv
 import json
+import os
 import random
 import time
 from collections import defaultdict
@@ -549,14 +551,22 @@ class TemporalYOLODataset(YOLODataset):
         #         f"TOTAL DATA TIME: {total_time:.2f} ms "
         #     )
 
-        if self.mode == "train":
-            with open("train_temporal_dataset_frame_indices.txt", "a") as f:
-                index_string = f"Index: {index}, Video ID: {vid_id}, Sequence Indices: {sequence_indices}\n"
-                f.write(index_string)
-        else:
-            with open("val_temporal_dataset_frame_indices.txt", "a") as f:
-                index_string = f"Index: {index}, Video ID: {vid_id}, Sequence Indices: {sequence_indices}\n"
-                f.write(index_string)
+        filename = (
+            "train_temporal_dataset_frame_indices.tsv"
+            if self.mode == "train"
+            else "val_temporal_dataset_frame_indices.tsv"
+        )
+
+        # Write header if file doesn't exist
+        if not os.path.exists(filename):
+            with open(filename, "w", newline="") as f:
+                writer = csv.writer(f, delimiter="\t")
+                writer.writerow(["Index", "Video_ID", "Sequence_Indices"])
+
+        # Append data
+        with open(filename, "a", newline="") as f:
+            writer = csv.writer(f, delimiter="\t")
+            writer.writerow([index, vid_id, sequence_indices])
         return batch
 
     @staticmethod
