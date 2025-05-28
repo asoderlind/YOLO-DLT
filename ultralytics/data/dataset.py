@@ -548,9 +548,15 @@ class TemporalYOLODataset(YOLODataset):
         #         f"GLOBAL FRAME TIME: {gframe_time:.2f} ms "
         #         f"TOTAL DATA TIME: {total_time:.2f} ms "
         #     )
-        with open("temporal_dataset_frame_indices.txt", "a") as f:
-            index_string = f"Index: {index}, Video ID: {vid_id}, Sequence Indices: {sequence_indices}\n"
-            f.write(index_string)
+
+        if self.mode == "train":
+            with open("train_temporal_dataset_frame_indices.txt", "a") as f:
+                index_string = f"Index: {index}, Video ID: {vid_id}, Sequence Indices: {sequence_indices}\n"
+                f.write(index_string)
+        else:
+            with open("val_temporal_dataset_frame_indices.txt", "a") as f:
+                index_string = f"Index: {index}, Video ID: {vid_id}, Sequence Indices: {sequence_indices}\n"
+                f.write(index_string)
         return batch
 
     @staticmethod
