@@ -197,6 +197,7 @@ if __name__ == "__main__":
         gframe=16,
         epochs=200,
         data="waymo_dark.yaml",
+        dataset_type="temporal",
     )
 
     # train_model_v(
