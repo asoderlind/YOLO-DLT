@@ -3,12 +3,12 @@
 import os
 import random
 from pathlib import Path
-from typing import Literal
+from typing import Iterator, Literal
 
 import numpy as np
 import torch
 from PIL import Image
-from torch.utils.data import dataloader, distributed
+from torch.utils.data import Sampler, dataloader, distributed
 
 from ultralytics.data.dataset import GroundingDataset, TemporalYOLODataset, YOLODataset, YOLOMultiModalDataset
 from ultralytics.data.loaders import (
@@ -22,7 +22,7 @@ from ultralytics.data.loaders import (
     autocast_list,
 )
 from ultralytics.data.utils import IMG_FORMATS, PIN_MEMORY, VID_FORMATS
-from ultralytics.utils import RANK, colorstr
+from ultralytics.utils import LOGGER, RANK, colorstr
 from ultralytics.utils.checks import check_file
 
 
@@ -154,12 +154,73 @@ def build_grounding(cfg, img_path, json_file, batch, mode="train", rect=False, s
     )
 
 
+class TemporalVideoSampler(Sampler):
+    """
+    Custom sampler for temporal datasets that ensures:
+    1. Full index range sampling for video diversity
+    2. Proper epoch sizing based on effective batch size
+    3. Proactive filtering of invalid indices
+    """
+
+    def __init__(self, dataset: TemporalYOLODataset, effective_batch_size: int, mode="train"):
+        self.dataset = dataset
+        self.effective_batch_size = effective_batch_size
+        self.mode = mode
+        self.total_frames = len(dataset.im_files)
+        self.samples_per_epoch = self.total_frames // effective_batch_size
+
+        # Pre-compute all valid indices
+        self.valid_indices = self._get_valid_indices()
+
+        LOGGER.info(
+            f"TemporalVideoSampler ({mode}): "
+            f"{len(self.valid_indices)}/{self.total_frames} valid indices, "
+            f"{self.samples_per_epoch} samples per epoch"
+        )
+
+    def _get_valid_indices(self) -> list[int]:
+        """Pre-filter the entire dataset for naturally valid indices"""
+        valid_indices = []
+
+        for idx in range(self.total_frames):
+            # Check if this index doesn't need correction
+            if self.dataset.get_valid_index(idx) == idx:
+                valid_indices.append(idx)
+
+        return valid_indices
+
+    def __iter__(self) -> Iterator[int]:
+        if len(self.valid_indices) >= self.samples_per_epoch:
+            # We have enough valid indices, sample without replacement
+            indices = random.sample(self.valid_indices, self.samples_per_epoch)
+        else:
+            # Fall back to sampling with replacement if needed
+            LOGGER.warning(
+                f"Not enough valid indices ({len(self.valid_indices)}) for samples per epoch "
+                f"({self.samples_per_epoch}), using replacement sampling"
+            )
+            indices = random.choices(self.valid_indices, k=self.samples_per_epoch)
+
+        return iter(indices)
+
+    def __len__(self) -> int:
+        return self.samples_per_epoch
+
+
 def build_dataloader(dataset, batch, workers, shuffle=True, rank=-1):
     """Return an InfiniteDataLoader or DataLoader for training or validation set."""
     batch = min(batch, len(dataset))
     nd = torch.cuda.device_count()  # number of CUDA devices
     nw = min(os.cpu_count() // max(nd, 1), workers)  # number of workers
-    sampler = None if rank == -1 else distributed.DistributedSampler(dataset, shuffle=shuffle)
+    if isinstance(dataset, TemporalYOLODataset):
+        # Use TemporalVideoSampler for temporal datasets
+        # TODO: Figure out how to not hardcode the effective batch size
+        sampler = TemporalVideoSampler(dataset, effective_batch_size=16, mode="train" if shuffle else "val")
+    elif rank == -1:
+        # Use default sampler for non-distributed training
+        sampler = None
+    else:
+        sampler = distributed.DistributedSampler(dataset, shuffle=shuffle)
     generator = torch.Generator()
     generator.manual_seed(6148914691236517205 + RANK)
 
