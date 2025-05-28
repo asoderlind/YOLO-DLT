@@ -170,8 +170,8 @@ class TaskAlignedAssigner(nn.Module):
         # still use CIoU for wiou to avoid tracking mean here
         if self.iou_type.startswith("wiou") or "nwd" in self.iou_type:
             effective_iou_type = "ciou"
-        elif self.iou_type == "thiou":
-            effective_iou_type = "mpdiou"
+        # elif self.iou_type == "thiou":
+        #     effective_iou_type = "mpdiou"
         else:
             effective_iou_type = self.iou_type
         return bbox_iou(gt_bboxes, pd_bboxes, xywh=False, iou_type=effective_iou_type).squeeze(-1).clamp_(0)
