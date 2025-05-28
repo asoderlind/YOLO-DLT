@@ -101,7 +101,6 @@ if __name__ == "__main__":
                     lambda_c=lambda_c,
                     seed=s
                 )
-    """
 
     # BDD100k-night
     for s in [2]:
@@ -112,6 +111,7 @@ if __name__ == "__main__":
             lambda_c=0.1,
             seed=s,
         )
+    """
 
     ############
     # Distance #
@@ -126,6 +126,7 @@ if __name__ == "__main__":
 
     for s in [0]:
         train(
+            model_path=CLUSTER_BDDK_WEIGHT_PATH,
             data_path="waymo_cluster_night.yaml",
             use_dist=False,
             dist=0.00,
