@@ -2,14 +2,15 @@ from ultralytics import YOLO
 
 model = YOLO("dlt-models/yolo11n-temporal-thresh-0.01.yaml").load("waymo_dark-yolo11n.pt")
 # model2 = YOLO("dlt-models/yolo11n.yaml").load("waymo_dark-yolo11n.pt")
+# model = YOLO("yolo11n.yaml")
 model.train(
     data="waymo_night.yaml",
     epochs=1,
     batch=1,
     device="mps",
     gframe=4,
+    # dataset_type="default",
     dataset_type="temporal",
-    # dataset_type="temporal",
     # temporal_freeze=True,
 )
 
