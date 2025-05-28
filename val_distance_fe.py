@@ -1,11 +1,5 @@
 from ultralytics import YOLO
-import torch
-import os
-from train_conf import CLUSTER_OUTPUT_PATH
-
-DEVICE = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-ENV = os.getenv("ENV", "LOCAL")
-KITTI_CLASSES = [0, 1, 2, 3, 4, 5, 6]
+from train_conf import CLUSTER_OUTPUT_PATH, MAX_DIST_WAYMO, DEVICE
 
 
 def eval_model(model_path, data_path, **kwargs):
@@ -25,11 +19,14 @@ if __name__ == "__main__":
     ###################
 
     for s in [0, 1, 2]:
-        eval_model(
-            f"{CLUSTER_OUTPUT_PATH}/bdd100k_night_cluster-yolo11n-seed-{s}/weights/best.pt",
-            "bdd100k_night_cluster.yaml",
-            project=CLUSTER_OUTPUT_PATH,
-        )
+        for dist in [0.01, 0.05, 0.1, 0.5, 1.0]:
+            eval_model(
+                f"{CLUSTER_OUTPUT_PATH}/waymo_dark/yolo11n.yaml-c-200e-dist-d={dist}-noFe-lc=0.5-s={s}_/weights/best.pt",
+                "waymo_dark.yaml",
+                use_dist=True,
+                max_dist=MAX_DIST_WAYMO,
+                project=CLUSTER_OUTPUT_PATH,
+            )
 
     ##########
     # EXDARK #
