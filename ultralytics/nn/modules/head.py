@@ -174,16 +174,8 @@ class Detect(nn.Module):
         return torch.cat([boxes[i, index // nc], scores[..., None], (index % nc)[..., None].float()], dim=-1)
 
 
-# class TemporalDetect(Detect):
-#     def __init__(self, nc=80, ch=(), fam_mode: DETECT_FAM_MODE = "cls", fsm_type: FSM_TYPE = "nms"):
-#         super().__init__(nc, ch)
-#         self.fam_mode: DETECT_FAM_MODE = fam_mode
-
-
 class TemporalDetect(Detect):
     """YOLO Temporal detection head for video models."""
-
-    temporal_window = 2  # default temporal window
 
     def __init__(
         self,
