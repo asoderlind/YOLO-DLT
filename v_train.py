@@ -130,7 +130,7 @@ def train_model_v(
 if __name__ == "__main__":
     # Let's do some ablations on gain and lr0 rate.
     train_model_v(
-        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.0025_lr0_0.4_nms-temporal_dl-0.5_gain",
+        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.0025_lr0_0.4_nms-temporal_dl-0.5_gain-fixed-attention-norm",
         model="dlt-models/yolo11n-temporal-nms-0.4.yaml",
         model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
         gframe=16,
