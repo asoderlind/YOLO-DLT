@@ -256,6 +256,9 @@ class TemporalDetect(Detect):
             case _:
                 raise ValueError(f"Invalid fam_mode: {self.fam_mode}")
 
+        # debug keep track of number of iterations
+        self.number_of_iterations = 0
+
     def bias_init(self):
         """Initialize Detect() biases, WARNING: requires stride availability."""
         m = self  # self.model[-1]  # Detect() module
@@ -273,7 +276,7 @@ class TemporalDetect(Detect):
 
     def forward(self, x: list[torch.Tensor]):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
-
+        self.number_of_iterations += 1
         start_time = time.time()
 
         # loop over detection layers (usually 3, 80x80, 40x40, 20x20)
@@ -375,7 +378,8 @@ class TemporalDetect(Detect):
         # x = [x[i][key_frame_batch_indices] for i in range(len(x))]
 
         total_time = (time.time() - start_time) * 1000.0  # in ms
-
+        if self.number_of_iterations > 2000:
+            breakpoint()
         if self.training:  # Training path
             # LOGGER.info(f"FAM time: {fam_time:.2f}ms, FSM time: {fsm_time:.2f}ms, Total time: {total_time:.2f}ms")
             return (
