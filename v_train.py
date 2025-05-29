@@ -232,6 +232,36 @@ if __name__ == "__main__":
         dataset_type="temporal",
     )
 
+    train_model_v(
+        name="waymo_dark-yolo11n-16_nbs_40_e-8_we-16_gframe-0.005_lr0_0.04_nms_default_dl",
+        model="dlt-models/yolo11n-temporal-nms-0.04.yaml",
+        model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
+        batch=16,
+        epochs=40,
+        warmup_epochs=4,
+        cos_lr=True,
+        data="waymo_dark.yaml",
+        lr0=0.005,
+        nbs=16,
+        temporal_freeze=True,
+        dataset_type="default",
+    )
+
+    train_model_v(
+        name="waymo_dark-yolo11n-16_nbs_60_e-8_we-16_gframe-0.005_lr0_0.04_nms_default_dl",
+        model="dlt-models/yolo11n-temporal-nms-0.04.yaml",
+        model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
+        batch=16,
+        epochs=60,
+        warmup_epochs=6,
+        cos_lr=True,
+        data="waymo_dark.yaml",
+        lr0=0.005,
+        nbs=16,
+        temporal_freeze=True,
+        dataset_type="default",
+    )
+
     # train_model_v(
     #     name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.4_nms-0.4_nms_val-default_dl",
     #     model="dlt-models/yolo11n-temporal-nms-0.4.yaml",
