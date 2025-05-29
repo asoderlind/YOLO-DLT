@@ -130,7 +130,7 @@ def train_model_v(
 if __name__ == "__main__":
     # Let's do some ablations on gain and lr0 rate.
     train_model_v(
-        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.4_nms-temporal_dl-0.5_gain",
+        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.0025_lr0_0.4_nms-temporal_dl-0.5_gain",
         model="dlt-models/yolo11n-temporal-nms-0.4.yaml",
         model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
         gframe=16,
@@ -140,28 +140,28 @@ if __name__ == "__main__":
         cos_lr=True,
         data="waymo_dark.yaml",
         dataset_type="temporal",
-        lr0=0.005,
+        lr0=0.0025,
         nbs=16,
         temporal_freeze=True,
         temporal_cls=0.5,
     )
-    train_model_v(
-        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.4_nms-temporal_dl-2.5_gain",
-        model="dlt-models/yolo11n-temporal-nms-0.4.yaml",
-        model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
-        gframe=16,
-        batch=1,
-        epochs=80,
-        warmup_epochs=8,
-        cos_lr=True,
-        data="waymo_dark.yaml",
-        dataset_type="temporal",
-        lr0=0.005,
-        nbs=16,
-        temporal_freeze=True,
-        temporal_cls=2.5,
-        resume=True,
-    )
+    # train_model_v(
+    #     name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.4_nms-temporal_dl-2.5_gain",
+    #     model="dlt-models/yolo11n-temporal-nms-0.4.yaml",
+    #     model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
+    #     gframe=16,
+    #     batch=1,
+    #     epochs=80,
+    #     warmup_epochs=8,
+    #     cos_lr=True,
+    #     data="waymo_dark.yaml",
+    #     dataset_type="temporal",
+    #     lr0=0.005,
+    #     nbs=16,
+    #     temporal_freeze=True,
+    #     temporal_cls=2.5,
+    #     resume=True,
+    # )
 
     # train_model_v(
     #     name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.005_lr0_0.5_nms-temporal_dl",
