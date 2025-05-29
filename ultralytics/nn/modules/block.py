@@ -1684,8 +1684,8 @@ class TemporalAttention(nn.Module):
         # head_dim = channels // num_heads
         # NOTE scale factor was wrong in my original version, can set manually to be compat with prev weights
         self.scale = scale  # qk_scale or head_dim ** -0.5
-        self.qkv_cls = nn.Linear(channels, channels * 3, bias=qkv_bias)
-        self.qkv_reg = nn.Linear(channels, channels * 3, bias=qkv_bias)
+        self.qkv_cls_linear = nn.Linear(channels, channels * 3, bias=qkv_bias)
+        self.qkv_reg_linear = nn.Linear(channels, channels * 3, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
         self.mode = mode
 
@@ -1699,6 +1699,7 @@ class TemporalAttention(nn.Module):
     ) -> tuple[torch.Tensor, torch.Tensor] | tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Forward pass of the TemporalAttention module.
+        batch_size will be 1 since we are processing flattened sequences.
 
         Args:
             x_cls (torch.Tensor): Classification branch features [batch_size, sequence_length, channels]
@@ -1712,52 +1713,54 @@ class TemporalAttention(nn.Module):
             sim_round2 (torch.Tensor): Similarity weights for average pooling [batch_size, sequence_length, sequence_length]
         """
         device = x_cls.device
-        B, N, C = x_cls.shape
-
+        B, N, C = x_cls.shape  # batch size will be 1 since we are processing flattened sequences
+        breakpoint()
         # PART 1: PREPARATION - Create Q, K, V matrices
         # Transform features to query, key, value representations
         qkv_cls = (
-            self.qkv_cls(x_cls).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        )  # [3, B, num_heads, N, C // num_heads]
+            self.qkv_cls_linear(x_cls).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        )  # [3, B=1, num_heads, N, C // num_heads]
         qkv_reg = (
-            self.qkv_reg(x_reg).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        )  # [3, B, num_heads, N, C // num_heads]
+            self.qkv_reg_linear(x_reg).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        )  # [3, 1, num_heads, N, C // num_heads]
 
         # Unpack Q, K, V from qkv tensors
-        q_cls, k_cls, v_cls = qkv_cls[0], qkv_cls[1], qkv_cls[2]  # [B, num_heads, N, C // num_heads]
+        q_cls, k_cls, v_cls = qkv_cls[0], qkv_cls[1], qkv_cls[2]  # [B=1, num_heads, N, C // num_heads]
         q_reg, k_reg, v_reg = qkv_reg[0], qkv_reg[1], qkv_reg[2]
 
         # Normalize features for numerical stability (implementation detail)
-        q_cls = q_cls / torch.norm(q_cls, dim=-1, keepdim=True)
-        k_cls = k_cls / torch.norm(k_cls, dim=-1, keepdim=True)
-        q_reg = q_reg / torch.norm(q_reg, dim=-1, keepdim=True)
-        k_reg = k_reg / torch.norm(k_reg, dim=-1, keepdim=True)
-        v_cls_normed: torch.Tensor = v_cls / torch.norm(v_cls, dim=-1, keepdim=True)
-        v_reg_normed: torch.Tensor = v_reg / torch.norm(v_reg, dim=-1, keepdim=True)
+        # In TemporalAttention.forward():
+        # Safe normalization with built-in epsilon handling
+        q_cls = F.normalize(q_cls, dim=-1, eps=1e-6)
+        k_cls = F.normalize(k_cls, dim=-1, eps=1e-6)
+        q_reg = F.normalize(q_reg, dim=-1, eps=1e-6)
+        k_reg = F.normalize(k_reg, dim=-1, eps=1e-6)
+        v_cls_normed = F.normalize(v_cls, dim=-1, eps=1e-6)
+        v_reg_normed = F.normalize(v_reg, dim=-1, eps=1e-6)
 
         # Prepare confidence scores matrix for attention weighting
         # cls_score = torch.reshape(cls_score, [1, 1, 1, -1]).repeat(1, self.num_heads, N, 1)  # [1, num_heads, N, N]
         # Assuming cls_score has shape [B, N]
-        cls_score = cls_score.unsqueeze(1).unsqueeze(2)  # [B, 1, 1, N]
+        cls_score = cls_score.unsqueeze(1).unsqueeze(2)  # [B=1, 1, 1, N]
         cls_score = cls_score.repeat(1, self.num_heads, N, 1)  # [B, num_heads, N, N]
 
         # PART 2: AFFINITY MANNER (A.M.) - Section with confidence-weighted attention
         # Compute attention scores for classification branch
         cls_mult = self.scale * cls_score if self.mode in ["both", "cls"] else self.scale
-        attn_cls: torch.Tensor = (q_cls @ k_cls.transpose(-2, -1)) * cls_mult
+        attn_cls: torch.Tensor = (q_cls @ k_cls.transpose(-2, -1)) * cls_mult  # [B = 1, num_heads, N, N]
         attn_cls = attn_cls.softmax(dim=-1)
-        attn_cls = self.attn_drop(attn_cls)
+        attn_cls = self.attn_drop(attn_cls)  # [B = 1, num_heads, N, N]
 
         # Compute attention scores for regression branch
         attn_reg: torch.Tensor = (q_reg @ k_reg.transpose(-2, -1)) * self.scale
         attn_reg = attn_reg.softmax(dim=-1)
-        attn_reg = self.attn_drop(attn_reg)
+        attn_reg = self.attn_drop(attn_reg)  # [B = 1, num_heads, N, N]
 
         # Combine attention from both branches (equivalent to SA_c(C) + SA_r(R) in paper)
         attn = (attn_reg + attn_cls) / 2  # [B, num_heads, N, N]
 
-        x_cls_out = torch.zeros_like(x_cls, device=device)
-        x_reg_out = torch.zeros_like(x_reg, device=device)
+        x_cls_out = torch.zeros([B, N, 2 * C], device=device)  # [B=1, N, 2C]
+        x_reg_out = torch.zeros([B, N, 2 * C], device=device)  # [B=1, N, 2C]
 
         match self.mode:
             case "both":
@@ -1773,8 +1776,8 @@ class TemporalAttention(nn.Module):
                 x_cls_out = torch.cat([x_cls_inter, x_ori_cls], dim=-1)  # [B, N, 2 * C]
                 x_reg_out = torch.cat([x_reg_inter, x_ori_reg], dim=-1)  # [B, N, 2 * C]
             case "cls":
-                x_cls_inter = (attn @ v_cls).transpose(1, 2).reshape(B, N, C)
-                x_ori_cls = v_cls.permute(0, 2, 1, 3).reshape(B, N, C)
+                x_cls_inter = (attn @ v_cls).transpose(1, 2).reshape(B, N, C)  # [B, N, C]
+                x_ori_cls = v_cls.permute(0, 2, 1, 3).reshape(B, N, C)  # [B, N, C]
                 x_cls_out = torch.cat([x_cls_inter, x_ori_cls], dim=-1)  # [B, N, 2 * C]
             case "reg":
                 x_reg_inter = (attn @ v_reg).transpose(1, 2).reshape(B, N, C)
@@ -2160,6 +2163,8 @@ class FeatureSelectionModule(nn.Module):
             final_indices = topk_indices[nms_indices[: self.topk_post]]
 
             # Store selected features (variable length per frame)
+            # From this batch, out of the 8400 anchor points, select up to topk_post (30) detections
+            # Each anchor point makes a full prediction, so we select the best ones based on NMS
             all_selected_cls_features.append(vid_features[b, final_indices])
             all_selected_reg_features.append(reg_features[b, final_indices])
             all_selected_boxes.append(boxes[b, final_indices])

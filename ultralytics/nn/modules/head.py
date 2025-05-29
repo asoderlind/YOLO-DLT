@@ -306,12 +306,13 @@ class TemporalDetect(Detect):
         # flatten features for FSM
         flat_vid_features = torch.cat(
             [feat.flatten(2).permute(0, 2, 1) for feat in before_fsm_vid_feats], dim=1
-        )  # [batch_size, sum(h_i*w_i), num_classes]
+        )  # [batch_size, sum(h_i*w_i), cls_ch]
         flat_reg_features = torch.cat(
             [feat.flatten(2).permute(0, 2, 1) for feat in before_fsm_reg_feats], dim=1
         )  # [batch_size, sum(h_i*w_i), 4 * reg_max]
 
         # model base predictions
+        # xywh format, in absolute resized_image coordinates
         raw_predictions = self._inference(x)  # [bs, 4 + num_classes, sum_i(w_i * h_i)]
 
         # Apply FSM (Feature Selection Module)
@@ -416,7 +417,7 @@ class TemporalDetect(Detect):
         """
         enhanced_cls_feats, _ = self.fam(
             cls_features=selected_cls_feats, reg_features=selected_reg_feats, cls_scores=selected_scores
-        )
+        )  # [B=1, total_selections, (common) cls_ch]
 
         final_cls_preds = self.linear_pred(enhanced_cls_feats)  # [1, topk_post, num_classes]
 
