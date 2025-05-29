@@ -380,6 +380,12 @@ class TemporalDetect(Detect):
         total_time = (time.time() - start_time) * 1000.0  # in ms
         if self.number_of_iterations > 2000:
             breakpoint()
+
+        # debug check
+        final_cls_preds = torch.zeros_like(final_cls_preds)
+        final_cls_preds[:, :, 1] = (
+            100  # Make the enhancements always predict class 1 with high confidence for debugging
+        )
         if self.training:  # Training path
             # LOGGER.info(f"FAM time: {fam_time:.2f}ms, FSM time: {fsm_time:.2f}ms, Total time: {total_time:.2f}ms")
             return (
