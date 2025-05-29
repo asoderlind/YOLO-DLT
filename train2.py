@@ -293,6 +293,29 @@ if __name__ == "__main__":
     # waymo = "waymo_cluster.yaml"
     # bdd100k = "bdd100k_cluster.yaml"
 
+    run_seeded_train(
+        iterations=5,
+        name="bdd100k_night_cluster-yolo9t",
+        model="yolov9t.yaml",
+        data=data,
+    )
+
+    # run_seeded_train(
+    #     iterations=5,
+    #     name="bdd100k_night_cluster-yolo8n",
+    #     model="yolov8n.yaml",
+    #     data=data,
+    # )
+
+    # run_seeded_train(
+    #     iterations=5,
+    #     name="bdd100k_night_cluster-yolo11s",
+    #     model="yolo11s.yaml",
+    #     data=data,
+    # )
+
+    ######################################
+
     # run_seeded_train(
     #     start_itr=3,
     #     iterations=2,
@@ -360,12 +383,12 @@ if __name__ == "__main__":
     #     data=data,
     # )
 
-    run_seeded_train(
-        iterations=5,
-        name="bdd100k_night_cluster-yolo11n-bic-repc3k2-eca",
-        model="dlt-models/yolo11n-bic-repc3k2-eca.yaml",
-        data=data,
-    )
+    # run_seeded_train(
+    #     iterations=5,
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-eca",
+    #     model="dlt-models/yolo11n-bic-repc3k2-eca.yaml",
+    #     data=data,
+    # )
 
     # run_seeded_train(
     #     iterations=5,
