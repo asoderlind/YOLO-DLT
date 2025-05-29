@@ -51,7 +51,7 @@ def train(
     hsv_v = 0.0 if use_fe else 0.4
 
     if name is None:
-        name = f"{data_no_yaml}/{model_no_yaml}-c{class_string}-{epochs}e-{'dist' if use_dist else 'noDist'}-d={dist}-{'fe' if use_fe else 'noFe'}-lc={lambda_c}-s={seed}_"
+        name = f"{data_no_yaml}/{model_no_yaml}-c{class_string}-lr0={lr0}-{epochs}e-{'dist' if use_dist else 'noDist'}-d={dist}-{'fe' if use_fe else 'noFe'}-lc={lambda_c}-s={seed}_"
         last_weight = f"{project}/{name}/weights/last.pt"
         if os.path.exists(last_weight):
             model = YOLO(last_weight)
@@ -126,7 +126,7 @@ if __name__ == "__main__":
 
     # Waymo-night
 
-    for s in [0]:
+    for s in [0, 1, 2]:
         train(
             model_path=CLUSTER_BDDK_WEIGHT_PATH,
             data_path="waymo_cluster_night.yaml",
@@ -134,8 +134,7 @@ if __name__ == "__main__":
             dist=0.00,
             max_dist=MAX_DIST_WAYMO,
             seed=s,
-            warmup_epochs=5,
-            lr0=0.005,
+            lr0=0.001,
             epochs=50,
             project=CLUSTER_OUTPUT_PATH,
         )

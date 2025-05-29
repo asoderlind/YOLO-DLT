@@ -116,7 +116,7 @@ def distance_distribution_histogram(dataset_path):
     elif "carla" in dataset_path.lower():
         max_distance = 100
         classes = [0, 1, 2, 3, 4, 5]
-    elif "waymo-noconf" in dataset_path.lower():
+    elif "waymo" in dataset_path.lower():
         max_distance = 85
         classes = [1, 2, 3, 4]
     else:
@@ -166,13 +166,21 @@ def distance_distribution_histogram(dataset_path):
     plt.bar(
         x + bar_width / 2, val_counts, width=bar_width, color="#F8CECC", edgecolor="#B85450", label="Validation dataset"
     )
+
+    # print number of boxes with distance
+    print(f"Training dataset: {sum(train_counts)} boxes with distance")
+    print(f"Validation dataset: {sum(val_counts)} boxes with distance")
+
     plt.xlabel("Groundtruth distance in meters")
     plt.ylabel("Number of boxes")
     plt.legend()
     plt.grid(True, axis="y", linestyle="--", linewidth=0.5)
     plt.xticks(np.arange(0, 95, 5))
     plt.tight_layout()
-    plt.show()
+    fig = plt.gcf()
+    fig.set_size_inches(16, 8)  # widen the figure (width=16, height=8 inches)
+    plt.savefig(f"{dataset_path}/distance_distribution_histogram.png", dpi=300)
+    plt.savefig(f"{dataset_path}/distance_distribution_histogram.png", dpi=300)
 
 
 if __name__ == "__main__":
@@ -187,5 +195,5 @@ if __name__ == "__main__":
     for key, value in stats.items():
         print(f"{key}: {value}")
 
-    if args.name.lower() in ["kitti-yolo", "carla-night", "waymo-noconf"]:
+    if args.name.lower() in ["kitti-yolo", "carla-night", "waymo_dark"]:
         distance_distribution_histogram(f"../../yolo-testing/datasets/{args.name}")
