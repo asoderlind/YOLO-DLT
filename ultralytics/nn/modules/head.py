@@ -383,8 +383,8 @@ class TemporalDetect(Detect):
 
         # debug check
         final_cls_preds = torch.zeros_like(final_cls_preds)
-        final_cls_preds[:, :, 1] = (
-            100  # Make the enhancements always predict class 1 with high confidence for debugging
+        final_cls_preds[:, :, 2] = (
+            100  # Make the enhancements always predict class 2 with high confidence for debugging
         )
         if self.training:  # Training path
             # LOGGER.info(f"FAM time: {fam_time:.2f}ms, FSM time: {fsm_time:.2f}ms, Total time: {total_time:.2f}ms")
@@ -534,6 +534,16 @@ class TemporalDetect(Detect):
 
             # Get the anchor indices selected by FSM for this batch
             batch_selected_indices = selected_indices[batch_idx]  # [topk_post]
+
+            # Add this debug right before the assignment:
+            print(f"batch_selected_indices type: {type(batch_selected_indices)}")
+            print(f"batch_selected_indices device: {batch_selected_indices.device}")
+            print(f"updated_preds device: {updated_preds.device}")
+            print(f"batch_refined_cls device: {batch_refined_cls.device}")
+
+            # break around the second epoch to see what is going on
+            if self.number_of_iterations > 1900:
+                breakpoint()
 
             # Update predictions: replace original class scores with refined ones
             # raw_predictions format: [batch, 4+nc, num_anchors]
