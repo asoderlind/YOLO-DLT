@@ -1714,7 +1714,6 @@ class TemporalAttention(nn.Module):
         """
         device = x_cls.device
         B, N, C = x_cls.shape  # batch size will be 1 since we are processing flattened sequences
-        breakpoint()
         # PART 1: PREPARATION - Create Q, K, V matrices
         # Transform features to query, key, value representations
         qkv_cls = (
