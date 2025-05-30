@@ -359,8 +359,7 @@ class TemporalDetect(Detect):
             )
 
         y = self._update_predictions_with_refined_classes(raw_predictions, final_cls_preds, pred_idx)
-        if self.number_of_iterations > 700:
-            breakpoint()
+
         # y = raw_predictions
         return (
             y
