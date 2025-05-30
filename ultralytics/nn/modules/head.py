@@ -374,8 +374,6 @@ class TemporalDetect(Detect):
         # x = [x[i][key_frame_batch_indices] for i in range(len(x))]
 
         total_time = (time.time() - start_time) * 1000.0  # in ms
-        if self.number_of_iterations > 2000:
-            breakpoint()
 
         # debug check
         final_cls_preds = torch.zeros_like(final_cls_preds)
