@@ -16,6 +16,7 @@ def get_statistics(dataset_path, image_formats=["jpg", "jpeg", "png", "JPG", "JP
         "bg_validation": -1,
         "num_classes": -1,
         "num_of_each_class": {},
+        "num_distance_data_of_each_class": {},
     }
     training_images = []
     for image_format in image_formats:
@@ -65,29 +66,56 @@ def get_statistics(dataset_path, image_formats=["jpg", "jpeg", "png", "JPG", "JP
     ######
 
     num_of_each_class = {}
+    num_distance_data_of_each_class = {}
 
     for label in training_labels:
         with open(label, "r") as f:
             for line in f:
                 class_id = line.split()[0]
+                distance = line.split()[-1] if len(line.split()) > 5 else "0"
+
+                # class data
                 if class_id not in num_of_each_class:
                     num_of_each_class[class_id] = 1
                 else:
                     num_of_each_class[class_id] += 1
                 if int(class_id) > statistics["num_classes"]:
                     statistics["num_classes"] = int(class_id)
+
+                # distance
+                if class_id not in num_distance_data_of_each_class:
+                    if distance != "0.0":
+                        num_distance_data_of_each_class[class_id] = 1
+                    else:
+                        num_distance_data_of_each_class[class_id] = 0
+                else:
+                    if distance != "0.0":
+                        num_distance_data_of_each_class[class_id] += 1
 
     for label in validation_labels:
         # Count the number of each class
         with open(label, "r") as f:
             for line in f:
                 class_id = line.split()[0]
+                distance = line.split()[-1] if len(line.split()) > 5 else "0"
+
+                # class data
                 if class_id not in num_of_each_class:
                     num_of_each_class[class_id] = 1
                 else:
                     num_of_each_class[class_id] += 1
                 if int(class_id) > statistics["num_classes"]:
                     statistics["num_classes"] = int(class_id)
+
+                # distance
+                if class_id not in num_distance_data_of_each_class:
+                    if distance != "0.0":
+                        num_distance_data_of_each_class[class_id] = 1
+                    else:
+                        num_distance_data_of_each_class[class_id] = 0
+                else:
+                    if distance != "0.0":
+                        num_distance_data_of_each_class[class_id] += 1
 
     statistics["total"] = total_images
     statistics["training"] = len(training_images)
@@ -100,7 +128,16 @@ def get_statistics(dataset_path, image_formats=["jpg", "jpeg", "png", "JPG", "JP
     statistics["bg_training"] = total_empty_training_labels
     statistics["bg_validation"] = total_empty_validation_labels
     statistics["bg_test"] = total_empty_test_labels
+
+    # sort the num_of_each_class dictionary by key
+    num_of_each_class = dict(sorted(num_of_each_class.items(), key=lambda item: int(item[0])))
+    num_distance_data_of_each_class = dict(
+        sorted(num_distance_data_of_each_class.items(), key=lambda item: int(item[0]))
+    )
+
     statistics["num_of_each_class"] = num_of_each_class
+    statistics["num_distance_data_of_each_class"] = num_distance_data_of_each_class
+
     if "Australia" in dataset_path or "China" in dataset_path:
         statistics["num_classes"] += 0
     else:
@@ -113,9 +150,6 @@ def distance_distribution_histogram(dataset_path):
     if "kitti" in dataset_path.lower():
         max_distance = 150
         classes = [0, 1, 2, 3, 4, 5, 6, 7]
-    elif "carla" in dataset_path.lower():
-        max_distance = 100
-        classes = [0, 1, 2, 3, 4, 5]
     elif "waymo" in dataset_path.lower():
         max_distance = 85
         classes = [1, 2, 3, 4]
@@ -171,16 +205,17 @@ def distance_distribution_histogram(dataset_path):
     print(f"Training dataset: {sum(train_counts)} boxes with distance")
     print(f"Validation dataset: {sum(val_counts)} boxes with distance")
 
-    plt.xlabel("Groundtruth distance in meters")
-    plt.ylabel("Number of boxes")
-    plt.legend()
+    plt.xlabel("Groundtruth distance in meters", fontsize=16)
+    plt.ylabel("Number of boxes", fontsize=16)
+    plt.legend(loc="upper right", fontsize=14)
     plt.grid(True, axis="y", linestyle="--", linewidth=0.5)
-    plt.xticks(np.arange(0, 95, 5))
+    plt.xticks(np.arange(0, 95, 5), fontsize=14)
+    plt.yticks(fontsize=14)
     plt.tight_layout()
     fig = plt.gcf()
-    fig.set_size_inches(16, 8)  # widen the figure (width=16, height=8 inches)
+    fig.set_size_inches(13, 5)  # widen the figure (width=16, height=8 inches)
     plt.savefig(f"{dataset_path}/distance_distribution_histogram.png", dpi=300)
-    plt.savefig(f"{dataset_path}/distance_distribution_histogram.png", dpi=300)
+    plt.show()
 
 
 if __name__ == "__main__":
@@ -193,7 +228,7 @@ if __name__ == "__main__":
     stats = get_statistics(f"../../yolo-testing/datasets/{args.name}")
 
     for key, value in stats.items():
-        print(f"{key}: {value}")
+        print(f"{key}: \n\t {value}")
 
-    if args.name.lower() in ["kitti-yolo", "carla-night", "waymo_dark"]:
+    if "kitti" in args.name.lower() or "waymo" in args.name.lower():
         distance_distribution_histogram(f"../../yolo-testing/datasets/{args.name}")
