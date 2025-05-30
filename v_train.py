@@ -130,7 +130,7 @@ def train_model_v(
 if __name__ == "__main__":
     # Let's do some ablations on gain and lr0 rate.
     train_model_v(
-        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.0025_lr0_0.4_nms-temporal_dl-4.0_gain",
+        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.0025_lr0_rescue_zone-temporal_dl-4.0_gain",
         model="dlt-models/yolo11n-temporal-nms-0.4.yaml",
         model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
         gframe=16,
@@ -144,6 +144,15 @@ if __name__ == "__main__":
         nbs=16,
         temporal_freeze=True,
         temporal_cls=4.0,
+    )
+
+    train_model_v(
+        name="bdd100k_night-yolo11n-temporal-base",
+        model="yolo11n.yaml",
+        model_load_path="",
+        batch=16,
+        epochs=200,
+        data="bdd100k_night.yaml",
     )
 
     train_model_v(
@@ -178,16 +187,6 @@ if __name__ == "__main__":
         nbs=16,
         temporal_freeze=True,
         temporal_cls=8.0,
-    )
-
-    train_model_v(
-        name="bdd100k_night-yolo11n-temporal-base",
-        model="yolo11n.yaml",
-        model_load_path="",
-        batch=16,
-        epochs=200,
-        data="bdd100k_night.yaml",
-        device="cuda",
     )
 
     # train_model_v(
