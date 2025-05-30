@@ -303,6 +303,9 @@ class v8DetectionLoss:
         # Targets
         targets = torch.cat((batch["batch_idx"].view(-1, 1), batch["cls"].view(-1, 1), batch["bboxes"]), 1)
         targets = self.preprocess(targets.to(self.device), batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
+        # gt_labels: [B, num_gt, 1]: ground truth labels for each batch num_gt represents the maximum number of ground truth boxes
+        # For any batch. If another batch does not have the same number it will be padded with zeros.
+        # gt_bboxes: [B, num_gt, 4]: ground truth bounding boxes for each batch. Also padded with zeros if necessary.
         gt_labels, gt_bboxes = targets.split((1, 4), 2)  # cls, xyxy
         mask_gt = gt_bboxes.sum(2, keepdim=True).gt_(0.0)
 
@@ -311,6 +314,7 @@ class v8DetectionLoss:
         # dfl_conf = pred_distri.view(batch_size, -1, 4, self.reg_max).detach().softmax(-1)
         # dfl_conf = (dfl_conf.amax(-1).mean(-1) + dfl_conf.amax(-1).amin(-1)) / 2
 
+        # fg_mask: [batch_size, sum(h_i * w_i)] a mask of each anchor point that is foreground
         _, target_bboxes, target_scores, fg_mask, _ = self.assigner(
             # pred_scores.detach().sigmoid() * 0.8 + dfl_conf.unsqueeze(-1) * 0.2,
             pred_scores.detach().sigmoid(),
@@ -436,6 +440,16 @@ class v8DetectionLoss:
     ) -> torch.Tensor:
         """
         Calculate temporal loss exactly like YOLOV - reuse standard assigner results when possible.
+
+        Args:
+            refined_cls_preds (torch.Tensor): Refined cls predictions [B, target_count, num_classes]
+            pred_res (list[torch.Tensor]): List of tensors with predictions for each batch, len B [up to topk_post, 4 + nc]
+            pred_idx (list[torch.Tensor]): List of tensors with indices for each batch, len B [up to topk_post]
+            target_scores (torch.Tensor): Target cls scores for each anchor point [B, sum(h_i * w_i), num_classes]
+            fg_mask (torch.Tensor): Foreground mask for each anchor point [B, sum(h_i * w_i)]
+            gt_labels (torch.Tensor): Ground truth labels for each batch [B, num_gt, 1]
+
+
         """
         from ultralytics.utils.metrics import box_iou
         from ultralytics.utils.ops import xywh2xyxy
@@ -446,10 +460,11 @@ class v8DetectionLoss:
         for batch_idx in range(batch_size):
             num_detections = len(pred_idx[batch_idx])
 
-            # Create target tensor for this batch
+            # Create target tensor for this batch [num_detections, num_classes + 1]
             ref_target = torch.zeros(num_detections, self.nc + 1, device=self.device, dtype=dtype)
 
             # Get foreground anchors from standard assigner
+            # All anchors that were assigned to foreground objects
             fg_indices = torch.where(fg_mask[batch_idx])[0]
 
             # Process each refined detection
@@ -457,7 +472,6 @@ class v8DetectionLoss:
                 # Check if this anchor was assigned by standard assigner
 
                 assigned_mask = fg_indices == anchor_idx
-
                 if assigned_mask.any():
                     # Use standard assigner's target
                     ref_target[det_idx, : self.nc] = target_scores[batch_idx, anchor_idx]
