@@ -2324,14 +2324,14 @@ class FeatureSelectionModule(nn.Module):
 
             # Log selection statistics for debugging
             # if b == 0:  # Only log first batch to avoid spam
-            selected_confs = max_scores[b, selected_indices]
-            print(f"Rescue Zone FSM - {selection_type}:")
-            print(f"  Selected {len(selected_indices)} detections")
-            print(f"  Confidence range: {selected_confs.min():.3f} - {selected_confs.max():.3f}")
-            print(f"  Mean confidence: {selected_confs.mean():.3f}")
-            print(
-                f"  In rescue zone: {((selected_confs >= RESCUE_MIN_CONF) & (selected_confs <= RESCUE_MAX_CONF)).sum()}/{len(selected_confs)}"
-            )
+            # selected_confs = max_scores[b, selected_indices]
+            # print(f"Rescue Zone FSM - {selection_type}:")
+            # print(f"  Selected {len(selected_indices)} detections")
+            # print(f"  Confidence range: {selected_confs.min():.3f} - {selected_confs.max():.3f}")
+            # print(f"  Mean confidence: {selected_confs.mean():.3f}")
+            # print(
+            #     f"  In rescue zone: {((selected_confs >= RESCUE_MIN_CONF) & (selected_confs <= RESCUE_MAX_CONF)).sum()}/{len(selected_confs)}"
+            # )
 
         # Concatenate all features across frames (YOLOV style)
         concat_cls_features = torch.cat(all_selected_cls_features, dim=0).unsqueeze(0)
