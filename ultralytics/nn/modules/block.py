@@ -2290,9 +2290,9 @@ class FeatureSelectionModule(nn.Module):
                         # LOGGER.warning("WARNING⚠️ Rescue Zone FSM: Taking what we can with fallback min/max ranges")
                         selected_indices = fallback_indices
                     # Don't need to panic if no candidates at all
-                    # else:
-                    #     # Absolute emergency - take lowest confidence detections
-                    #     _, selected_indices = torch.topk(max_scores[b], self.topk_post, largest=False)
+                    else:
+                        # Absolute emergency - take lowest confidence detections
+                        _, selected_indices = torch.topk(max_scores[b], self.topk_post, largest=False)
 
                 selection_type = "fallback"
 
