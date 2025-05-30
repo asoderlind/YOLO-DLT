@@ -128,32 +128,66 @@ def train_model_v(
 
 # Example usage
 if __name__ == "__main__":
+    WAYMO_TEMPORAL_BASE = "runs/detect/waymo_dark-yolo11n-temporal-base/weights/last.pt"
+    # All runs have 16 nbs, 10% warmup, 4.0 gain, freeze true, cos_lr,
     train_model_v(
-        name="waymo_dark-yolo11n-temporal-base",
-        model="yolo11n.yaml",
-        model_load_path="runs/detect/bdd100k_night-yolo11n-temporal-base/weights/last.pt",
-        epochs=20,
-        data="waymo_dark.yaml",
-        dataset_type="default",
-        lr0=0.001,
-    )
-
-    train_model_v(
-        name="waymo_dark-yolo11n-16_nbs_80_e-8_we-16_gframe-0.0025_lr0_rescue_zone-default_dl-4.0_gain",
+        name="waymo_dark-yolo11n-40_e-16_gframe-0.001_lr0-nms-temporal_dl",
         model="dlt-models/yolo11n-temporal-nms-0.4.yaml",
-        model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
-        gframe=16,
-        batch=16,
-        epochs=80,
-        warmup_epochs=8,
-        cos_lr=True,
+        model_load_path=WAYMO_TEMPORAL_BASE,
         data="waymo_dark.yaml",
-        dataset_type="default",
-        lr0=0.0025,
-        nbs=16,
+        gframe=16,
+        batch=1,
         temporal_freeze=True,
         temporal_cls=4.0,
+        epochs=40,
+        warmup_epochs=4,
+        cos_lr=True,
+        dataset_type="temporal",
+        lr0=0.001,
+        nbs=16,
     )
+    train_model_v(
+        name="waymo_dark-yolo11n-40_e-16_gframe-0.001_lr0-nms-default_dl",
+        model="dlt-models/yolo11n-temporal-nms-0.4.yaml",
+        model_load_path=WAYMO_TEMPORAL_BASE,
+        data="waymo_dark.yaml",
+        gframe=16,
+        batch=16,
+        temporal_freeze=True,
+        temporal_cls=4.0,
+        epochs=40,
+        warmup_epochs=4,
+        cos_lr=True,
+        dataset_type="default",
+        lr0=0.001,
+        nbs=16,
+    )
+    # train_model_v(
+    #     name="waymo_dark-yolo11n-temporal-base",
+    #     model="yolo11n.yaml",
+    #     model_load_path="runs/detect/bdd100k_night-yolo11n-temporal-base/weights/last.pt",
+    #     epochs=20,
+    #     data="waymo_dark.yaml",
+    #     dataset_type="default",
+    #     lr0=0.001,
+    # )
+
+    # train_model_v(
+    #     name="waymo_dark-yolo11n-16_nbs_40_e-8_we-16_gframe-0.0025_lr0_rescue_zone-default_dl-4.0_gain",
+    #     model="dlt-models/yolo11n-temporal-nms-0.4.yaml",
+    #     model_load_path="runs/detect/waymo_dark-yolo11n3/weights/last.pt",
+    #     gframe=16,
+    #     batch=16,
+    #     epochs=80,
+    #     warmup_epochs=8,
+    #     cos_lr=True,
+    #     data="waymo_dark.yaml",
+    #     dataset_type="default",
+    #     lr0=0.0025,
+    #     nbs=16,
+    #     temporal_freeze=True,
+    #     temporal_cls=4.0,
+    # )
 
     # train_model_v(
     #     name="bdd100k_night-yolo11n-temporal-base",
