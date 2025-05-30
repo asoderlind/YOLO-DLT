@@ -6,11 +6,12 @@ model = YOLO("dlt-models/yolo11n-temporal-nms-0.4.yaml").load("waymo_dark-yolo11
 model.train(
     data="waymo_night.yaml",
     epochs=1,
-    batch=1,
+    # batch=1,
+    batch=8,
     device="mps",
     gframe=4,
-    # dataset_type="default",
-    dataset_type="temporal",
+    dataset_type="default",
+    # dataset_type="temporal",
     # temporal_freeze=True,
 )
 
