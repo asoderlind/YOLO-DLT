@@ -10,10 +10,9 @@ import torch.nn as nn
 from torch.nn.init import constant_, xavier_uniform_
 
 from ultralytics.utils import LOGGER
-from ultralytics.utils.ops import xywh2xyxy
 from ultralytics.utils.tal import TORCH_1_10, dist2bbox, dist2rbox, make_anchors
 
-from .block import DFL, BNContrastiveHead, ContrastiveHead, FeatureAggregationModule, FeatureSelectionModule, Proto
+from .block import DFL, MPN, BNContrastiveHead, ContrastiveHead, FeatureAggregationModule, FeatureSelectionModule, Proto
 from .conv import Conv, DWConv
 from .transformer import MLP, DeformableTransformerDecoder, DeformableTransformerDecoderLayer
 from .utils import DETECT_FAM_MODE, FSM_TYPE, bias_init_with_prob, linear_init
@@ -333,45 +332,15 @@ class TemporalDetect(Detect):
         fsm_time = (time.time() - fsm_start) * 1000.0  # in ms
 
         # Apply temporal aggregation
-        match self.fam_mode:
-            case "cls":
-                # final_cls_preds: [1, topk_post, num_classes]
-                fam_start = time.time()
-                final_cls_preds, final_reg_preds = self._forward_cls(
-                    selected_cls_feats, selected_reg_feats, selected_scores
-                )
-                fam_time = (time.time() - fam_start) * 1000.0  # in ms
-            case "reg":
-                final_cls_preds, final_reg_preds = self._forward_reg(
-                    selected_cls_feats, selected_reg_feats, selected_scores
-                )
-            case "both_separate":
-                # final_cls_preds, final_reg_preds, key_frame_indices = self._forward_both_separate(
-                #     selected_cls_feats, selected_reg_feats, selected_scores, selected_indices
-                # )
-                # final_cls_preds: [1, topk_post, num_classes]
-                fam_start = time.time()
-                final_cls_preds, final_reg_preds = self._forward_both_separate(
-                    selected_cls_feats,
-                    selected_reg_feats,
-                    selected_scores,
-                )
-            case "both_combined":
-                final_cls_preds, final_reg_preds = self._forward_both_combined(
-                    selected_cls_feats,
-                    selected_reg_feats,
-                    selected_scores,
-                )
 
-            case _:
-                raise ValueError(f"Invalid fam_mode: {self.fam_mode}")
-
-        # # split up the batch into individual key_frame-reference pairs
-        # # for each pair, apply temporal aggregation
-        # # Filter out ref frames from x
-        # batch_size = selected_cls_feats.shape[0]
-        # key_frame_batch_indices = torch.arange(0, batch_size, self.temporal_window + 1, device=x[0].device)
-        # x = [x[i][key_frame_batch_indices] for i in range(len(x))]
+        # final_cls_preds: [1, topk_post, num_classes]
+        fam_start = time.time()
+        final_cls_preds, final_reg_preds = self._forward_cls(
+            selected_cls_feats,
+            selected_reg_feats,
+            selected_scores,
+        )
+        fam_time = (time.time() - fam_start) * 1000.0  # in ms
 
         total_time = (time.time() - start_time) * 1000.0  # in ms
 
@@ -386,6 +355,7 @@ class TemporalDetect(Detect):
             )
 
         y = self._update_predictions_with_refined_classes(raw_predictions, final_cls_preds, pred_idx)
+        breakpoint()
         # y = raw_predictions
         return (
             y
@@ -551,204 +521,9 @@ class EOVODDetect(Detect):
 
     batch: dict | None = None  # batch for training
 
-    def __init__(self, nc=80, ch=()):
+    def __init__(self, nc=80, ch=(), num_attention_blocks: int = 4):
         super().__init__(nc, ch)
-
-    def _extract_ref_bboxes(self, bboxes: torch.Tensor, batch_idx: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """Extract bounding boxes from reference frames (all non-keyframe indices)."""
-        # Find indices for reference frames (anything != 0)
-        ref_mask = batch_idx != 0
-        return bboxes[ref_mask], batch_idx[ref_mask]
-
-    def _box_to_indices(self, box: torch.Tensor, width: int) -> torch.Tensor:
-        """Convert 2D bounding box on xyxy format to list of 1D feature map indices."""
-        x1, y1, x2, y2 = box.int()
-        # Create coordinate grids
-        y_coords = torch.arange(y1, y2 + 1, device=box.device)
-        x_coords = torch.arange(x1, x2 + 1, device=box.device)
-        # Create meshgrid and flatten to get all combinations
-        y_grid, x_grid = torch.meshgrid(y_coords, x_coords, indexing="ij")
-        indices = (x_grid + y_grid * width).flatten()
-        return indices  # [num_pixels]
-
-    def _create_foreground_mask(
-        self,
-        ref_bboxes: torch.Tensor,
-        feature_shape: torch.Size,
-        stride: torch.Tensor,
-        img_size: torch.Tensor,
-        max_pixels_per_box: int = 300,
-    ) -> torch.Tensor:
-        """Create binary mask where ref_bboxes project onto feature map."""
-        # feature_shape: [B, C, H, W] where B=1
-        B, C, H, W = feature_shape
-
-        # Initialize mask as zeros - [1, C, H, W] for broadcasting
-        mask = torch.zeros((1, C, H, W), dtype=torch.bool, device=ref_bboxes.device)
-
-        if len(ref_bboxes) == 0:
-            return mask
-
-        # Convert normalized coordinates to pixel coordinates
-        ref_bboxes_pixel = ref_bboxes.clone()
-        ref_bboxes_pixel[:, 0] *= img_size[1]  # x_center in pixels
-        ref_bboxes_pixel[:, 1] *= img_size[0]  # y_center in pixels
-        ref_bboxes_pixel[:, 2] *= img_size[1]  # width in pixels
-        ref_bboxes_pixel[:, 3] *= img_size[0]  # height in pixels
-
-        # Convert from [x_center, y_center, width, height] to [x1, y1, x2, y2]
-        ref_bboxes_xyxy = xywh2xyxy(ref_bboxes_pixel)
-
-        # Project to feature map coordinates
-        ref_bboxes_feat = ref_bboxes_xyxy / stride
-
-        # Clamp to feature map bounds and convert to integers
-        ref_bboxes_feat[:, [0, 2]] = torch.clamp(ref_bboxes_feat[:, [0, 2]], 0, W - 1)  # x1, x2
-        ref_bboxes_feat[:, [1, 3]] = torch.clamp(ref_bboxes_feat[:, [1, 3]], 0, H - 1)  # y1, y2
-        ref_bboxes_feat = ref_bboxes_feat.int()
-
-        # Apply pixel limitation per box
-        for bbox in ref_bboxes_feat:
-            x1, y1, x2, y2 = bbox
-
-            # Calculate box area
-            box_area = (x2 - x1 + 1) * (y2 - y1 + 1)
-
-            if box_area <= max_pixels_per_box:
-                # Small box - use entire region
-                mask[0, :, y1 : y2 + 1, x1 : x2 + 1] = True
-                continue
-
-            # Large box - randomly sample pixels
-            y_coords, x_coords = torch.meshgrid(
-                torch.arange(y1, y2 + 1, device=mask.device),
-                torch.arange(x1, x2 + 1, device=mask.device),
-                indexing="ij",
-            )
-
-            # Flatten coordinates
-            y_flat = y_coords.flatten()
-            x_flat = x_coords.flatten()
-
-            # Randomly sample max_pixels_per_box locations
-            sample_indices = torch.randperm(len(y_flat))[:max_pixels_per_box]
-            sampled_y = y_flat[sample_indices]
-            sampled_x = x_flat[sample_indices]
-
-            # Set sampled pixels to True
-            mask[0, :, sampled_y, sampled_x] = True
-
-        return mask
-
-    def _extract_ref_pixels_from_bboxes(
-        self,
-        x_ref: torch.Tensor,
-        ref_bboxes: torch.Tensor,
-        ref_indices: torch.Tensor,
-        stride: torch.Tensor,
-        img_size: torch.Tensor,
-        max_pixels_per_box: int = 300,
-        max_num_pixels: int = 1000,
-    ) -> torch.Tensor:
-        """
-        Extract pixels from reference frames using bounding boxes (single feature level).
-
-        Args:
-            x_ref: Reference frame features [2, C, H, W]
-            ref_bboxes: Reference bboxes [N, 4] in normalized xywh format
-            ref_indices: Frame indices [N] mapping each bbox to its reference frame
-            stride: Stride for this feature level
-            img_size: Image dimensions [H, W] in pixels
-
-        Returns:
-            torch.Tensor: Extracted reference pixels [M, C] where M <= 1000
-        """
-        if len(ref_bboxes) == 0:
-            return torch.empty(0, x_ref.shape[1], device=x_ref.device)
-        num_ref_frames, C, H, W = x_ref.shape
-
-        ref_pixel_list: list[torch.Tensor] = []
-
-        # Step 1: Convert normalized bboxes to feature coordinates
-        ref_bboxes_pixel = ref_bboxes.clone()  # [N, 4]
-        ref_bboxes_pixel[:, 0] *= img_size[1]  # x_center
-        ref_bboxes_pixel[:, 1] *= img_size[0]  # y_center
-        ref_bboxes_pixel[:, 2] *= img_size[1]  # width
-        ref_bboxes_pixel[:, 3] *= img_size[0]  # height
-
-        ref_bboxes_xyxy: torch.Tensor = xywh2xyxy(ref_bboxes_pixel)  # [N, 4] in xyxy format
-        ref_bboxes_feat = ref_bboxes_xyxy / stride
-
-        for frame_idx in range(1, num_ref_frames + 1):  # 0 is the key frame
-            # Get bboxes for this frame
-            frame_bboxes = ref_bboxes_feat[ref_indices == frame_idx]  # [M, 4] for this frame
-
-            if len(frame_bboxes) == 0:
-                continue
-
-            # Flatten frame features: [C, H, W] -> [H*W, C]
-            frame_feats = x_ref[frame_idx - 1].view(-1, C)  # [H*W, C]
-
-            for bbox in frame_bboxes:  # [4] in xyxy format
-                indices = self._box_to_indices(bbox, W)  # Convert bbox to 1D indices [num_pixels]
-
-                if len(indices) == 0:
-                    continue
-
-                # Limit to 300 pixels per box
-                if len(indices) > max_pixels_per_box:
-                    indices = indices[torch.randperm(len(indices))[:max_pixels_per_box]]
-
-                # Clamp indices to valid range
-                indices = torch.clamp(indices, 0, H * W - 1)
-
-                ref_pixel_list.append(frame_feats[indices])
-
-        if len(ref_pixel_list) == 0:
-            return torch.empty(0, C, device=x_ref.device)
-
-        # Step 4: Combine and limit to 1000 total pixels
-        ref_pixels = torch.cat(ref_pixel_list, dim=0)  # [M, C]
-        return ref_pixels[:max_num_pixels]
-
-    def _lpn_enhance(
-        self,
-        x_current: torch.Tensor,
-        x_ref: torch.Tensor,
-        mask: torch.Tensor,
-        ref_bboxes: torch.Tensor,
-        stride: int,
-        level_idx: int,
-    ) -> torch.Tensor:
-        """Apply LPN enhancement using spatial masking (following original approach)."""
-        B, C, H, W = x_current.shape
-
-        # Extract reference pixels using bboxes
-        ref_pixels = self._extract_ref_pixels(x_ref.squeeze(0), ref_bboxes, stride, level_idx)  # [M, C]
-
-        if len(ref_pixels) == 0 or not mask.any():
-            return x_current
-
-        # Flatten current frame: [1, C, H, W] -> [H*W, C]
-        current_flat = x_current.permute(0, 2, 3, 1).view(-1, C).contiguous()  # [H*W, C]
-
-        # Get mask for foreground pixels: [1, C, H, W] -> [H*W]
-        mask_flat = mask.permute(0, 2, 3, 1).view(-1, C)[:, 0].bool()  # [H*W]
-
-        # Extract ONLY foreground pixels (following filter_with_mask)
-        current_fg = current_flat[mask_flat]  # [num_fg_pixels, C]
-
-        # Apply attention only to foreground pixels
-        enhanced_fg = self.selsa_aggregators[level_idx](current_fg, ref_pixels)  # [num_fg_pixels, C]
-
-        # Put enhanced pixels back (following update_with_query)
-        enhanced_flat = current_flat.clone()
-        enhanced_flat[mask_flat] = enhanced_fg
-
-        # Reshape back to spatial format
-        enhanced = enhanced_flat.view(B, H, W, C).permute(0, 3, 1, 2)  # [1, C, H, W]
-
-        return enhanced
+        self.mpn = MPN(self.nl, num_attention_blocks=num_attention_blocks)
 
     def forward(self, x: list[torch.Tensor]):
         """Concatenates and returns predicted bounding boxes and class probabilities."""
@@ -758,37 +533,14 @@ class EOVODDetect(Detect):
             raise RuntimeError("EOVODDetect batch is None")
 
         if self.training:
-            # 1. Extract frames
+            x = self.mpn.forward_train(x, self.batch)
+        else:
             x_ref = [x[i][1:] for i in range(self.nl)]  # [B-1, C, H, W] for each level
-            x_current = [x[i][:1] for i in range(self.nl)]  # [1, C, H, W] for each level
-
-            # 2. Set strides once
-            if not hasattr(self, "lpn_strides"):
-                self.lpn_strides = torch.tensor([8, 16, 32], device=x[0].device)
-
-            # 3. Extract reference bboxes (from both ref frames)
-            ref_bboxes, ref_bbox_idx = self._extract_ref_bboxes(self.batch["bboxes"], self.batch["batch_idx"])
-            img_size = (
-                torch.tensor(x[0].shape[2:], device=x[0].device, dtype=x[0].dtype) * self.stride[0]
-            )  # image size (h,w)
-
-            # 4. For each feature level, enhance current frame
-            for level_idx in range(self.nl):
-                stride = self.lpn_strides[level_idx]
-                # Query is just the key frame feats at the current level flattened, [1, C, H, W] -> [H*W, C]
-                _query = x_current[level_idx].squeeze(0).view(-1, x_current[level_idx].shape[1])
-                # key = ref_pixels extracted from both reference frames, [M, C]
-                _key = self._extract_ref_pixels_from_bboxes(
-                    x_ref[level_idx], ref_bboxes, self.batch["batch_idx"], stride, img_size
-                )
-                mask = self._create_foreground_mask(ref_bboxes, x_current[level_idx].shape, stride, img_size)
-                # skip if no foreground mask
-                if not mask.any():
-                    continue
-                x_current[level_idx] = self._lpn_enhance(x_current[level_idx], x_ref[level_idx], mask)
-
-        # 5. Continue with detection head
-        x = x_current  # Replace x with enhanced current frames
+            x_ref_head = []
+            for i in range(self.nl):
+                x_ref_head.append(torch.cat((self.cv2[i](x_ref[i]), self.cv3[i](x_ref[i])), 1))
+                y_ref = self._inference(x_ref_head)
+            x = self.mpn.forward_inference(x, self.batch)
 
         for i in range(self.nl):
             x[i] = torch.cat((self.cv2[i](x[i]), self.cv3[i](x[i])), 1)
