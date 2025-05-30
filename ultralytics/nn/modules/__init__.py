@@ -29,6 +29,7 @@ from .block import (
     ELAN1,
     FA,
     FEM,
+    MPN,
     PSA,
     SE,
     SPP,
@@ -215,4 +216,5 @@ __all__ = (
     "TemporalDetect",
     "FeatureAggregationModule",
     "FeatureSelectionModule",
+    "MPN",
 )
