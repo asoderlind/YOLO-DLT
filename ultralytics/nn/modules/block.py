@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.ops import batched_nms
 
+from ultralytics.utils.ops import xywh2xyxy
 from ultralytics.utils.torch_utils import fuse_conv_and_bn
 
 from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, RFAConv, autopad
@@ -1983,7 +1984,7 @@ class FeatureSelectionModule(nn.Module):
         fsm_type: FSM_TYPE = "nms",
         conf_thresh: float = 0.001,
         nms_thresh_train: float = 0.75,
-        nms_thresh_val: float = 0.4,
+        nms_thresh_val: float = 0.5,
         topk_pre: int = 750,
         topk_post: int = 30,
         max_thresh_proposals_per_frame: int = 85,
@@ -2024,6 +2025,8 @@ class FeatureSelectionModule(nn.Module):
             return self._threshold_selection(raw_preds, vid_features, reg_features)
         elif self.fsm_type == "nms":
             return self._nms_selection(raw_preds, vid_features, reg_features)
+        elif self.fsm_type == "rescue_zone":
+            return self._nms_selection_rescue_zone(raw_preds, vid_features, reg_features)
         else:
             raise ValueError(f"Unknown selection method: {self.fsm_type}")
 
@@ -2186,3 +2189,406 @@ class FeatureSelectionModule(nn.Module):
             batch_selected_predictions,  #  len batch_size, [up to topk_post, 4+nc]
             batch_selected_indices,  # len batch_size, [up to topk_post] (indices in the original raw_preds tensor)
         )
+
+    def _nms_selection_rescue_zone(
+        self, raw_preds: torch.Tensor, vid_features: torch.Tensor, reg_features: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, list[torch.Tensor], list[torch.Tensor]]:
+        """
+        Select features using Rescue Zone NMS - targeting uncertain but promising detections.
+
+        Key insight: Instead of polishing already-confident detections (0.7-0.9),
+        rescue promising detections from the "death zone" (0.25-0.65) where they
+        would otherwise be discarded but could be boosted by temporal aggregation.
+
+        Args:
+            raw_preds (torch.Tensor): Raw predictions [batch_size, 4 + num_classes, num_anchors]
+            vid_features (torch.Tensor): Video features [batch_size, num_anchors, cls_ch]
+            reg_features (torch.Tensor): Regression features [batch_size, num_anchors, reg_ch]
+        """
+        predictions = raw_preds.permute(0, 2, 1)  # [batch, num_anchors, 4+nc]
+        batch_size = raw_preds.shape[0]
+        device = raw_preds.device
+
+        # Collect all selected features across the batch
+        all_selected_cls_features = []
+        all_selected_reg_features = []
+        all_selected_boxes = []
+        all_selected_scores = []
+        batch_selected_predictions = []
+        batch_selected_indices = []
+
+        # Extract boxes and scores for all frames
+        boxes = predictions[:, :, :4]  # [batch_size, num_anchors, 4]
+        scores = predictions[:, :, 4:]  # [batch_size, num_anchors, num_classes]
+        max_scores, cls_ids = scores.max(dim=2)  # [batch_size, num_anchors]
+
+        # Define rescue zone parameters
+        RESCUE_MIN_CONF = 0.25  # Lower bound: below this is probably noise
+        RESCUE_MAX_CONF = 0.65  # Upper bound: above this probably has backup detections
+        FALLBACK_MIN_CONF = 0.15  # Fallback range if not enough rescue candidates
+        FALLBACK_MAX_CONF = 0.8  # Extended upper bound for fallback
+        MIN_SELECTIONS = 10  # Minimum selections per frame to ensure we have something
+
+        # Process each frame in the batch
+        for b in range(batch_size):
+            # Stage 1: Identify rescue zone candidates
+            rescue_mask = (max_scores[b] >= RESCUE_MIN_CONF) & (max_scores[b] <= RESCUE_MAX_CONF)
+            rescue_indices = torch.where(rescue_mask)[0]
+
+            if len(rescue_indices) >= self.topk_post:
+                # Plenty of rescue candidates - select best ones
+                rescue_scores = max_scores[b][rescue_indices]
+                _, best_rescue = torch.topk(rescue_scores, self.topk_post)
+                selected_indices = rescue_indices[best_rescue]
+                selection_type = "rescue_zone"
+
+            elif len(rescue_indices) >= MIN_SELECTIONS:
+                # Some rescue candidates but not enough - expand selection
+                # Take all rescue candidates + fill with slightly higher confidence
+
+                remaining_needed = self.topk_post - len(rescue_indices)
+
+                # Look for candidates just above rescue zone
+                extended_mask = (max_scores[b] > RESCUE_MAX_CONF) & (max_scores[b] <= FALLBACK_MAX_CONF)
+                extended_indices = torch.where(extended_mask)[0]
+
+                if len(extended_indices) >= remaining_needed:
+                    # LOGGER.warning("WARNING⚠️ Rescue Zone FSM: Using fallback max extended candidates")
+                    extended_scores = max_scores[b][extended_indices]
+                    _, best_extended = torch.topk(
+                        extended_scores, remaining_needed, largest=False
+                    )  # Take LOWEST of high-conf
+                    extended_selected = extended_indices[best_extended]
+                    selected_indices = torch.cat([rescue_indices, extended_selected])
+                else:
+                    # Take all available extended + fill with rescue zone
+                    selected_indices = torch.cat([rescue_indices, extended_indices])
+                    # Don't need to be so aggressive with filling up
+                    # if len(selected_indices) < self.topk_post:
+                    #     # Pad with top rescue candidates (duplicates if necessary)
+                    #     remaining = self.topk_post - len(selected_indices)
+                    #     rescue_scores = max_scores[b][rescue_indices]
+                    #     _, top_rescue = torch.topk(rescue_scores, remaining)
+                    #     selected_indices = torch.cat([selected_indices, rescue_indices[top_rescue]])
+
+                selection_type = "rescue_plus_extended"
+
+            else:
+                # Very few rescue candidates - fallback to expanded range
+                fallback_mask = (max_scores[b] >= FALLBACK_MIN_CONF) & (max_scores[b] <= FALLBACK_MAX_CONF)
+                fallback_indices = torch.where(fallback_mask)[0]
+
+                if len(fallback_indices) >= self.topk_post:
+                    # LOGGER.warning("WARNING⚠️ Rescue Zone FSM: Expanding to fallback min/max conf ranges")
+                    # Prefer lower confidence within fallback range (more potential for improvement)
+                    fallback_scores = max_scores[b][fallback_indices]
+                    _, selected_fallback = torch.topk(fallback_scores, self.topk_post, largest=False)
+                    selected_indices = fallback_indices[selected_fallback]
+                else:
+                    # Last resort - take whatever we can get
+                    if len(fallback_indices) > 0:
+                        # LOGGER.warning("WARNING⚠️ Rescue Zone FSM: Taking what we can with fallback min/max ranges")
+                        selected_indices = fallback_indices
+                    # Don't need to panic if no candidates at all
+                    # else:
+                    #     # Absolute emergency - take lowest confidence detections
+                    #     _, selected_indices = torch.topk(max_scores[b], self.topk_post, largest=False)
+
+                selection_type = "fallback"
+
+            # Apply light NMS within selected candidates to reduce redundancy
+            # Always apply NMS to avoid overlapping boxes, regardless of count
+            selected_boxes = boxes[b, selected_indices]
+            selected_scores_vals = max_scores[b, selected_indices]
+            selected_classes = cls_ids[b, selected_indices]
+
+            # Apply NMS with relaxed threshold (we want to keep more diverse detections)
+            nms_indices = batched_nms(
+                selected_boxes,
+                selected_scores_vals,
+                selected_classes,
+                iou_threshold=0.6,  # RELAXED: 0.6 vs training 0.4 - keeps more boxes
+            )
+
+            # Take up to topk_post after NMS
+            selected_indices = selected_indices[nms_indices[: self.topk_post]]
+
+            # Store selected features
+            all_selected_cls_features.append(vid_features[b, selected_indices])
+            all_selected_reg_features.append(reg_features[b, selected_indices])
+            all_selected_boxes.append(boxes[b, selected_indices])
+            all_selected_scores.append(max_scores[b, selected_indices])
+
+            batch_selected_predictions.append(predictions[b, selected_indices])
+            batch_selected_indices.append(selected_indices)
+
+            # Log selection statistics for debugging
+            # if b == 0:  # Only log first batch to avoid spam
+            selected_confs = max_scores[b, selected_indices]
+            print(f"Rescue Zone FSM - {selection_type}:")
+            print(f"  Selected {len(selected_indices)} detections")
+            print(f"  Confidence range: {selected_confs.min():.3f} - {selected_confs.max():.3f}")
+            print(f"  Mean confidence: {selected_confs.mean():.3f}")
+            print(
+                f"  In rescue zone: {((selected_confs >= RESCUE_MIN_CONF) & (selected_confs <= RESCUE_MAX_CONF)).sum()}/{len(selected_confs)}"
+            )
+
+        # Concatenate all features across frames (YOLOV style)
+        concat_cls_features = torch.cat(all_selected_cls_features, dim=0).unsqueeze(0)
+        concat_reg_features = torch.cat(all_selected_reg_features, dim=0).unsqueeze(0)
+        concat_boxes = torch.cat(all_selected_boxes, dim=0).unsqueeze(0)
+        concat_scores = torch.cat(all_selected_scores, dim=0).unsqueeze(0)
+
+        return (
+            concat_cls_features,  # [1, total_detections, cls_ch]
+            concat_reg_features,  # [1, total_detections, reg_ch]
+            concat_boxes,  # [1, total_detections, 4]
+            concat_scores,  # [1, total_detections]
+            batch_selected_predictions,  # len batch_size, [topk_post, 4+nc]
+            batch_selected_indices,  # len batch_size, [topk_post]
+        )
+
+
+class SelsaAggregator(nn.Module):
+    """
+    Selsa aggregator module.
+
+    This module is proposed in "Sequence Level Semantics Aggregation for Video
+    Object Detection". SELSA <https://arxiv.org/abs/1907.06390>.
+
+    Args:
+        in_channels (int): The number of channels of the features.
+        num_attention_blocks (int): The number of attention blocks (heads). Defaults to 16.
+    """
+
+    def __init__(self, in_channels: int, num_attention_blocks: int = 4):
+        super().__init__()
+        self.in_channels = in_channels
+        self.num_attention_blocks = num_attention_blocks
+
+        # Linear layers for query (current frame features)
+        self.fc_embed = nn.Linear(in_channels, in_channels)
+        self.fc = nn.Linear(in_channels, in_channels)
+
+        # Linear layers for key/value (reference frame features)
+        self.ref_fc_embed = nn.Linear(in_channels, in_channels)
+        self.ref_fc = nn.Linear(in_channels, in_channels)
+
+    def forward(self, x: torch.Tensor, ref_x: torch.Tensor) -> torch.Tensor:
+        """
+        Aggregate the features `ref_x` of reference proposals.
+
+        The aggregation mainly contains two steps:
+        1. Use multi-head attention to compute the weight between `x` and `ref_x`.
+        2. Use the normalized (i.e. softmax) weight to weightedly sum `ref_x`.
+
+        Args:
+            x (Tensor): Current frame features of shape [N, C]. N is the number of
+                       key frame proposals/pixels.
+            ref_x (Tensor): Reference frame features of shape [M, C]. M is the number
+                           of reference frame proposals/pixels.
+
+        Returns:
+            Tensor: The aggregated features of key frame proposals with shape [N, C].
+        """
+        roi_n = x.shape[0]  # Number of current frame pixels
+        ref_roi_n = ref_x.shape[0]  # Number of reference frame pixels
+
+        # Handle edge cases
+        if roi_n == 0 or ref_roi_n == 0:
+            return x
+
+        # Process query (current frame features)
+        x_embed = self.fc_embed(x)  # [N, C]
+        # Reshape for multi-head attention: [N, C] -> [num_heads, N, C//num_heads]
+        x_embed = x_embed.view(roi_n, self.num_attention_blocks, -1).permute(1, 0, 2)
+
+        # Process key (reference frame features)
+        ref_x_embed = self.ref_fc_embed(ref_x)  # [M, C]
+        # Reshape and transpose for attention: [M, C] -> [num_heads, C//num_heads, M]
+        ref_x_embed = ref_x_embed.view(ref_roi_n, self.num_attention_blocks, -1).permute(1, 2, 0)
+
+        # Compute attention weights: [num_heads, N, M]
+        weights = torch.bmm(x_embed, ref_x_embed) / (x_embed.shape[-1] ** 0.5)
+        weights = weights.softmax(dim=2)  # Softmax over reference pixels
+
+        # Process value (reference frame features)
+        ref_x_new = self.ref_fc(ref_x)  # [M, C]
+        # Reshape for multi-head: [M, C] -> [num_heads, M, C//num_heads]
+        ref_x_new = ref_x_new.view(ref_roi_n, self.num_attention_blocks, -1).permute(1, 0, 2)
+
+        # Apply attention: [num_heads, N, M] × [num_heads, M, C//num_heads] -> [num_heads, N, C//num_heads]
+        x_new = torch.bmm(weights, ref_x_new).permute(1, 0, 2).contiguous()
+
+        # Reshape back: [N, num_heads, C//num_heads] -> [N, C]
+        x_new = self.fc(x_new.view(roi_n, -1))
+
+        return x_new
+
+
+class MPN(nn.Module):
+    """
+    Location Prior Network (LPN) for enhancing object detection in videos.
+    Adapted from: https://github.com/guanxiongsun/EOVOD
+    """
+
+    def __init__(self, ch: tuple[int], num_attention_blocks: int = 4) -> None:
+        """
+        Initializes the Location Prior Network (LPN) module.
+        This module is designed to enhance object detection by providing location priors
+        based on the spatial distribution of objects in the video frames.
+        """
+        self.register_buffer("strides", torch.tensor([8, 16, 32]))
+        self.nl = len(ch)  # Number of feature levels
+        self.aggregators = nn.ModuleList(
+            SelsaAggregator(in_channels=c, num_attention_blocks=num_attention_blocks) for c in ch
+        )
+        super().__init__()
+
+    def _box_to_indices(self, box: torch.Tensor, width: int) -> torch.Tensor:
+        """Convert 2D bounding box on xyxy format to list of 1D feature map indices."""
+        x1, y1, x2, y2 = box.int()
+        # Create coordinate grids
+        y_coords = torch.arange(y1, y2 + 1, device=box.device)
+        x_coords = torch.arange(x1, x2 + 1, device=box.device)
+        # Create meshgrid and flatten to get all combinations
+        y_grid, x_grid = torch.meshgrid(y_coords, x_coords, indexing="ij")
+        indices = (x_grid + y_grid * width).flatten()
+        return indices  # [num_pixels]
+
+    def _extract_ref_bboxes(self, bboxes: torch.Tensor, batch_idx: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Extract bounding boxes from reference frames (all non-keyframe indices)."""
+        # Find indices for reference frames (anything != 0)
+        ref_mask = batch_idx != 0
+        return bboxes[ref_mask], batch_idx[ref_mask]
+
+    def _extract_ref_pixels_and_indices(
+        self,
+        x_ref: torch.Tensor,
+        ref_bboxes: torch.Tensor,
+        ref_indices: torch.Tensor,
+        stride: torch.Tensor,
+        img_size: torch.Tensor,
+        max_pixels_per_box: int = 300,
+        max_total_pixels: int = 1000,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Extract pixels from reference frames AND indices for current frame masking.
+
+        Args:
+            x_ref: Reference frame features [2, C, H, W]
+            ref_bboxes: Reference bboxes [N, 4] in normalized xywh format
+            ref_indices: Frame indices [N] mapping each bbox to its reference frame
+            stride: Stride for this feature level
+            img_size: Image dimensions [H, W] in pixels
+
+        Returns:
+            tuple: (ref_pixels [M, C], mask_indices [K]) where M,K <= 1000
+        """
+        if len(ref_bboxes) == 0:
+            return (
+                torch.empty(0, x_ref.shape[1], device=x_ref.device),
+                torch.empty(0, dtype=torch.long, device=x_ref.device),
+            )
+
+        num_ref_frames, C, H, W = x_ref.shape
+        ref_pixel_list = []  # Collect reference pixels
+        mask_indices_list = []  # Collect indices for current frame masking
+
+        # Step 1: Convert normalized bboxes to feature coordinates
+        ref_bboxes_pixel = ref_bboxes.clone()
+        ref_bboxes_pixel[:, 0] *= img_size[1]  # x_center
+        ref_bboxes_pixel[:, 1] *= img_size[0]  # y_center
+        ref_bboxes_pixel[:, 2] *= img_size[1]  # width
+        ref_bboxes_pixel[:, 3] *= img_size[0]  # height
+
+        ref_bboxes_xyxy = xywh2xyxy(ref_bboxes_pixel)
+        ref_bboxes_feat = ref_bboxes_xyxy / stride
+
+        # Step 2: Process each reference frame
+        for frame_idx in range(num_ref_frames):
+            # Flatten frame features: [C, H, W] -> [H*W, C]
+            frame_feats = x_ref[frame_idx].view(-1, C)
+
+            # Get bboxes for this frame
+            frame_bbox_mask = ref_indices == (frame_idx + 1)
+            frame_bboxes = ref_bboxes_feat[frame_bbox_mask]
+
+            # Step 3: Extract pixels for each bbox in this frame
+            for bbox in frame_bboxes:
+                indices = self._box_to_indices(bbox, W)
+
+                if len(indices) == 0:
+                    continue
+
+                # Limit to 300 pixels per box
+                if len(indices) > max_pixels_per_box:
+                    indices = indices[torch.randperm(len(indices))[:300]]
+
+                # Clamp indices to valid range
+                indices = torch.clamp(indices, 0, H * W - 1)
+
+                # Collect reference pixels
+                ref_pixel_list.append(frame_feats[indices])
+
+                # Collect mask indices for current frame (same spatial locations)
+                mask_indices_list.append(indices)
+
+        # Step 4: Combine and limit both ref pixels and mask indices
+        if len(ref_pixel_list) == 0:
+            return (torch.empty(0, C, device=x_ref.device), torch.empty(0, dtype=torch.long, device=x_ref.device))
+
+        # Combine reference pixels
+        ref_pixels = torch.cat(ref_pixel_list, dim=0)
+
+        # Combine mask indices and remove duplicates
+        mask_indices = torch.cat(mask_indices_list, dim=0)
+        mask_indices = torch.unique(mask_indices)  # Remove duplicate indices
+
+        # Limit both to 1000 total
+        ref_pixels = ref_pixels[:max_total_pixels]
+        mask_indices = mask_indices[:max_total_pixels]
+
+        return ref_pixels, mask_indices
+
+    def forward_train(self, x: list[torch.Tensor], batch: dict[str, torch.Tensor]):
+        # 1. Extract frames
+        x_ref = [x[i][1:] for i in range(self.nl)]  # [B-1, C, H, W] for each level
+        x_current = [x[i][:1] for i in range(self.nl)]  # [1, C, H, W] for each level
+
+        # 3. Extract reference bboxes (from both ref frames)
+        ref_bboxes, ref_bbox_idx = self._extract_ref_bboxes(batch["bboxes"], batch["batch_idx"])
+        img_size = (
+            torch.tensor(x[0].shape[2:], device=x[0].device, dtype=x[0].dtype) * self.strides[0]  # type: ignore[index]
+        )  # image size (h,w)
+
+        # 4. For each feature level, enhance current frame features
+        for level_idx in range(self.nl):
+            stride: torch.Tensor = self.strides[level_idx]  # type: ignore[index]
+            _, C, H, W = x_current[level_idx].shape  # [1, C, H, W]
+
+            # key = ref_pixels extracted from both reference frames, [M, C]
+            # mask = foregound pixel indices [total_unique_pixel_indices]
+            _key, mask = self._extract_ref_pixels_and_indices(
+                x_ref[level_idx], ref_bboxes, ref_bbox_idx, stride, img_size
+            )
+
+            if not mask.any():
+                # No reference pixels found, skip this level
+                continue
+
+            # Query is just the key frame feats at the current level flattened,
+            # [1, C, H, W] -> (squeeze + view) -> [H*W, C] -> (mask) -> [total_unique_pixels, C]
+            x_current_level_flat = x_current[level_idx].squeeze(0).view(-1, x_current[level_idx].shape[1])  # [H*W, C]
+            _query = x_current_level_flat[mask]  # [total_unique_pixels, C]
+
+            # Apply attention with residual connection
+            _query_new = _query + self.aggregators[level_idx](_query, _key)  # [total_unique_pixels, C]
+
+            x_current_level_flat[mask] = _query_new  # Update only foreground pixels
+
+            # restore shape [H*W, C] -> [C, H, W] -> [1, C, H, W]
+            x_current[level_idx] = x_current_level_flat.view(H, W, C).permute(2, 0, 1).unsqueeze(0)  # [1, C, H, W]
+
+        # returns enhanced features for the current frame & discards reference frames
+        return x_current

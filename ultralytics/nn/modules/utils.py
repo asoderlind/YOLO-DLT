@@ -91,7 +91,7 @@ def multi_scale_deformable_attn_pytorch(
 
 
 FAM_MODE = Literal["both", "cls", "reg"]
-FSM_TYPE = Literal["nms", "thresh"]
+FSM_TYPE = Literal["nms", "thresh", "rescue_zone"]
 DETECT_FAM_MODE = Literal["both_combined", "both_separate", "cls", "reg"]
 
 TEMPORAL_MAPPING = {
