@@ -225,6 +225,9 @@ class v8DetectionLoss:
         self.hyp = h
         self.temporal = isinstance(m, TemporalDetect)
         if self.temporal:
+            import random
+            import string
+
             self.fam_mode = m.fam_mode
             self.headers = [
                 "raw_pred",
@@ -239,6 +242,9 @@ class v8DetectionLoss:
                 "refined_bce",
                 "change_direction",
                 "conf_change_amount",
+                "raw_is_correct",
+                "refined_is_correct",
+                "is_foreground",
             ]
             change_direction_alternatives = [
                 "correct_improved",
@@ -246,8 +252,11 @@ class v8DetectionLoss:
                 "incorrect_improved",
                 "incorrect_worsened",
             ]
-            self.save_file_train = "train_stats.tsv"
-            self.save_file_val = "val_stats.tsv"
+            # generate random 4 digit hexadecimal string
+            rand_suffix = "".join(random.choices(string.ascii_letters + string.digits, k=4))
+
+            self.save_file_train = f"train_stats_{rand_suffix}.tsv"
+            self.save_file_val = f"val_stats_{rand_suffix}.tsv"
             with open(self.save_file_train, "w") as f:
                 f.write("\t".join(self.headers) + "\n")
             with open(self.save_file_val, "w") as f:
@@ -644,29 +653,32 @@ class v8DetectionLoss:
                     else:
                         change_directions.append("unknown")
 
-            # Prepare data for TSV
-            debug_data = []
+            # Prepare enhanced data for TSV
+            debug_data: list[str] = []
             for i in range(len(raw_conf)):
                 row = [
-                    f"{raw_probs[i].tolist()}",  # raw_pred (full probability vector)
-                    int(raw_cls_idx[i].item()),  # raw_cls (index of max class)
+                    f"{raw_probs[i].tolist()}",  # raw_pred
+                    int(raw_cls_idx[i].item()),  # raw_cls
                     f"{raw_conf[i].item():.4f}",  # raw_conf
-                    f"{refined_probs[i].tolist()}",  # refined_pred (full probability vector)
-                    int(refined_cls_idx[i].item()),  # refined_cls (index of max class)
+                    f"{refined_probs[i].tolist()}",  # refined_pred
+                    int(refined_cls_idx[i].item()),  # refined_cls
                     f"{refined_conf[i].item():.4f}",  # refined_conf
-                    f"{enhanced_targets[i].tolist()}",  # gt_labels (full target vector)
-                    int(gt_cls_idx[i].item()) if is_foreground[i] else -1,  # gt_cls (-1 for background)
+                    f"{enhanced_targets[i].tolist()}",  # gt_labels
+                    int(gt_cls_idx[i].item()) if is_foreground[i] else -1,  # gt_cls
                     f"{raw_bce_per_pred[i].item():.4f}",  # raw_bce
                     f"{refined_bce_per_pred[i].item():.4f}",  # refined_bce
                     change_directions[i],  # change_direction
                     f"{conf_change[i].item():.4f}",  # conf_change_amount
+                    int(raw_correct[i].item()),  # raw_is_correct
+                    int(refined_correct[i].item()),  # refined_is_correct
+                    int(is_foreground[i].item()),  # is_foreground
                 ]
                 debug_data.append("\t".join(map(str, row)))
 
             # Write to TSV file
             with open(save_file, "a") as f:
-                for row in debug_data:
-                    f.write(row + "\n")
+                for row_str in debug_data:
+                    f.write(row_str + "\n")
 
         return loss_temporal
 

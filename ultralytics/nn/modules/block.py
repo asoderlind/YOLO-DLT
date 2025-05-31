@@ -1847,7 +1847,7 @@ class FeatureAggregationModule(nn.Module):
         num_heads: int = 4,
         qkv_bias: bool = False,
         attn_drop: float = 0.0,
-        scale: int = 25,
+        scale: float = 25,
         mode: FAM_MODE = "both",
     ):
         super().__init__()

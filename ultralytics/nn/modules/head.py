@@ -184,6 +184,7 @@ class TemporalDetect(Detect):
         fam_mode: DETECT_FAM_MODE = "cls",
         fsm_type: FSM_TYPE = "nms",
         fsm_param: float | None = None,
+        scale: float = 25,
     ):
         """Initialize the YOLO Temporal detection layer with specified number of classes and channels."""
         super().__init__(nc, ch)
@@ -247,7 +248,7 @@ class TemporalDetect(Detect):
                 self.linear_pred_cls = nn.Linear(4 * common_ch, self.nc)
                 self.linear_pred_reg = nn.Linear(4 * common_ch, 4 * self.reg_max)
             case "cls":
-                self.fam = FeatureAggregationModule(cls_ch=cls_ch, reg_ch=reg_ch, mode="cls")
+                self.fam = FeatureAggregationModule(cls_ch=cls_ch, reg_ch=reg_ch, mode="cls", scale=scale)
                 self.linear_pred = nn.Linear(4 * common_ch, self.nc)
             case "reg":
                 self.fam = FeatureAggregationModule(cls_ch=cls_ch, reg_ch=reg_ch, mode="reg")

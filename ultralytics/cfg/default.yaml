@@ -114,7 +114,7 @@ box: 7.5 # (float) box loss gain
 cls: 0.5 # (float) cls loss gain (scale with pixels)
 dfl: 1.5 # (float) dfl loss gain
 lambda_c: 0.5 # (float) loss weight for class label smoothing
-temporal_cls: 5.0 # (float) temporal class loss gain
+temporal_cls: 4.0 # (float) temporal class loss gain
 temporal_reg: 2.0 # (float) temporal regression loss gain
 pose: 12.0 # (float) pose loss gain
 kobj: 1.0 # (float) keypoint obj loss gain
