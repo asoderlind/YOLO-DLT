@@ -131,8 +131,9 @@ if __name__ == "__main__":
     WAYMO_TEMPORAL_BASE = "runs/detect/waymo_dark-yolo11n-temporal-base/weights/last.pt"
     BDD100K_NIGHT_TEMPORAL_BASE = "runs/detect/bdd100k_night-yolo11n-temporal-base/weights/last.pt"
     # All runs have 16 nbs, 10% warmup, 4.0 gain, freeze true, cos_lr,
+
     train_model_v(
-        name="waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-debug",
+        name="waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-scaled-reg",
         model="dlt-models/yolo11n-temporal-nms-0.75.yaml",
         model_load_path=WAYMO_TEMPORAL_BASE,
         data="waymo_dark.yaml",
@@ -146,6 +147,41 @@ if __name__ == "__main__":
         dataset_type="temporal",
         lr0=0.005,
         nbs=16,
+    )
+
+    train_model_v(
+        name="waymo_dark-yolo11n-40_e-16_lframe-0.005_lr0-0.75_nms-temporal_dl",
+        model="dlt-models/yolo11n-temporal-nms-0.75.yaml",
+        model_load_path=WAYMO_TEMPORAL_BASE,
+        data="waymo_dark.yaml",
+        gframe=16,
+        batch=1,
+        temporal_freeze=True,
+        temporal_cls=4.0,
+        epochs=40,
+        warmup_epochs=4,
+        cos_lr=True,
+        dataset_type="temporal",
+        lr0=0.005,
+        nbs=16,
+    )
+
+    train_model_v(
+        name="waymo_dark-yolo11n-40_e-16_lframe-2_tmp_stride-0.005_lr0-0.75_nms-temporal_dl",
+        model="dlt-models/yolo11n-temporal-nms-0.75.yaml",
+        model_load_path=WAYMO_TEMPORAL_BASE,
+        data="waymo_dark.yaml",
+        gframe=16,
+        batch=1,
+        temporal_freeze=True,
+        temporal_cls=4.0,
+        epochs=40,
+        warmup_epochs=4,
+        cos_lr=True,
+        dataset_type="temporal",
+        lr0=0.005,
+        nbs=16,
+        temporal_stride=2,  # Using temporal stride of 2
     )
 
     # train_model_v(

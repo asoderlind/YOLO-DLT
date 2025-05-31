@@ -1689,7 +1689,6 @@ class TemporalAttention(nn.Module):
         self.qkv_reg_linear = nn.Linear(channels, channels * 3, bias=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
         self.mode = mode
-        self.debug_counter = 0
 
     def forward(
         self,
@@ -1714,7 +1713,6 @@ class TemporalAttention(nn.Module):
             x_reg (None): Regression branch features (not used currently)
             sim_round2 (torch.Tensor): Similarity weights for average pooling [batch_size, sequence_length, sequence_length]
         """
-        self.debug_counter += 1
         device = x_cls.device
         B, N, C = x_cls.shape  # batch size will be 1 since we are processing flattened sequences
         # PART 1: PREPARATION - Create Q, K, V matrices
@@ -1752,11 +1750,9 @@ class TemporalAttention(nn.Module):
         attn_cls: torch.Tensor = (q_cls @ k_cls.transpose(-2, -1)) * cls_mult  # [B = 1, num_heads, N, N]
         attn_cls = attn_cls.softmax(dim=-1)
         attn_cls = self.attn_drop(attn_cls)  # [B = 1, num_heads, N, N]
-        if self.debug_counter > 2500:
-            breakpoint()  # Debugging point to inspect attention scores
 
         # Compute attention scores for regression branch
-        attn_reg: torch.Tensor = (q_reg @ k_reg.transpose(-2, -1)) * self.scale
+        attn_reg: torch.Tensor = (q_reg @ k_reg.transpose(-2, -1)) * cls_mult  # do this in place of objectness score
         attn_reg = attn_reg.softmax(dim=-1)
         attn_reg = self.attn_drop(attn_reg)  # [B = 1, num_heads, N, N]
 
