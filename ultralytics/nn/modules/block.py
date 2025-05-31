@@ -1673,7 +1673,7 @@ class TemporalAttention(nn.Module):
         num_heads: int = 4,
         qkv_bias=False,
         attn_drop: float = 0.0,
-        scale: int = 25,
+        scale: float = 0.25,
         mode: FAM_MODE = "both",
     ) -> None:
         # channels :input[batch_size,sequence_length, channels]-->output[batch_size, sequence_length, channels]
