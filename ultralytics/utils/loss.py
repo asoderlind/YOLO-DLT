@@ -226,6 +226,29 @@ class v8DetectionLoss:
         self.temporal = isinstance(m, TemporalDetect)
         if self.temporal:
             self.fam_mode = m.fam_mode
+            headers = [
+                "raw_pred",
+                "raw_conf",
+                "refined_pred",
+                "refined_conf",
+                "gt_labels",
+                "raw_bce",
+                "refined_bce",
+                "change_direction",
+            ]
+            change_direction_alternatives = [
+                "correct_improved",
+                "correct_worsened",
+                "incorrect_improved",
+                "incorrect_worsened",
+            ]
+            self.save_file_train = "train_stats.tsv"
+            self.save_file_val = "val_stats.tsv"
+            with open(self.save_file_train, "w") as f:
+                f.write("\t".join(headers) + "\n")
+            with open(self.save_file_val, "w") as f:
+                f.write("\t".join(headers) + "\n")
+
         self.stride = m.stride  # model strides
         self.nc = m.nc  # number of classes
         self.no = m.nc + m.reg_max * 4
@@ -280,11 +303,12 @@ class v8DetectionLoss:
             feats = preds[1] if isinstance(preds, tuple) else preds
             loss = torch.zeros(4, device=self.device)  # box, cls, dfl, con
         else:
+            self.training = len(preds) == 5  # 5 outputs during training, 6 during validation
             loss = torch.zeros(5, device=self.device)  # box, cls, dfl, con, temporal_cls
             start_index = 0 if len(preds) == 5 else 1  # 5 outputs during training, 6 during validation
             feats = preds[start_index]
             refined_cls_preds: torch.Tensor = preds[start_index + 1]
-            # refined_reg_preds = preds[start_index + 2] NOT USED FOR NOW
+            raw_predictions = preds[start_index + 2]  # for debug purposes
             pred_res: list[torch.Tensor] = preds[start_index + 3]  # len batch_size [ <= topk_post, 4 + nc]
             pred_idx: torch.Tensor = preds[start_index + 4]  # len batch_size [<= topk_post]
 
@@ -333,17 +357,14 @@ class v8DetectionLoss:
         # Temporal cls loss
         if self.temporal and self.fam_mode in ["cls", "both_combined", "both_separate"]:
             # loss_time_start = time.time()
-            loss[4] = self._calculate_temporal_cls_loss_iou_based(
+            loss[4] = self._calculate_temporal_cls_loss_aligned(
                 refined_cls_preds,
                 pred_res,
                 pred_idx,
                 target_scores,
-                fg_mask,
-                gt_labels,
-                gt_bboxes,
                 batch_size,
                 dtype,
-                eps,
+                raw_predictions,
             )
         #     loss_time = (time.time() - loss_time_start) * 1000  # in ms
         # print(f"TEMPORAL CLS LOSS TIME: {loss_time:.2f} ms")
@@ -436,18 +457,19 @@ class v8DetectionLoss:
         gt_bboxes: torch.Tensor,
         batch_size: int,
         dtype,
-        eps: float = 1e-7,
+        raw_predictions: torch.Tensor,
     ) -> torch.Tensor:
         """
         Calculate temporal loss exactly like YOLOV - reuse standard assigner results when possible.
 
         Args:
-            refined_cls_preds (torch.Tensor): Refined cls predictions [B, target_count, num_classes]
+            refined_cls_preds (torch.Tensor): Refined cls predictions [1, total_target_count, num_classes]
             pred_res (list[torch.Tensor]): List of tensors with predictions for each batch, len B [up to topk_post, 4 + nc]
             pred_idx (list[torch.Tensor]): List of tensors with indices for each batch, len B [up to topk_post]
             target_scores (torch.Tensor): Target cls scores for each anchor point [B, sum(h_i * w_i), num_classes]
             fg_mask (torch.Tensor): Foreground mask for each anchor point [B, sum(h_i * w_i)]
             gt_labels (torch.Tensor): Ground truth labels for each batch [B, num_gt, 1]
+            raw_predictions (torch.Tensor): Raw predictions for debug purposes [B, 4 + nc, sum(h_i * w_i)]
 
 
         """
@@ -524,80 +546,58 @@ class v8DetectionLoss:
 
         return loss_ref
 
-    # def _calculate_temporal_cls_loss(
-    #     self,
-    #     refined_cls_preds: torch.Tensor,
-    #     refined_indices: torch.Tensor,
-    #     target_scores: torch.Tensor,
-    #     batch_size: int,
-    #     dtype,
-    #     eps: float = 1e-7,
-    # ) -> torch.Tensor:
-    #     """Calculate the temporal classification loss.
-
-    #     Args:
-    #         refined_cls_preds (torch.Tensor): [B, target_count, num_classes]
-    #         refined_indices (torch.Tensor): [B, target_count]
-    #         target_scores (torch.Tensor): [B, sum(h_i * w_i), num_classes]
-    #         batch_size (int): Batch size.
-    #         dtype: Data type of the tensors.
-    #         eps (float, optional): Small value to avoid division by zero. Defaults to 1e-7.
-    #     Returns:
-    #         torch.Tensor: Temporal classification loss.
-
-    #     """
-    #     batch_indices = (
-    #         torch.arange(batch_size, device=target_scores.device).view(-1, 1).expand(-1, refined_indices.size(1))
-    #     )
-    #     # Crazy PyTorch indexing to get the target scores for the key frames
-    #     # Filter target_scores[batch_indices[i,j], refined_indices[i,j]] for each i, j
-    #     # Keep other dim the same
-    #     refined_target_scores = target_scores[batch_indices, refined_indices]
-    #     refined_target_scores_sum = max(  # type: ignore
-    #         refined_target_scores.sum(), 1
-    #     )
-    #     return self.bce(refined_cls_preds, refined_target_scores.to(dtype)).sum() / (refined_target_scores_sum + eps)
-
-    def _calculate_temporal_reg_loss(
+    def _calculate_temporal_cls_loss_aligned(
         self,
-        refined_reg_preds: torch.Tensor,
-        refined_indices: torch.Tensor,
-        target_bboxes: torch.Tensor,
+        refined_cls_preds: torch.Tensor,  # [total_enhanced, num_classes] - flat
+        pred_res: list[torch.Tensor],
+        pred_idx: list[torch.Tensor],
         target_scores: torch.Tensor,
-        anchor_points: torch.Tensor,
-        stride_tensor: torch.Tensor,
-        fg_mask: torch.Tensor,
         batch_size: int,
+        dtype,
+        raw_predictions: torch.Tensor,  # [B, 4 + nc, sum(h_i * w_i)]
     ) -> torch.Tensor:
-        selected_anchor_points = anchor_points[refined_indices]
-        pred_bboxes_refined = self.bbox_decode(selected_anchor_points, refined_reg_preds)
-        batch_indices = (
-            torch.arange(batch_size, device=target_scores.device).view(-1, 1).expand(-1, refined_indices.size(1))
-        )
-        refined_target_bboxes = target_bboxes[batch_indices, refined_indices]
-        refined_target_scores = target_scores[batch_indices, refined_indices]
-        refined_target_scores_sum = max(refined_target_scores.sum(), 1)  # type: ignore
-        refined_fg_mask = fg_mask[batch_indices, refined_indices]
+        """
+        Calculate temporal classification loss using standard TAL assignment.
 
-        # Select appropriate strides for the refined indices
-        selected_strides = stride_tensor[refined_indices]  # [batch_size, target_count, 1]
+        Args:
+            refined_cls_preds (torch.Tensor): Refined cls predictions [1, total_target_count, num_classes]
+            pred_res (list[torch.Tensor]): List of tensors with predictions for each batch, len B [up to topk_post, 4 + nc]
+            pred_idx (list[torch.Tensor]): List of tensors with indices for each batch, len B [up to topk_post]
+            target_scores (torch.Tensor): Target cls scores for each anchor point [B, sum(h_i * w_i), num_classes]
+            fg_mask (torch.Tensor): Foreground mask for each anchor point [B, sum(h_i * w_i)]
+            gt_labels (torch.Tensor): Ground truth labels for each batch [B, num_gt, 1]
+            raw_predictions (torch.Tensor): Raw predictions for debug purposes [B, 4 + nc, sum(h_i * w_i)]
 
-        # Divide target bboxes by stride to match the coordinate space of predictions
-        refined_target_bboxes = refined_target_bboxes / selected_strides
 
-        if not refined_fg_mask.sum():
-            return torch.tensor(0.0, device=self.device)
-        loss, _ = self.bbox_loss(
-            refined_reg_preds,
-            pred_bboxes_refined,
-            selected_anchor_points,
-            refined_target_bboxes,
-            refined_target_scores,
-            refined_target_scores_sum,
-            refined_fg_mask,
-        )
+        """
 
-        return loss
+        # Handle flat tensor from temporal aggregation
+
+        refined_cls_preds = refined_cls_preds.view(-1, self.nc)  # Ensure it's flat [total_enhanced, num_classes]
+
+        enhanced_targets = []
+
+        for batch_idx in range(batch_size):
+            num_enhanced = len(pred_idx[batch_idx])
+            batch_targets = torch.zeros(num_enhanced, self.nc, device=self.device, dtype=dtype)
+
+            for i, anchor_idx in enumerate(pred_idx[batch_idx]):
+                # Use standard assigner results for ALL enhanced predictions
+                batch_targets[i] = target_scores[batch_idx, anchor_idx]
+                # This includes both foreground (non-zero) and background (all-zero) targets
+
+            enhanced_targets.append(batch_targets)
+
+        # Concatenate all enhanced targets
+        enhanced_targets = torch.cat(enhanced_targets, dim=0)
+
+        # Calculate loss over ALL enhanced predictions (like base YOLO)
+        # Foreground predictions will have non-zero targets
+        # Background predictions will have all-zero targets
+        enhanced_targets_sum = max(enhanced_targets.sum(), 1)
+        loss_temporal = self.bce(refined_cls_preds, enhanced_targets).sum() / enhanced_targets_sum
+
+        return loss_temporal
 
 
 class v8SegmentationLoss(v8DetectionLoss):

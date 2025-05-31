@@ -353,7 +353,7 @@ class TemporalDetect(Detect):
             return (
                 x,
                 final_cls_preds,  # [1, topk_post, num_classes]
-                final_reg_preds,
+                raw_predictions,  # [batch_size, 4 + num_classes, sum(h_i*w_i)]
                 pred_res,  # [batch_size, topk_post, 4 + num_classes]
                 pred_idx,  # [batch_size, topk_post]
             )
@@ -368,7 +368,7 @@ class TemporalDetect(Detect):
                 y,
                 x,
                 final_cls_preds,  # [1, topk_post, num_classes]
-                final_reg_preds,
+                raw_predictions,  # [batch_size, 4 + num_classes, sum(h_i*w_i)]
                 pred_res,  # [batch_size, topk_post, 4 + num_classes]
                 pred_idx,  # [batch_size, topk_post]
             )
