@@ -510,13 +510,20 @@ class TemporalDetect(Detect):
 
     def freeze_base_detector(self):
         """Freeze the regular detection branches (cv2 and cv3) of the model."""
-        LOGGER.info("Freezing regular detection branches except for the last layer.")
+        # LOGGER.info("Freezing regular detection branches except for the last layer.")
+        LOGGER.info("Freezing regular detection branches cv2 and cv3 completely.")
         for i in range(self.nl):
             self.cv2[i].eval()
             self.cv3[i].eval()
+            self.cv2_pred[i].eval()
+            self.cv3_pred[i].eval()
             for param in self.cv2[i].parameters():
                 param.requires_grad = False
             for param in self.cv3[i].parameters():
+                param.requires_grad = False
+            for param in self.cv2_pred[i].parameters():
+                param.requires_grad = False
+            for param in self.cv3_pred[i].parameters():
                 param.requires_grad = False
 
 
