@@ -226,15 +226,19 @@ class v8DetectionLoss:
         self.temporal = isinstance(m, TemporalDetect)
         if self.temporal:
             self.fam_mode = m.fam_mode
-            headers = [
+            self.headers = [
                 "raw_pred",
+                "raw_cls",
                 "raw_conf",
                 "refined_pred",
+                "refined_cls",
                 "refined_conf",
                 "gt_labels",
+                "gt_cls",
                 "raw_bce",
                 "refined_bce",
                 "change_direction",
+                "conf_change_amount",
             ]
             change_direction_alternatives = [
                 "correct_improved",
@@ -245,9 +249,9 @@ class v8DetectionLoss:
             self.save_file_train = "train_stats.tsv"
             self.save_file_val = "val_stats.tsv"
             with open(self.save_file_train, "w") as f:
-                f.write("\t".join(headers) + "\n")
+                f.write("\t".join(self.headers) + "\n")
             with open(self.save_file_val, "w") as f:
-                f.write("\t".join(headers) + "\n")
+                f.write("\t".join(self.headers) + "\n")
 
         self.stride = m.stride  # model strides
         self.nc = m.nc  # number of classes
@@ -558,44 +562,110 @@ class v8DetectionLoss:
     ) -> torch.Tensor:
         """
         Calculate temporal classification loss using standard TAL assignment.
-
-        Args:
-            refined_cls_preds (torch.Tensor): Refined cls predictions [1, total_target_count, num_classes]
-            pred_res (list[torch.Tensor]): List of tensors with predictions for each batch, len B [up to topk_post, 4 + nc]
-            pred_idx (list[torch.Tensor]): List of tensors with indices for each batch, len B [up to topk_post]
-            target_scores (torch.Tensor): Target cls scores for each anchor point [B, sum(h_i * w_i), num_classes]
-            fg_mask (torch.Tensor): Foreground mask for each anchor point [B, sum(h_i * w_i)]
-            gt_labels (torch.Tensor): Ground truth labels for each batch [B, num_gt, 1]
-            raw_predictions (torch.Tensor): Raw predictions for debug purposes [B, 4 + nc, sum(h_i * w_i)]
-
-
         """
 
         # Handle flat tensor from temporal aggregation
-
         refined_cls_preds = refined_cls_preds.view(-1, self.nc)  # Ensure it's flat [total_enhanced, num_classes]
 
         enhanced_targets = []
+        raw_prediction_cls = raw_predictions[:, 4:, :].permute(0, 2, 1).contiguous()  # [B, sum(h_i * w_i), nc]
+        batch_raw_pred_cls = []
 
         for batch_idx in range(batch_size):
-            num_enhanced = len(pred_idx[batch_idx])
-            batch_targets = torch.zeros(num_enhanced, self.nc, device=self.device, dtype=dtype)
-
-            for i, anchor_idx in enumerate(pred_idx[batch_idx]):
-                # Use standard assigner results for ALL enhanced predictions
-                batch_targets[i] = target_scores[batch_idx, anchor_idx]
-                # This includes both foreground (non-zero) and background (all-zero) targets
-
+            # Use standard assigner results for ALL enhanced predictions
+            batch_targets = target_scores[batch_idx, pred_idx[batch_idx]]  # [num_enhanced, num_classes]
             enhanced_targets.append(batch_targets)
 
+            batch_raw_pred_cls.append(raw_prediction_cls[batch_idx, pred_idx[batch_idx]])  # [30, num_classes]
+
         # Concatenate all enhanced targets
-        enhanced_targets = torch.cat(enhanced_targets, dim=0)
+        enhanced_targets = torch.cat(enhanced_targets, dim=0)  # [total_enhanced, num_classes]
 
         # Calculate loss over ALL enhanced predictions (like base YOLO)
-        # Foreground predictions will have non-zero targets
-        # Background predictions will have all-zero targets
         enhanced_targets_sum = max(enhanced_targets.sum(), 1)
         loss_temporal = self.bce(refined_cls_preds, enhanced_targets).sum() / enhanced_targets_sum
+
+        # Debug setup
+        save_file = self.save_file_train if self.training else self.save_file_val
+        flat_raw_pred_cls = torch.cat(batch_raw_pred_cls, dim=0)  # [total_enhanced, num_classes]
+
+        # Apply sigmoid to get probabilities for analysis
+        raw_probs = torch.sigmoid(flat_raw_pred_cls)
+        refined_probs = torch.sigmoid(refined_cls_preds)
+
+        # Get predicted classes and confidences
+        raw_conf, raw_cls_idx = raw_probs.max(dim=1)
+        refined_conf, refined_cls_idx = refined_probs.max(dim=1)
+
+        # Get ground truth classes and confidences
+        gt_conf, gt_cls_idx = enhanced_targets.max(dim=1)
+
+        # Calculate individual BCE losses (no reduction)
+        raw_bce_individual = self.bce(flat_raw_pred_cls, enhanced_targets)  # [total_enhanced, num_classes]
+        refined_bce_individual = self.bce(refined_cls_preds, enhanced_targets)  # [total_enhanced, num_classes]
+
+        # Sum across classes for per-prediction loss
+        raw_bce_per_pred = raw_bce_individual.sum(dim=1)  # [total_enhanced]
+        refined_bce_per_pred = refined_bce_individual.sum(dim=1)  # [total_enhanced]
+
+        # FIXED: Determine if predictions are correct by comparing class indices
+        # Only consider foreground targets (gt_conf > 0 means non-background)
+        is_foreground = gt_conf > 0
+        raw_correct = (raw_cls_idx == gt_cls_idx) & is_foreground
+        refined_correct = (refined_cls_idx == gt_cls_idx) & is_foreground
+
+        # Calculate confidence change
+        conf_change = refined_conf - raw_conf
+
+        # Determine change direction
+        change_directions = []
+        for i in range(len(raw_correct)):
+            if not is_foreground[i]:  # Background case
+                if raw_conf[i] > refined_conf[i]:
+                    change_directions.append("background_improved")  # Confidence reduced for background
+                else:
+                    change_directions.append("background_worsened")  # Confidence increased for background
+            else:  # Foreground case
+                if raw_correct[i] and refined_correct[i]:
+                    if refined_conf[i] > raw_conf[i]:
+                        change_directions.append("correct_improved")
+                    else:
+                        change_directions.append("correct_worsened")
+                elif not raw_correct[i] and refined_correct[i]:
+                    change_directions.append("original_incorrect_new_correct")
+                elif raw_correct[i] and not refined_correct[i]:
+                    change_directions.append("original_correct_new_incorrect")
+                elif not raw_correct[i] and not refined_correct[i]:
+                    if refined_bce_per_pred[i] < raw_bce_per_pred[i]:
+                        change_directions.append("incorrect_improved")  # Loss decreased
+                    else:
+                        change_directions.append("incorrect_worsened")  # Loss increased
+                else:
+                    change_directions.append("unknown")
+
+        # Prepare data for TSV
+        debug_data = []
+        for i in range(len(raw_conf)):
+            row = [
+                f"{raw_probs[i].tolist()}",  # raw_pred (full probability vector)
+                int(raw_cls_idx[i].item()),  # raw_cls (index of max class)
+                f"{raw_conf[i].item():.4f}",  # raw_conf
+                f"{refined_probs[i].tolist()}",  # refined_pred (full probability vector)
+                int(refined_cls_idx[i].item()),  # refined_cls (index of max class)
+                f"{refined_conf[i].item():.4f}",  # refined_conf
+                f"{enhanced_targets[i].tolist()}",  # gt_labels (full target vector)
+                int(gt_cls_idx[i].item()) if is_foreground[i] else -1,  # gt_cls (-1 for background)
+                f"{raw_bce_per_pred[i].item():.4f}",  # raw_bce
+                f"{refined_bce_per_pred[i].item():.4f}",  # refined_bce
+                change_directions[i],  # change_direction
+                f"{conf_change[i].item():.4f}",  # conf_change_amount
+            ]
+            debug_data.append("\t".join(map(str, row)))
+
+        # Write to TSV file
+        with open(save_file, "a") as f:
+            for row in debug_data:
+                f.write(row + "\n")
 
         return loss_temporal
 
