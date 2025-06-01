@@ -4,15 +4,15 @@ model = YOLO("dlt-models/yolo11n-temporal-nms-0.4.yaml").load("waymo_dark-yolo11
 # model2 = YOLO("dlt-models/yolo11n.yaml").load("waymo_dark-yolo11n.pt")
 # model = YOLO("yolo11n.yaml")
 model.train(
+    name="waymo_night-yolo11n-gframe-test",
     data="waymo_night.yaml",
     epochs=1,
-    # batch=1,
-    batch=8,
+    batch=1,
     device="mps",
-    gframe=4,
-    dataset_type="default",
-    # dataset_type="temporal",
-    # temporal_freeze=True,
+    lframe=4,
+    dataset_type="temporal",
+    temporal_freeze=True,
+    mosaic=0.0,
 )
 
 # model = YOLO("runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt")
