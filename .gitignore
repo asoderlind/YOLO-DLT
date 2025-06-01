@@ -6,7 +6,11 @@ __pycache__/
 # C extensions
 *.so
 
-feature_visualization
+feature_visualization_*.png
+
+sample_images/
+feature_visualization/
+dist_gain*.png
 
 sample_images/2015_01899.jpg
 sample_images/2015_01901.jpg
