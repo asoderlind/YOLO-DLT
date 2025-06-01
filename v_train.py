@@ -134,22 +134,22 @@ if __name__ == "__main__":
 
     # lr ablation runs
 
-    train_model_v(
-        name="waymo_dark-yolo11n-40_e-16_gframe-0.0025_lr0-0.75_nms-temporal_dl",
-        model="dlt-models/yolo11n-temporal-nms-0.75.yaml",
-        model_load_path=WAYMO_TEMPORAL_BASE,
-        data="waymo_dark.yaml",
-        gframe=16,
-        batch=1,
-        temporal_freeze=True,
-        temporal_cls=4.0,
-        epochs=40,
-        warmup_epochs=4,
-        cos_lr=True,
-        dataset_type="temporal",
-        lr0=0.0025,
-        nbs=16,
-    )
+    # train_model_v(
+    #     name="waymo_dark-yolo11n-40_e-16_gframe-0.0025_lr0-0.75_nms-temporal_dl",
+    #     model="dlt-models/yolo11n-temporal-nms-0.75.yaml",
+    #     model_load_path=WAYMO_TEMPORAL_BASE,
+    #     data="waymo_dark.yaml",
+    #     gframe=16,
+    #     batch=1,
+    #     temporal_freeze=True,
+    #     temporal_cls=4.0,
+    #     epochs=40,
+    #     warmup_epochs=4,
+    #     cos_lr=True,
+    #     dataset_type="temporal",
+    #     lr0=0.0025,
+    #     nbs=16,
+    # )
 
     train_model_v(
         name="waymo_dark-yolo11n-40_e-16_gframe-0.001_lr0-0.75_nms-temporal_dl",
