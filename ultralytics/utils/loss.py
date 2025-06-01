@@ -7,6 +7,7 @@ import torch.nn.functional as F
 
 from ultralytics.DLN.model import DLN
 from ultralytics.nn.modules.head import TemporalDetect
+from ultralytics.utils import LOGGER
 from ultralytics.utils.metrics import OKS_SIGMA
 from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
 from ultralytics.utils.tal import RotatedTaskAlignedAssigner, TaskAlignedAssigner, dist2bbox, dist2rbox, make_anchors
@@ -225,9 +226,6 @@ class v8DetectionLoss:
         self.hyp = h
         self.temporal = isinstance(m, TemporalDetect)
         if self.temporal:
-            import random
-            import string
-
             self.fam_mode = m.fam_mode
             self.headers = [
                 "raw_pred",
@@ -252,15 +250,14 @@ class v8DetectionLoss:
                 "incorrect_improved",
                 "incorrect_worsened",
             ]
-            # generate random 4 digit hexadecimal string
-            rand_suffix = "".join(random.choices(string.ascii_letters + string.digits, k=4))
 
-            self.save_file_train = f"train_stats_{rand_suffix}.tsv"
-            self.save_file_val = f"val_stats_{rand_suffix}.tsv"
+            self.save_file_train = f"train_stats_{self.hyp.name}.tsv"
+            self.save_file_val = f"val_stats_{self.hyp.name}.tsv"
             with open(self.save_file_train, "w") as f:
                 f.write("\t".join(self.headers) + "\n")
             with open(self.save_file_val, "w") as f:
                 f.write("\t".join(self.headers) + "\n")
+            LOGGER.info(f"STATS 📊: Saving validation stats to {self.save_file_val}")
 
         self.stride = m.stride  # model strides
         self.nc = m.nc  # number of classes

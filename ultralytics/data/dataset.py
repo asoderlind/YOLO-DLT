@@ -289,10 +289,6 @@ class TemporalYOLODataset(YOLODataset):
         assert self.hyp.get("batch", 0) == 1, (
             "Batch size should be 1 for temporal dataset. The real batch size is set by lframe + gframe."
         )
-        if self.lframe > 0 and self.mode == "train":
-            assert self.hyp.get("mosaic", 0) == 0 and self.hyp.get("mixup", 0) == 0, (
-                "Mosaic and mixup are not supported when using local frames. Please set them to 0 or set lframe to 0."
-            )
         if self.mode == "val":
             lframe_val = self.hyp.get("lframe_val", self.lframe)
             temporal_stride_val = self.hyp.get("temporal_stride_val", self.temporal_stride)
