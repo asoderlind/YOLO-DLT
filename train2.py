@@ -1,6 +1,4 @@
 import os
-import time
-from datetime import datetime
 
 import torch.nn as nn
 
@@ -70,9 +68,6 @@ def train_model(
     # Load the model
     model_obj = YOLO(model)
 
-    # Record start time
-    start_time = time.time()
-
     # Build name
     final_name = name.format(
         data=os.path.basename(data).split(".")[0],
@@ -105,33 +100,6 @@ def train_model(
         classes=classes,
         **kwargs,  # Pass any additional kwargs to train
     )
-
-    # Calculate elapsed time
-    elapsed_time = time.time() - start_time
-
-    # Format time as hours, minutes, seconds
-    hours, remainder = divmod(elapsed_time, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    formatted_time = f"{int(hours)}h {int(minutes)}m {seconds:.2f}s"
-
-    output_path = project if project else f"runs/detect/{final_name}/"
-
-    # Create output directory if it doesn't exist
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    output_file = os.path.join(output_path, "timing.txt")
-
-    # Save timing information to file
-    with open(output_file, "w") as f:
-        f.write(f"Training completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        f.write(f"Model: {model}\n")
-        f.write(f"Dataset: {data}\n")
-        f.write(f"Epochs: {epochs}\n")
-        f.write(f"Device: {device}\n")
-        f.write(f"Total training time: {formatted_time}\n")
-        f.write(f"Total seconds: {elapsed_time:.2f}\n")
-
-    print(f"\nTraining completed in {formatted_time}")
-    print(f"Timing information saved to: {output_path}")
 
     return results
 
@@ -292,118 +260,108 @@ if __name__ == "__main__":
     # bdd100k = "bdd100k_cluster.yaml"
 
     run_seeded_train(
-        iterations=5,
+        iterations=3,
         name="bdd100k_night_cluster-yolo9t",
         model="yolov9t.yaml",
         data=data,
     )
 
     # run_seeded_train(
-    #     iterations=5,
+    #     iterations=3,
     #     name="bdd100k_night_cluster-yolo8n",
     #     model="yolov8n.yaml",
     #     data=data,
     # )
 
     # run_seeded_train(
-    #     iterations=5,
+    #     start_itr=1,
+    #     iterations=2,
     #     name="bdd100k_night_cluster-yolo11s",
     #     model="yolo11s.yaml",
     #     data=data,
     # )
 
-    ######################################
-
     # run_seeded_train(
-    #     start_itr=3,
+    #     start_itr=1,
     #     iterations=2,
-    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2",
-    #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
+    #     name="bdd100k_night_cluster-yolo11n-bic",
+    #     model="dlt-models/yolo11n-bic.yaml",
     #     data=data,
     # )
 
     # run_seeded_train(
-    #     start_itr=3,
+    #     start_itr=1,
     #     iterations=2,
-    #     name="bdd100k_night_cluster-yolo11n-bic-carep3k2",
-    #     model="dlt-models/yolo11n-bic-carep3k2.yaml",
+    #     name="bdd100k_night_cluster-yolo11n-repc3k2",
+    #     model="dlt-models/yolo11n-repc3k2.yaml",
     #     data=data,
     # )
 
     # run_seeded_train(
-    #     iterations=5,
+    #     start_itr=1,
+    #     iterations=2,
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-simsppf",
     #     model="dlt-models/yolo11n-bic-repc3k2-simsppf.yaml",
     #     data=data,
     # )
 
     # run_seeded_train(
-    #     iterations=5,
+    #     start_itr=1,
+    #     iterations=2,
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-sppfcsp",
     #     model="dlt-models/yolo11n-bic-repc3k2-sppfcsp.yaml",
     #     data=data,
     # )
 
     # run_seeded_train(
-    #     iterations=5,
+    #     start_itr=1,
+    #     iterations=2,
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-simsppfcsp",
     #     model="dlt-models/yolo11n-bic-repc3k2-simsppfcsp.yaml",
     #     data=data,
     # )
 
     # run_seeded_train(
-    #     start_itr=3,
-    #     iterations=2,
-    #     name="bdd100k_night_cluster-yolo11n-spdconv1-bic-repc3k2",
-    #     model="dlt-models/yolo11n-spdconv1-bic-repc3k2.yaml",
-    #     data=data,
-    # )
-
-    # run_seeded_train(
-    #     start_itr=3,
-    #     iterations=2,
-    #     name="bdd100k_night_cluster-yolo11n-spdconv-bic-repc3k2",
-    #     model="dlt-models/yolo11n-spdconv-bic-repc3k2.yaml",
-    #     data=data,
-    # )
-
-    # run_seeded_train(
-    #     iterations=5,
+    #     iterations=3,
     #     name="bdd100k_night_cluster-yolo11n-bic-rfac3k2",
     #     model="dlt-models/yolo11n-bic-rfac3k2.yaml",
     #     data=data,
     # )
 
     # run_seeded_train(
-    #     iterations=5,
+    #     start_itr=1,
+    #     iterations=2,
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-se",
     #     model="dlt-models/yolo11n-bic-repc3k2-se.yaml",
     #     data=data,
     # )
 
     # run_seeded_train(
-    #     iterations=5,
+    #     start_itr=1,
+    #     iterations=2,
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-eca",
     #     model="dlt-models/yolo11n-bic-repc3k2-eca.yaml",
     #     data=data,
     # )
 
     # run_seeded_train(
-    #     iterations=5,
+    #     start_itr=1,
+    #     iterations=2,
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-simam",
     #     model="dlt-models/yolo11n-bic-repc3k2-simam.yaml",
     #     data=data,
     # )
 
     # run_seeded_train(
-    #     iterations=5,
+    #     start_itr=1,
+    #     iterations=2,
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-ca",
     #     model="dlt-models/yolo11n-bic-repc3k2-ca.yaml",
     #     data=data,
     # )
 
     # run_seeded_train(
-    #     iterations=5,
+    #     iterations=3,
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-thiou-ciou_ass",
     #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
     #     data=data,
@@ -411,14 +369,16 @@ if __name__ == "__main__":
     # )
 
     # run_seeded_train(
-    #     iterations=5,
+    #     start_itr=1,
+    #     iterations=2,
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-wiou1",
     #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
     #     data=data,
     #     iou_type="wiou1",
     # )
     # run_seeded_train(
-    #     iterations=5,
+    #     start_itr=1,
+    #     iterations=2,
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-wiou2",
     #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
     #     data=data,
@@ -426,51 +386,75 @@ if __name__ == "__main__":
     # )
 
     # run_seeded_train(
-    #     iterations=5,
+    #     start_itr=1,
+    #     iterations=2,
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-siou",
     #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
     #     data=data,
     #     iou_type="siou",
     # )
     # run_seeded_train(
-    #     iterations=5,
+    #     start_itr=1,
+    #     iterations=2,
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-ciou+nwd",
     #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
     #     data=data,
     #     iou_type="ciou+nwd",
     # )
     # run_seeded_train(
-    #     iterations=5,
+    #     start_itr=1,
+    #     iterations=2,
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-eiou",
     #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
     #     data=data,
     #     iou_type="eiou",
     # )
+
     # run_seeded_train(
-    #     iterations=5,
-    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-focal-eiou",
-    #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
-    #     data=data,
-    #     iou_type="focal-eiou",
-    # )
-    # run_seeded_train(
-    #     iterations=5,
+    #     start_itr=1,
+    #     iterations=2,
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-isiou",
     #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
     #     data=data,
     #     iou_type="isiou",
     # )
     # run_seeded_train(
-    #     iterations=5,
+    #     start_itr=1,
+    #     iterations=2,
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-mpdiou",
     #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
     #     data=data,
     #     iou_type="mpdiou",
     # )
     # run_seeded_train(
-    #     iterations=5,
+    #     start_itr=1,
+    #     iterations=2,
     #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-nwd",
     #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
     #     data=data,
     #     iou_type="nwd",
+    # )
+
+    # run_seeded_train(
+    #     start_itr=1,
+    #     iterations=2,
+    #     name="bdd100k_night_cluster-yolo11n-bic",
+    #     model="dlt-models/yolo11n-bic.yaml",
+    #     data=data,
+    # )
+
+    # run_seeded_train(
+    #     start_itr=1,
+    #     iterations=2,
+    #     name="bdd100k_night_cluster-yolo11n-repc3k2",
+    #     model="dlt-models/yolo11n-repc3k2.yaml",
+    #     data=data,
+    # )
+
+    # run_seeded_train(
+    #     iterations=3,
+    #     name="bdd100k_night_cluster-yolo11n-bic-repc3k2-focal-eiou",
+    #     model="dlt-models/yolo11n-bic-repc3k2.yaml",
+    #     data=data,
+    #     iou_type="focal-eiou",
     # )
