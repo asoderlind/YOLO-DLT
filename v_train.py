@@ -132,49 +132,49 @@ if __name__ == "__main__":
     BDD100K_NIGHT_TEMPORAL_BASE = "runs/detect/bdd100k_night-yolo11n-temporal-base/weights/last.pt"
     # All runs have 16 nbs, 10% warmup, 4.0 gain, freeze true, cos_lr,
 
-    model = YOLO(
-        "runs/detect/waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-25.0_attn_scale/weights/last.pt"
-    )
+    # model = YOLO(
+    #     "runs/detect/waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-25.0_attn_scale/weights/last.pt"
+    # )
 
-    model_base = YOLO(WAYMO_TEMPORAL_BASE)
+    # model_base = YOLO(WAYMO_TEMPORAL_BASE)
 
-    model.val(
-        name="waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-25.0_attn_scale_val",
-        data="waymo_dark.yaml",
-        batch=1,
-        device="cuda",
-        gframe=16,
-        dataset_type="temporal",
-    )
+    # model.val(
+    #     name="waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-25.0_attn_scale_val",
+    #     data="waymo_dark.yaml",
+    #     batch=1,
+    #     device="cuda",
+    #     gframe=16,
+    #     dataset_type="temporal",
+    # )
 
-    model.val(
-        name="waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-25.0_attn_scale_val_car",
-        data="waymo_dark.yaml",
-        batch=1,
-        device="cuda",
-        gframe=16,
-        dataset_type="temporal",
-        classes=0,  # Only validate on car class
-    )
+    # model.val(
+    #     name="waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-25.0_attn_scale_val_car",
+    #     data="waymo_dark.yaml",
+    #     batch=1,
+    #     device="cuda",
+    #     gframe=16,
+    #     dataset_type="temporal",
+    #     classes=0,  # Only validate on car class
+    # )
 
-    model_base.val(
-        name="waymo_dark-yolo11n-temporal-base_val",
-        data="waymo_dark.yaml",
-        batch=1,
-        device="cuda",
-        gframe=16,
-        dataset_type="temporal",
-    )
+    # model_base.val(
+    #     name="waymo_dark-yolo11n-temporal-base_val",
+    #     data="waymo_dark.yaml",
+    #     batch=1,
+    #     device="cuda",
+    #     gframe=16,
+    #     dataset_type="temporal",
+    # )
 
-    model_base.val(
-        name="waymo_dark-yolo11n-temporal-base_val_car",
-        data="waymo_dark.yaml",
-        batch=1,
-        device="cuda",
-        gframe=16,
-        dataset_type="temporal",
-        classes=0,  # Only validate on car class
-    )
+    # model_base.val(
+    #     name="waymo_dark-yolo11n-temporal-base_val_car",
+    #     data="waymo_dark.yaml",
+    #     batch=1,
+    #     device="cuda",
+    #     gframe=16,
+    #     dataset_type="temporal",
+    #     classes=0,  # Only validate on car class
+    # )
 
     train_model_v(
         name="waymo_dark-yolo11n-40_e-16_lframe-0.005_lr0-0.75_nms-temporal_dl-mosaic",
