@@ -1,6 +1,6 @@
 from ultralytics import YOLO
 
-model_bic_rfaconv = YOLO("bic-rfac3k2.yaml")
+model_bic_rfaconv = YOLO("dlt-models/yolo11n-bic-rfac3k2.yaml")
 
 
 model_bic_rfaconv.val(
