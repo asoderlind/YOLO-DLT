@@ -259,19 +259,53 @@ if __name__ == "__main__":
     # waymo = "waymo_cluster.yaml"
     # bdd100k = "bdd100k_cluster.yaml"
 
-    for i in range(3):
-        train_model(
-            name=f"bdd100k_night-yolo9t-seed-{i}",
-            model="yolov9t.yaml",
-            data=data,
-            project="",
-        )
-        train_model(
-            name=f"bdd100k_night-yolo8n-seed-{i}",
-            model="yolov8n.yaml",
-            data=data,
-            project="",
-        )
+    train_model(
+        name="bdd100k_night-yolo9t-seed-0",
+        model="yolov9t.yaml",
+        data=data,
+        project="",
+        resume=True,
+    )
+
+    train_model(
+        name="bdd100k_night-yolo8n-seed-0",
+        model="yolov8n.yaml",
+        data=data,
+        project="",
+        seed=0,
+    )
+
+    train_model(
+        name="bdd100k_night-yolo8n-seed-1",
+        model="yolov8n.yaml",
+        data=data,
+        project="",
+        seed=1,
+    )
+
+    train_model(
+        name="bdd100k_night-yolo8n-seed-2",
+        model="yolov8n.yaml",
+        data=data,
+        project="",
+        seed=2,
+    )
+
+    train_model(
+        name="bdd100k_night-yolo9t-seed-1",
+        model="yolov9t.yaml",
+        data=data,
+        project="",
+        seed=1,
+    )
+
+    train_model(
+        name="bdd100k_night-yolo9t-seed-2",
+        model="yolov9t.yaml",
+        data=data,
+        project="",
+        seed=2,
+    )
 
     # run_seeded_train(
     #     iterations=3,
