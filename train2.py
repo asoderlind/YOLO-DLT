@@ -99,6 +99,7 @@ def train_model(
         warmup_bias_lr=warmup_bias_lr,
         project=project,
         classes=classes,
+        resume=resume,
         **kwargs,  # Pass any additional kwargs to train
     )
 
@@ -262,7 +263,7 @@ if __name__ == "__main__":
 
     train_model(
         name="bdd100k_night-yolo9t-seed-0",
-        model="runs/detect/bdd100k_night-yolo9t-seed-test-0/weights/last.pt",
+        model="runs/detect/bdd100k_night-yolo9t-seed-0/weights/last.pt",
         data=data,
         project="",
         resume=True,
