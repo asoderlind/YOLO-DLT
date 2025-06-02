@@ -1,6 +1,6 @@
 from ultralytics import YOLO
 
-model_bic_rfaconv = YOLO("runs/detect/bdd100k_night-yolo11n-bic-reduced-channel-rfac3k2/weights/last.pt")
+model_bic_rfaconv = YOLO("bic-rfac3k2.yaml")
 
 
 model_bic_rfaconv.val(
