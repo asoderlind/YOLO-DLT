@@ -1696,7 +1696,7 @@ class TemporalAttention(nn.Module):
         x_reg: torch.Tensor,
         cls_score: torch.Tensor,
         ave: bool = True,
-        sim_thresh: float = 0.75,
+        sim_thresh: float = 0.5,
     ) -> tuple[torch.Tensor, torch.Tensor] | tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Forward pass of the TemporalAttention module.
