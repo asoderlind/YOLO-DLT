@@ -42,6 +42,7 @@ def train_model(
     momentum=MOMENTUM,
     project=CLUSTER_OUTPUT_PATH,
     classes=None,
+    resume=None,
     **kwargs,
 ):
     """
@@ -261,7 +262,7 @@ if __name__ == "__main__":
 
     train_model(
         name="bdd100k_night-yolo9t-seed-0",
-        model="yolov9t.yaml",
+        model="runs/detect/bdd100k_night-yolo9t-seed-test-0/weights/last.pt",
         data=data,
         project="",
         resume=True,
