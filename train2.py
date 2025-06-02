@@ -254,21 +254,23 @@ def run_grid_search():
 
 
 if __name__ == "__main__":
-    data = "bdd100k_night_cluster.yaml"
+    data = "bdd100k_night.yaml"
     # waymo_night = "waymo_cluster_night.yaml"
     # waymo = "waymo_cluster.yaml"
     # bdd100k = "bdd100k_cluster.yaml"
 
     for i in range(3):
         train_model(
-            name=f"bdd100k_night_cluster-yolo9t-seed-{i}",
+            name=f"bdd100k_night-yolo9t-seed-{i}",
             model="yolov9t.yaml",
             data=data,
+            project="",
         )
         train_model(
-            name=f"bdd100k_night_cluster-yolo8n-seed-{i}",
+            name=f"bdd100k_night-yolo8n-seed-{i}",
             model="yolov8n.yaml",
             data=data,
+            project="",
         )
 
     # run_seeded_train(
