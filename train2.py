@@ -270,14 +270,6 @@ if __name__ == "__main__":
     )
 
     train_model(
-        name="bdd100k_night-yolo8n-seed-0",
-        model="yolov8n.yaml",
-        data=data,
-        project="",
-        seed=0,
-    )
-
-    train_model(
         name="bdd100k_night-yolo8n-seed-1",
         model="yolov8n.yaml",
         data=data,
