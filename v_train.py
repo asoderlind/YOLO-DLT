@@ -144,7 +144,12 @@ if __name__ == "__main__":
         dataset_type="temporal",
         nbs=16,
         lr0=0.005,
-        temporal_freeze=True,
+        # temporal_freeze=True,
+        box=0.0,  # (float) box loss gain
+        cls=0.0,  # (float) cls loss gain (scale with pixels)
+        dfl=0.0,  # (float) dfl loss gain
+        lambda_c=0.0,  # (float) loss weight for class label smoothing
+        temporal_cls=0.0,  # (float) temporal class loss gain
     )
 
     # train_model_v(
