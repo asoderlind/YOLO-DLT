@@ -132,24 +132,34 @@ if __name__ == "__main__":
     BDD100K_NIGHT_TEMPORAL_BASE = "runs/detect/bdd100k_night-yolo11n-temporal-base/weights/last.pt"
     # All runs have 16 nbs, 10% warmup, 4.0 gain, freeze true, cos_lr,
 
-    train_model_v(
-        name="waymo_dark-yolo11n-temporal-base-freeze-run",
-        model=WAYMO_TEMPORAL_BASE,
+    model = YOLO(WAYMO_TEMPORAL_BASE)
+    model.val(
+        name="waymo_dark-yolo11n-temporal-base_val",
         data="waymo_dark.yaml",
+        batch=1,
+        device="cuda",
         gframe=16,
-        epochs=40,
-        warmup_epochs=4,
-        cos_lr=True,
-        dataset_type="default",
-        nbs=16,
-        lr0=0.005,
-        # temporal_freeze=True,
-        box=0.0,  # (float) box loss gain
-        cls=0.0,  # (float) cls loss gain (scale with pixels)
-        dfl=0.0,  # (float) dfl loss gain
-        lambda_c=0.0,  # (float) loss weight for class label smoothing
-        temporal_cls=0.0,  # (float) temporal class loss gain
+        dataset_type="temporal",
     )
+
+    # train_model_v(
+    #     name="waymo_dark-yolo11n-temporal-base-freeze-run",
+    #     model=WAYMO_TEMPORAL_BASE,
+    #     data="waymo_dark.yaml",
+    #     gframe=16,
+    #     epochs=40,
+    #     warmup_epochs=4,
+    #     cos_lr=True,
+    #     dataset_type="default",
+    #     nbs=16,
+    #     lr0=0.005,
+    #     # temporal_freeze=True,
+    #     box=0.0,  # (float) box loss gain
+    #     cls=0.0,  # (float) cls loss gain (scale with pixels)
+    #     dfl=0.0,  # (float) dfl loss gain
+    #     lambda_c=0.0,  # (float) loss weight for class label smoothing
+    #     temporal_cls=0.0,  # (float) temporal class loss gain
+    # )
 
     # train_model_v(
     #     name="waymo_dark-yolo11n-40_e-8_lframe-8_gframe-2_tmp_stride-0.001_lr0-0.75_nms-temporal_dl-mosaic",
