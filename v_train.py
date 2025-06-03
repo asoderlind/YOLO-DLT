@@ -133,10 +133,10 @@ if __name__ == "__main__":
     # All runs have 16 nbs, 10% warmup, 4.0 gain, freeze true, cos_lr,
 
     model_temp = YOLO(
-        "waymo_dark-yolo11n-40_e-8_lframe-8_gframe-2_tmp_stride-0.001_lr0-0.75_nms-temporal_dl-mosaic/weights/last.pt"
+        "runs/detect/waymo_dark-yolo11n-40_e-8_lframe-8_gframe-2_tmp_stride-0.001_lr0-0.75_nms-temporal_dl-mosaic/weights/last.pt"
     )
     model_temp.val(
-        name="runs/detect/waymo_dark-yolo11n-40_e-8_lframe-8_gframe-2_tmp_stride-0.001_lr0-0.75_nms-temporal_dl-mosaic_val",
+        name="waymo_dark-yolo11n-40_e-8_lframe-8_gframe-2_tmp_stride-0.001_lr0-0.75_nms-temporal_dl-mosaic_val",
         data="waymo_dark.yaml",
         batch=1,
         device="cuda",
