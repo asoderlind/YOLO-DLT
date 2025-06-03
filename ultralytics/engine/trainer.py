@@ -281,7 +281,7 @@ class BaseTrainer:
                 LOGGER.info(f"Freezing layer '{k}'")
                 v.requires_grad = False
             elif not v.requires_grad and v.dtype.is_floating_point:  # only floating point Tensor can require gradients
-                if self.args.temporal_freeze and "cv2" in k or "cv3" in k:
+                if self.args.temporal_freeze and "cv2" in k or "cv3" in k or "vid_cls" in k:
                     # if temporal_freeze is active, cv2 and cv3 layers are frozen
                     continue
                 LOGGER.info(
