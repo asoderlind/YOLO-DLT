@@ -173,6 +173,17 @@ class Detect(nn.Module):
         i = torch.arange(batch_size)[..., None]  # batch indices
         return torch.cat([boxes[i, index // nc], scores[..., None], (index % nc)[..., None].float()], dim=-1)
 
+    def freeze_base_detector(self):
+        """Freeze the regular detection branches (cv2 and cv3) of the model."""
+        LOGGER.info("Freezing regular detection branches except for the last layer.")
+        for i in range(self.nl):
+            self.cv2[i].eval()
+            self.cv3[i].eval()
+            for param in self.cv2[i].parameters():
+                param.requires_grad = False
+            for param in self.cv3[i].parameters():
+                param.requires_grad = False
+
 
 class TemporalDetect(Detect):
     """YOLO Temporal detection head for video models."""
