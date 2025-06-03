@@ -136,7 +136,6 @@ if __name__ == "__main__":
         name="waymo_dark-yolo11n-temporal-base-freeze-run",
         model=WAYMO_TEMPORAL_BASE,
         data="waymo_dark.yaml",
-        batch=1,
         gframe=16,
         epochs=40,
         warmup_epochs=4,
