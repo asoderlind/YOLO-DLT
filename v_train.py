@@ -132,6 +132,18 @@ if __name__ == "__main__":
     BDD100K_NIGHT_TEMPORAL_BASE = "runs/detect/bdd100k_night-yolo11n-temporal-base/weights/last.pt"
     # All runs have 16 nbs, 10% warmup, 4.0 gain, freeze true, cos_lr,
 
+    model_temp = YOLO(
+        "waymo_dark-yolo11n-40_e-8_lframe-8_gframe-2_tmp_stride-0.001_lr0-0.75_nms-temporal_dl-mosaic/weights/last.pt"
+    )
+    model_temp.val(
+        name="waymo_dark-yolo11n-40_e-8_lframe-8_gframe-2_tmp_stride-0.001_lr0-0.75_nms-temporal_dl-mosaic_val",
+        data="waymo_dark.yaml",
+        batch=1,
+        device="cuda",
+        gframe=16,
+        dataset_type="temporal",
+    )
+
     model = YOLO(WAYMO_TEMPORAL_BASE)
     model.val(
         name="waymo_dark-yolo11n-temporal-base_val",
