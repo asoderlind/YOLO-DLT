@@ -302,6 +302,22 @@ if __name__ == "__main__":
         seed=2,
     )
 
+    train_model(
+        name="bdd100k_night-yolo11s-seed-1",
+        model="yolo11s.yaml",
+        data=data,
+        project="",
+        seed=1,
+    )
+
+    train_model(
+        name="bdd100k_night-yolo11s-seed-2",
+        model="yolo11s.yaml",
+        data=data,
+        project="",
+        seed=2,
+    )
+
     # run_seeded_train(
     #     iterations=3,
     #     name="bdd100k_night_cluster-yolo9t",
