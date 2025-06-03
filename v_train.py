@@ -136,7 +136,7 @@ if __name__ == "__main__":
         "waymo_dark-yolo11n-40_e-8_lframe-8_gframe-2_tmp_stride-0.001_lr0-0.75_nms-temporal_dl-mosaic/weights/last.pt"
     )
     model_temp.val(
-        name="waymo_dark-yolo11n-40_e-8_lframe-8_gframe-2_tmp_stride-0.001_lr0-0.75_nms-temporal_dl-mosaic_val",
+        name="runs/detect/waymo_dark-yolo11n-40_e-8_lframe-8_gframe-2_tmp_stride-0.001_lr0-0.75_nms-temporal_dl-mosaic_val",
         data="waymo_dark.yaml",
         batch=1,
         device="cuda",
