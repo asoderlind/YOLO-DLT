@@ -141,7 +141,7 @@ if __name__ == "__main__":
         epochs=40,
         warmup_epochs=4,
         cos_lr=True,
-        dataset_type="temporal",
+        dataset_type="default",
         nbs=16,
         lr0=0.005,
         # temporal_freeze=True,
