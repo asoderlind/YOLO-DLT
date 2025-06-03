@@ -239,7 +239,10 @@ class DetectionValidator(BaseValidator):
             mode (str): `train` mode or `val` mode, users are able to customize different augmentations for each mode.
             batch (int, optional): Size of batches, this is for `rect`. Defaults to None.
         """
-        return build_yolo_dataset(self.args, img_path, batch, self.data, mode=mode, stride=self.stride)
+        dataset_type = self.args.dataset_type
+        return build_yolo_dataset(
+            self.args, img_path, batch, self.data, mode=mode, stride=self.stride, dataset_type=dataset_type
+        )
 
     def get_dataloader(self, dataset_path, batch_size):
         """Construct and return dataloader."""
