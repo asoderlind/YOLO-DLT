@@ -133,23 +133,38 @@ if __name__ == "__main__":
     # All runs have 16 nbs, 10% warmup, 4.0 gain, freeze true, cos_lr,
 
     train_model_v(
-        name="waymo_dark-yolo11n-40_e-8_lframe-8_gframe-2_tmp_stride-0.001_lr0-0.75_nms-temporal_dl-mosaic",
-        model="dlt-models/yolo11n-temporal-nms-0.75.yaml",
-        model_load_path=WAYMO_TEMPORAL_BASE,
+        name="waymo_dark-yolo11n-temporal-base-freeze-run",
+        model=WAYMO_TEMPORAL_BASE,
         data="waymo_dark.yaml",
-        lframe=8,
-        gframe=8,
         batch=1,
-        temporal_freeze=True,
-        temporal_cls=4.0,
+        gframe=16,
         epochs=40,
         warmup_epochs=4,
         cos_lr=True,
         dataset_type="temporal",
-        lr0=0.005,
         nbs=16,
-        temporal_stride=2,  # Using temporal stride of 2
+        lr0=0.005,
+        temporal_freeze=True,
     )
+
+    # train_model_v(
+    #     name="waymo_dark-yolo11n-40_e-8_lframe-8_gframe-2_tmp_stride-0.001_lr0-0.75_nms-temporal_dl-mosaic",
+    #     model="dlt-models/yolo11n-temporal-nms-0.75.yaml",
+    #     model_load_path=WAYMO_TEMPORAL_BASE,
+    #     data="waymo_dark.yaml",
+    #     lframe=8,
+    #     gframe=8,
+    #     batch=1,
+    #     temporal_freeze=True,
+    #     temporal_cls=4.0,
+    #     epochs=40,
+    #     warmup_epochs=4,
+    #     cos_lr=True,
+    #     dataset_type="temporal",
+    #     lr0=0.005,
+    #     nbs=16,
+    #     temporal_stride=2,  # Using temporal stride of 2
+    # )
 
     # train_model_v(
     #     name="waymo_dark-yolo11n-40_e-8_lframe-8_gframe-0.005_lr0-0.75_nms-temporal_dl-mosaic",
