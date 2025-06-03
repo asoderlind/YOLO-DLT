@@ -297,6 +297,16 @@ class BaseModel(torch.nn.Module):
                     continue
                 LOGGER.info(f"Transferring {key} to {TEMPORAL_MAPPING[key]}")
                 csd[TEMPORAL_MAPPING[key]] = csd.pop(key)
+
+            # Handle feature copying (cv3 -> vid_cls)
+            if hasattr(self, "args") and self.args.get("vid_cls_mapping", False):
+                LOGGER.info("Copying cv3 to vid_cls mapping")
+                cv3_to_vid_cls_mapping = self.model[-1].generate_cv3_to_vid_cls_mapping()
+                for source_key, target_key in cv3_to_vid_cls_mapping.items():
+                    if source_key not in csd:
+                        continue
+                    LOGGER.info(f"Copying {source_key} to {target_key}")
+                    csd[target_key] = csd[source_key].clone()  # Use clone() to avoid reference issues
         csd = intersect_dicts(csd, self.state_dict())  # intersect
         self.load_state_dict(csd, strict=False)  # load
         if verbose:

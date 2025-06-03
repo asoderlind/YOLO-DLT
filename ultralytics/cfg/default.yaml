@@ -14,6 +14,7 @@ temporal_stride: 1 # (int) temporal window stride (take the previous reference f
 lframe_val: -1 # (int) number of local frames to use for temporal validation
 gframe_val: -1 # (int) number of global frames to use for temporal validation
 temporal_stride_val: -1 # (int) temporal window stride (take the previous reference frames every n frames)
+vid_cls_mapping: False # (bool) whether to use load video cls branch with weights from the model
 use_fe: False # (bool) use feature enhancement for training
 iou_type: ciou # (str) iou loss type, i.e. "iou", "giou", "diou", "ciou", "nwd", "wiou", "wiou1", "wiou2", "wiou3", "siou", "ciou+nwd (80/20)", "eiou", "focal-eiou", "isiou", "thiou"
 model: # (str, optional) path to model file, i.e. yolov8n.pt, yolov8n.yaml

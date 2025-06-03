@@ -531,6 +531,32 @@ class TemporalDetect(Detect):
             for param in self.cv3[i].parameters():
                 param.requires_grad = False
 
+    def generate_cv3_to_vid_cls_mapping(self):
+        """Generate mapping from cv3 to vid_cls branches"""
+        mapping = {}
+
+        # For each detection head (0, 1, 2)
+        for head_idx in range(3):
+            # For each sequential block (0, 1) - excluding the final Conv2d at index 2
+            for seq_idx in range(2):
+                # For each layer in the sequential block (0, 1)
+                for layer_idx in range(2):
+                    base_path = f"model.23.cv3.{head_idx}.{seq_idx}.{layer_idx}"
+                    target_path = f"model.23.vid_cls.{head_idx}.{seq_idx}.{layer_idx}"
+
+                    # Map all conv and bn parameters (including num_batches_tracked)
+                    for param in [
+                        "conv.weight",
+                        "bn.weight",
+                        "bn.bias",
+                        "bn.running_mean",
+                        "bn.running_var",
+                        "bn.num_batches_tracked",
+                    ]:
+                        mapping[f"{base_path}.{param}"] = f"{target_path}.{param}"
+
+        return mapping
+
 
 class EOVODDetect(Detect):
     """YOLO EOVOD detection head for end-to-end video object detection models."""
