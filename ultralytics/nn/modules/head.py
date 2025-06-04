@@ -532,13 +532,13 @@ class TemporalDetect(Detect):
                 param.requires_grad = False
             for param in self.cv3[i].parameters():
                 param.requires_grad = False
-            for param in self.cv2_pred[i].parameters():
-                param.requires_grad = False
-            for param in self.cv3_pred[i].parameters():
-                param.requires_grad = False
-            if self.vid_cls:
-                for param in self.vid_cls[i].parameters():
-                    param.requires_grad = False
+            # for param in self.cv2_pred[i].parameters():
+            #     param.requires_grad = False
+            # for param in self.cv3_pred[i].parameters():
+            #     param.requires_grad = False
+            # if self.vid_cls:
+            #     for param in self.vid_cls[i].parameters():
+            #         param.requires_grad = False
 
     def generate_cv3_to_vid_cls_mapping(self):
         """Generate mapping from cv3 to vid_cls branches"""
