@@ -286,21 +286,57 @@ if __name__ == "__main__":
     #     resume=True,
     # )
 
+    # train_model(
+    #     name="bdd100k_night-yolo9t-seed-1",
+    #     model="runs/detect/bdd100k_night-yolo9t-seed-12/weights/last.pt",
+    #     data=data,
+    #     project="",
+    #     seed=1,
+    #     resume=True,
+    # )
+
     train_model(
-        name="bdd100k_night-yolo9t-seed-1",
-        model="runs/detect/bdd100k_night-yolo9t-seed-12/weights/last.pt",
+        name="bdd100k_night-yolo11n-bic-repc3k2-wiou2-seed-2",
+        model="dlt-models/yolo11n-bic-repc3k2.yaml",
         data=data,
         project="",
-        seed=1,
-        resume=True,
+        seed=2,
+        iou_type="wiou2",
+    )
+
+    train_model(
+        name="bdd100k_night-yolo11n-bic-repc3k2-nwd-seed-2",
+        model="dlt-models/yolo11n-bic-repc3k2.yaml",
+        data=data,
+        project="",
+        seed=2,
+        iou_type="nwd",
+    )
+
+    train_model(
+        name="bdd100k_night-yolo11n-bic-repc3k2-mpdiou-seed-2",
+        model="dlt-models/yolo11n-bic-repc3k2.yaml",
+        data=data,
+        project="",
+        seed=2,
+        iou_type="mpdiou",
+    )
+
+    train_model(
+        name="bdd100k_night-yolo11n-bic-repc3k2-simsppf-seed-2",
+        model="dlt-models/yolo11n-bic-repc3k2-simsppf.yaml",
+        data=data,
+        project="",
+        seed=2,
     )
 
     train_model(
         name="bdd100k_night-yolo9t-seed-2",
-        model="yolov9t.yaml",
+        model="runs/detect/bdd100k_night-yolo9t-seed-2/weights/last.pt",
         data=data,
         project="",
         seed=2,
+        resume=True,
     )
 
     train_model(
