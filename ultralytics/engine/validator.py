@@ -219,7 +219,7 @@ class BaseValidator:
 
             # Enhanced NMS Analysis
             with dt[3]:
-                if isinstance(preds, tuple) and len(preds) >= 4:
+                if isinstance(preds, list) and len(preds) >= 4:
                     # Extract predictions
                     enhanced_preds = preds[0]  # Enhanced predictions
                     raw_preds = preds[3]  # Raw predictions
@@ -372,7 +372,6 @@ class BaseValidator:
 
         # Convert to DataFrame for easier analysis
         df_after = pd.DataFrame(self.nms_analysis["after_nms"])
-        breakpoint()
         summary = {
             "total_images": len(df_after),
             "avg_enhanced_detections": df_after["enhanced_count"].mean(),
