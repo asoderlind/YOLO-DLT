@@ -1673,7 +1673,7 @@ class TemporalAttention(nn.Module):
         num_heads: int = 4,
         qkv_bias=False,
         attn_drop: float = 0.0,
-        scale: float = 0.25,
+        scale: float = 25,
         mode: FAM_MODE = "both",
     ) -> None:
         # channels :input[batch_size,sequence_length, channels]-->output[batch_size, sequence_length, channels]
@@ -1696,7 +1696,7 @@ class TemporalAttention(nn.Module):
         x_reg: torch.Tensor,
         cls_score: torch.Tensor,
         ave: bool = True,
-        sim_thresh: float = 0.5,
+        sim_thresh: float = 0.75,
     ) -> tuple[torch.Tensor, torch.Tensor] | tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Forward pass of the TemporalAttention module.
