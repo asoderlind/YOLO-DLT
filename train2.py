@@ -288,10 +288,11 @@ if __name__ == "__main__":
 
     train_model(
         name="bdd100k_night-yolo9t-seed-1",
-        model="yolov9t.yaml",
+        model="runs/detect/bdd100k_night-yolo9t-seed-12/weights/last.pt",
         data=data,
         project="",
         seed=1,
+        resume=True,
     )
 
     train_model(
