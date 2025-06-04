@@ -456,105 +456,104 @@ class v8DetectionLoss:
 
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
 
-    def _calculate_temporal_cls_loss_iou_based(
-        self,
-        refined_cls_preds: torch.Tensor,
-        pred_res: list[torch.Tensor],
-        pred_idx: list[torch.Tensor],
-        target_scores: torch.Tensor,
-        fg_mask: torch.Tensor,
-        gt_labels: torch.Tensor,
-        gt_bboxes: torch.Tensor,
-        batch_size: int,
-        dtype,
-        raw_predictions: torch.Tensor,
-    ) -> torch.Tensor:
-        """
-        Calculate temporal loss exactly like YOLOV - reuse standard assigner results when possible.
+    # def _calculate_temporal_cls_loss_iou_based(
+    #     self,
+    #     refined_cls_preds: torch.Tensor,
+    #     pred_res: list[torch.Tensor],
+    #     pred_idx: list[torch.Tensor],
+    #     target_scores: torch.Tensor,
+    #     fg_mask: torch.Tensor,
+    #     gt_labels: torch.Tensor,
+    #     gt_bboxes: torch.Tensor,
+    #     batch_size: int,
+    #     dtype,
+    #     raw_predictions: torch.Tensor,
+    # ) -> torch.Tensor:
+    #     """
+    #     Calculate temporal loss exactly like YOLOV - reuse standard assigner results when possible.
 
-        Args:
-            refined_cls_preds (torch.Tensor): Refined cls predictions [1, total_target_count, num_classes]
-            pred_res (list[torch.Tensor]): List of tensors with predictions for each batch, len B [up to topk_post, 4 + nc]
-            pred_idx (list[torch.Tensor]): List of tensors with indices for each batch, len B [up to topk_post]
-            target_scores (torch.Tensor): Target cls scores for each anchor point [B, sum(h_i * w_i), num_classes]
-            fg_mask (torch.Tensor): Foreground mask for each anchor point [B, sum(h_i * w_i)]
-            gt_labels (torch.Tensor): Ground truth labels for each batch [B, num_gt, 1]
-            raw_predictions (torch.Tensor): Raw predictions for debug purposes [B, 4 + nc, sum(h_i * w_i)]
+    #     Args:
+    #         refined_cls_preds (torch.Tensor): Refined cls predictions [1, total_target_count, num_classes]
+    #         pred_res (list[torch.Tensor]): List of tensors with predictions for each batch, len B [up to topk_post, 4 + nc]
+    #         pred_idx (list[torch.Tensor]): List of tensors with indices for each batch, len B [up to topk_post]
+    #         target_scores (torch.Tensor): Target cls scores for each anchor point [B, sum(h_i * w_i), num_classes]
+    #         fg_mask (torch.Tensor): Foreground mask for each anchor point [B, sum(h_i * w_i)]
+    #         gt_labels (torch.Tensor): Ground truth labels for each batch [B, num_gt, 1]
+    #         raw_predictions (torch.Tensor): Raw predictions for debug purposes [B, 4 + nc, sum(h_i * w_i)]
 
+    #     """
+    #     from ultralytics.utils.metrics import box_iou
+    #     from ultralytics.utils.ops import xywh2xyxy
 
-        """
-        from ultralytics.utils.metrics import box_iou
-        from ultralytics.utils.ops import xywh2xyxy
+    #     ref_targets: list[torch.Tensor] = []
+    #     ref_masks: list[torch.Tensor] = []
 
-        ref_targets: list[torch.Tensor] = []
-        ref_masks: list[torch.Tensor] = []
+    #     for batch_idx in range(batch_size):
+    #         num_detections = len(pred_idx[batch_idx])
 
-        for batch_idx in range(batch_size):
-            num_detections = len(pred_idx[batch_idx])
+    #         # Create target tensor for this batch [num_detections, num_classes + 1]
+    #         ref_target = torch.zeros(num_detections, self.nc + 1, device=self.device, dtype=dtype)
 
-            # Create target tensor for this batch [num_detections, num_classes + 1]
-            ref_target = torch.zeros(num_detections, self.nc + 1, device=self.device, dtype=dtype)
+    #         # Get foreground anchors from standard assigner
+    #         # All anchors that were assigned to foreground objects
+    #         fg_indices = torch.where(fg_mask[batch_idx])[0]
 
-            # Get foreground anchors from standard assigner
-            # All anchors that were assigned to foreground objects
-            fg_indices = torch.where(fg_mask[batch_idx])[0]
+    #         # Process each refined detection
+    #         for det_idx, anchor_idx in enumerate(pred_idx[batch_idx]):
+    #             # Check if this anchor was assigned by standard assigner
 
-            # Process each refined detection
-            for det_idx, anchor_idx in enumerate(pred_idx[batch_idx]):
-                # Check if this anchor was assigned by standard assigner
+    #             assigned_mask = fg_indices == anchor_idx
+    #             if assigned_mask.any():
+    #                 # Use standard assigner's target
+    #                 ref_target[det_idx, : self.nc] = target_scores[batch_idx, anchor_idx]
+    #             else:
+    #                 # Fall back to IoU-based matching (like YOLOV)
+    #                 pred_box = xywh2xyxy(pred_res[batch_idx][det_idx, :4].unsqueeze(0))
 
-                assigned_mask = fg_indices == anchor_idx
-                if assigned_mask.any():
-                    # Use standard assigner's target
-                    ref_target[det_idx, : self.nc] = target_scores[batch_idx, anchor_idx]
-                else:
-                    # Fall back to IoU-based matching (like YOLOV)
-                    pred_box = xywh2xyxy(pred_res[batch_idx][det_idx, :4].unsqueeze(0))
+    #                 # Get valid GT for this batch
+    #                 batch_gt_boxes = gt_bboxes[batch_idx]
+    #                 batch_gt_labels = gt_labels[batch_idx, :, 0]
+    #                 valid_gt_mask = batch_gt_boxes.sum(dim=1) > 0
 
-                    # Get valid GT for this batch
-                    batch_gt_boxes = gt_bboxes[batch_idx]
-                    batch_gt_labels = gt_labels[batch_idx, :, 0]
-                    valid_gt_mask = batch_gt_boxes.sum(dim=1) > 0
+    #                 if valid_gt_mask.any():
+    #                     valid_gt_boxes = batch_gt_boxes[valid_gt_mask]
+    #                     valid_gt_labels = batch_gt_labels[valid_gt_mask]
 
-                    if valid_gt_mask.any():
-                        valid_gt_boxes = batch_gt_boxes[valid_gt_mask]
-                        valid_gt_labels = batch_gt_labels[valid_gt_mask]
+    #                     # Compute IoU
+    #                     ious = box_iou(pred_box, valid_gt_boxes)
+    #                     max_iou, matched_idx = ious.max(dim=1)
 
-                        # Compute IoU
-                        ious = box_iou(pred_box, valid_gt_boxes)
-                        max_iou, matched_idx = ious.max(dim=1)
+    #                     if max_iou >= 0.6:
+    #                         # High IoU - create soft label
+    #                         gt_class = valid_gt_labels[matched_idx].long()
+    #                         ref_target[det_idx, gt_class] = max_iou.item()
+    #                     else:
+    #                         # Low IoU - background
+    #                         ref_target[det_idx, -1] = 1 - max_iou.item()
+    #                 else:
+    #                     # No valid GT - background
+    #                     ref_target[det_idx, -1] = 1.0
 
-                        if max_iou >= 0.6:
-                            # High IoU - create soft label
-                            gt_class = valid_gt_labels[matched_idx].long()
-                            ref_target[det_idx, gt_class] = max_iou.item()
-                        else:
-                            # Low IoU - background
-                            ref_target[det_idx, -1] = 1 - max_iou.item()
-                    else:
-                        # No valid GT - background
-                        ref_target[det_idx, -1] = 1.0
+    #         # Extract targets and foreground mask
+    #         ref_targets.append(ref_target[:, : self.nc])
+    #         ref_masks.append(ref_target[:, -1] == 0)
 
-            # Extract targets and foreground mask
-            ref_targets.append(ref_target[:, : self.nc])
-            ref_masks.append(ref_target[:, -1] == 0)
+    #     # Concatenate all batches
+    #     ref_targets = torch.cat(ref_targets, dim=0)  # type: ignore[assignment]
+    #     ref_masks = torch.cat(ref_masks, dim=0)  # type: ignore[assignment]
 
-        # Concatenate all batches
-        ref_targets = torch.cat(ref_targets, dim=0)  # type: ignore[assignment]
-        ref_masks = torch.cat(ref_masks, dim=0)  # type: ignore[assignment]
+    #     # Flatten refined predictions
+    #     refined_preds_flat = refined_cls_preds.view(-1, self.nc)
 
-        # Flatten refined predictions
-        refined_preds_flat = refined_cls_preds.view(-1, self.nc)
+    #     # Compute loss
+    #     if not ref_masks.sum():
+    #         return torch.tensor(0.0, device=self.device)
 
-        # Compute loss
-        if not ref_masks.sum():
-            return torch.tensor(0.0, device=self.device)
+    #     ref_targets_sum = max(ref_targets[ref_masks].sum(), 1)
 
-        ref_targets_sum = max(ref_targets[ref_masks].sum(), 1)
+    #     loss_ref = self.bce(refined_preds_flat[ref_masks], ref_targets[ref_masks]).sum() / ref_targets_sum
 
-        loss_ref = self.bce(refined_preds_flat[ref_masks], ref_targets[ref_masks]).sum() / ref_targets_sum
-
-        return loss_ref
+    #     return loss_ref
 
     def _calculate_temporal_cls_loss_aligned(
         self,
