@@ -372,7 +372,7 @@ class BaseValidator:
 
         # Convert to DataFrame for easier analysis
         df_after = pd.DataFrame(self.nms_analysis["after_nms"])
-
+        breakpoint()
         summary = {
             "total_images": len(df_after),
             "avg_enhanced_detections": df_after["enhanced_count"].mean(),
