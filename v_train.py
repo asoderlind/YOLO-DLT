@@ -133,7 +133,7 @@ if __name__ == "__main__":
     # All runs have 16 nbs, 10% warmup, 4.0 gain, freeze true, cos_lr,
 
     train_model_v(
-        name="waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-25.0_attn_scale-0.5_tau-fixed",
+        name="waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-25.0_attn_scale-fixed-2",
         model="dlt-models/yolo11n-temporal-nms-0.75.yaml",
         model_load_path=WAYMO_TEMPORAL_BASE,
         data="waymo_dark.yaml",
@@ -148,6 +148,23 @@ if __name__ == "__main__":
         lr0=0.005,
         nbs=16,
     )
+
+    # train_model_v(
+    #     name="waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-25.0_attn_scale-0.5_tau-fixed",
+    #     model="dlt-models/yolo11n-temporal-nms-0.75.yaml",
+    #     model_load_path=WAYMO_TEMPORAL_BASE,
+    #     data="waymo_dark.yaml",
+    #     gframe=16,
+    #     batch=1,
+    #     temporal_freeze=True,
+    #     temporal_cls=4.0,
+    #     epochs=40,
+    #     warmup_epochs=4,
+    #     cos_lr=True,
+    #     dataset_type="temporal",
+    #     lr0=0.005,
+    #     nbs=16,
+    # )
 
     # train_model_v(
     #     name="waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-12.5_attn_scale-fixed",

@@ -596,7 +596,9 @@ class v8DetectionLoss:
             flat_raw_pred_cls = torch.cat(batch_raw_pred_cls, dim=0)  # [total_enhanced, num_classes]
 
             # Apply sigmoid to get probabilities for analysis
-            raw_probs = torch.sigmoid(flat_raw_pred_cls)
+            # Note: raw_predictions are already logits, so we can use them directly
+            # refined cls_preds are not logits, so we apply sigmoid
+            raw_probs = flat_raw_pred_cls.clone()  # torch.sigmoid(flat_raw_pred_cls)
             refined_probs = torch.sigmoid(refined_cls_preds)
 
             # Get predicted classes and confidences
