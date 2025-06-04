@@ -1,13 +1,13 @@
 from ultralytics import YOLO
 
-model_name = "waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-2.5_attn_scale3"
+model_name = "waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-12.5_attn_scale-fixed"
 
 model = YOLO(f"runs/detect/{model_name}/weights/last.pt")
 
 # WAYMO_TEMPORAL_BASE = "runs/detect/waymo_dark-yolo11n-temporal-base/weights/last.pt"
 # model = YOLO(WAYMO_TEMPORAL_BASE)
 
-for i in range(1, 3):
+for i in range(0, 3):
     model.val(
         # name="waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-0.25_attn_scale3",
         name=f"{model_name}-val-seed-{i}",
