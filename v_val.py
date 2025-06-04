@@ -1,6 +1,6 @@
 from ultralytics import YOLO
 
-model_name = "waymo_dark-yolo11n-40_e-8_lframe-8_gframe-mosaic-fixed"
+model_name = "waymo_dark-yolo11n-40_e-8_lframe-8_gframe-2_tmp_stride-mosaic-fixed"
 
 model = YOLO(f"runs/detect/{model_name}/weights/last.pt")
 
@@ -18,4 +18,5 @@ for i in range(1, 3):
         dataset_type="temporal",
         device="cuda",
         seed=i,
+        temporal_stride=2,
     )
