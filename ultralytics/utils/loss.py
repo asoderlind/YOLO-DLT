@@ -575,7 +575,7 @@ class v8DetectionLoss:
         enhanced_targets = []
         raw_prediction_cls = raw_predictions[:, 4:, :].permute(0, 2, 1).contiguous()  # [B, sum(h_i * w_i), nc]
         batch_raw_pred_cls = []
-
+        breakpoint()
         for batch_idx in range(batch_size):
             # Use standard assigner results for ALL enhanced predictions
             batch_targets = target_scores[batch_idx, pred_idx[batch_idx]]  # [num_enhanced, num_classes]
