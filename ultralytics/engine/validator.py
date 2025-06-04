@@ -110,6 +110,15 @@ class BaseValidator:
         """Executes validation process, running inference on dataloader and computing performance metrics."""
         self.training = trainer is not None
         augment = self.args.augment and (not self.training)
+        # Initialize NMS analysis tracking
+        self.nms_analysis = {
+            "before_nms": [],
+            "after_nms": [],
+            "filtered_by_conf": [],
+            "filtered_by_nms": [],
+            "conf_distribution": [],
+            "detection_counts": [],
+        }
         if self.training:
             self.device = trainer.device
             self.data = trainer.data
@@ -122,6 +131,28 @@ class BaseValidator:
             self.args.plots &= trainer.stopper.possible_stop or (trainer.epoch == trainer.epochs - 1)
             model.eval()
         else:
+            self.nms_log_file = f"nms_analysis_{self.args.name}.tsv"
+            with open(self.nms_log_file, "w") as f:
+                headers = [
+                    "batch_idx",
+                    "image_idx",
+                    "stage",
+                    "num_detections",
+                    "num_enhanced",
+                    "num_raw",
+                    "conf_thresh",
+                    "avg_conf_before",
+                    "avg_conf_after",
+                    "min_conf_before",
+                    "max_conf_before",
+                    "min_conf_after",
+                    "max_conf_after",
+                    "filtered_by_conf",
+                    "filtered_by_nms",
+                    "precision_change",
+                    "recall_change",
+                ]
+                f.write("\t".join(headers) + "\n")
             if str(self.args.model).endswith(".yaml") and model is None:
                 LOGGER.warning("WARNING ⚠️ validating an untrained model YAML will result in 0 mAP.")
             callbacks.add_integration_callbacks(self)
@@ -186,10 +217,28 @@ class BaseValidator:
                 if self.training:
                     self.loss += model.loss(batch, preds, is_validation=True)[1]
 
-            # Postprocess
+            # Enhanced NMS Analysis
             with dt[3]:
-                breakpoint()
-                preds = self.postprocess(preds)
+                if isinstance(preds, tuple) and len(preds) >= 4:
+                    # Extract predictions
+                    enhanced_preds = preds[0]  # Enhanced predictions
+                    raw_preds = preds[3]  # Raw predictions
+
+                    # Analyze before NMS
+                    self._analyze_pre_nms(enhanced_preds, raw_preds, batch_i)
+
+                    # Apply NMS to both
+                    enhanced_output = self.postprocess((enhanced_preds,))
+                    raw_output = self.postprocess((raw_preds,))
+
+                    # Analyze after NMS
+                    self._analyze_post_nms(enhanced_output, raw_output, enhanced_preds, raw_preds, batch_i)
+
+                    # Use enhanced predictions for metrics
+                    preds = enhanced_output
+                else:
+                    # Standard postprocess for non-temporal models
+                    preds = self.postprocess(preds)
 
             self.update_metrics(preds, batch)
             if self.args.plots and batch_i < 3:
@@ -220,7 +269,133 @@ class BaseValidator:
                 stats = self.eval_json(stats)  # update stats
             if self.args.plots or self.args.save_json:
                 LOGGER.info(f"Results saved to {colorstr('bold', self.save_dir)}")
+
+            # Save NMS analysis summary
+            if not self.training:
+                self._save_nms_analysis_summary()
             return stats
+
+    def _analyze_pre_nms(self, enhanced_preds, raw_preds, batch_idx):
+        """Analyze predictions before NMS is applied."""
+        bs = enhanced_preds.shape[0]
+
+        for img_idx in range(bs):
+            # Get predictions for this image
+            enh_pred = enhanced_preds[img_idx]  # [nc+4, num_anchors]
+            raw_pred = raw_preds[img_idx]
+
+            # Extract confidence scores (max class probability)
+            enh_conf = enh_pred[4 : 4 + self.nc].max(0)[0]  # [num_anchors]
+            raw_conf = raw_pred[4 : 4 + self.nc].max(0)[0]
+
+            # Count predictions above confidence threshold
+            enh_above_thresh = (enh_conf > self.args.conf).sum().item()
+            raw_above_thresh = (raw_conf > self.args.conf).sum().item()
+
+            # Store statistics
+            self.nms_analysis["before_nms"].append(
+                {
+                    "batch_idx": batch_idx,
+                    "img_idx": img_idx,
+                    "enhanced_total": len(enh_conf),
+                    "enhanced_above_conf": enh_above_thresh,
+                    "raw_above_conf": raw_above_thresh,
+                    "enhanced_conf_mean": enh_conf.mean().item(),
+                    "raw_conf_mean": raw_conf.mean().item(),
+                    "enhanced_conf_std": enh_conf.std().item(),
+                    "raw_conf_std": raw_conf.std().item(),
+                }
+            )
+
+    def _analyze_post_nms(self, enhanced_output, raw_output, enhanced_preds, raw_preds, batch_idx):
+        """Analyze predictions after NMS is applied."""
+        bs = len(enhanced_output)
+
+        for img_idx in range(bs):
+            enh_dets = enhanced_output[img_idx]  # [n_dets, 6+]
+            raw_dets = raw_output[img_idx]
+
+            # Count detections
+            n_enh = len(enh_dets)
+            n_raw = len(raw_dets)
+
+            # Get confidence statistics after NMS
+            enh_confs = enh_dets[:, 4] if n_enh > 0 else torch.tensor([])
+            raw_confs = raw_dets[:, 4] if n_raw > 0 else torch.tensor([])
+
+            # Analyze filtering
+            pre_nms_stats = self.nms_analysis["before_nms"][-1]
+            filtered_by_conf_enh = pre_nms_stats["enhanced_total"] - pre_nms_stats["enhanced_above_conf"]
+            filtered_by_nms_enh = pre_nms_stats["enhanced_above_conf"] - n_enh
+
+            # Log to TSV
+            if not self.training:
+                with open(self.nms_log_file, "a") as f:
+                    row = [
+                        batch_idx,
+                        img_idx,
+                        "post_nms",
+                        n_enh,
+                        n_enh,
+                        n_raw,
+                        self.args.conf,
+                        pre_nms_stats["enhanced_conf_mean"],
+                        enh_confs.mean().item() if n_enh > 0 else 0,
+                        pre_nms_stats["enhanced_conf_mean"] - 2 * pre_nms_stats["enhanced_conf_std"],
+                        pre_nms_stats["enhanced_conf_mean"] + 2 * pre_nms_stats["enhanced_conf_std"],
+                        enh_confs.min().item() if n_enh > 0 else 0,
+                        enh_confs.max().item() if n_enh > 0 else 0,
+                        filtered_by_conf_enh,
+                        filtered_by_nms_enh,
+                        (n_enh - n_raw) / max(n_raw, 1),  # relative change
+                        0,  # placeholder for recall change
+                    ]
+                    f.write("\t".join(map(str, row)) + "\n")
+
+            self.nms_analysis["after_nms"].append(
+                {
+                    "batch_idx": batch_idx,
+                    "img_idx": img_idx,
+                    "enhanced_count": n_enh,
+                    "raw_count": n_raw,
+                    "count_diff": n_enh - n_raw,
+                    "enhanced_conf_mean": enh_confs.mean().item() if n_enh > 0 else 0,
+                    "raw_conf_mean": raw_confs.mean().item() if n_raw > 0 else 0,
+                    "filtered_by_conf": filtered_by_conf_enh,
+                    "filtered_by_nms": filtered_by_nms_enh,
+                }
+            )
+
+    def _save_nms_analysis_summary(self):
+        """Save summary statistics of NMS analysis."""
+        import pandas as pd
+
+        # Convert to DataFrame for easier analysis
+        df_after = pd.DataFrame(self.nms_analysis["after_nms"])
+
+        summary = {
+            "total_images": len(df_after),
+            "avg_enhanced_detections": df_after["enhanced_count"].mean(),
+            "avg_raw_detections": df_after["raw_count"].mean(),
+            "avg_detection_diff": df_after["count_diff"].mean(),
+            "images_with_fewer_enhanced": (df_after["count_diff"] < 0).sum(),
+            "images_with_more_enhanced": (df_after["count_diff"] > 0).sum(),
+            "avg_filtered_by_conf": df_after["filtered_by_conf"].mean(),
+            "avg_filtered_by_nms": df_after["filtered_by_nms"].mean(),
+        }
+
+        # Save summary
+        with open(f"nms_analysis_summary_{self.args.name}.txt", "w") as f:
+            for key, value in summary.items():
+                f.write(f"{key}: {value}\n")
+
+        LOGGER.info("NMS Analysis Summary saved. Key findings:")
+        LOGGER.info(
+            f"  - Avg detections: Enhanced={summary['avg_enhanced_detections']:.1f}, Raw={summary['avg_raw_detections']:.1f}"
+        )
+        LOGGER.info(f"  - Images with fewer enhanced detections: {summary['images_with_fewer_enhanced']}")
+        LOGGER.info(f"  - Avg filtered by confidence: {summary['avg_filtered_by_conf']:.1f}")
+        LOGGER.info(f"  - Avg filtered by NMS: {summary['avg_filtered_by_nms']:.1f}")
 
     def match_predictions(self, pred_classes, true_classes, iou, use_scipy=False):
         """
