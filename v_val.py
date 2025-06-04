@@ -1,6 +1,6 @@
 from ultralytics import YOLO
 
-model_name = "waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-5.0_attn_scale-fixed"
+model_name = "waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-2.5_attn_scale3"
 
 model = YOLO(f"runs/detect/{model_name}/weights/last.pt")
 
