@@ -129,6 +129,7 @@ class Detect(nn.Module):
             return dbox.transpose(1, 2), cls.sigmoid().permute(0, 2, 1)
         else:
             dbox = self.decode_bboxes(self.dfl(box), self.anchors.unsqueeze(0)) * self.strides
+            breakpoint()
         return torch.cat((dbox, cls.sigmoid()), 1)
 
     def bias_init(self):
