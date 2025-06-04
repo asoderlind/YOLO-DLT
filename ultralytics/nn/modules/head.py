@@ -369,8 +369,6 @@ class TemporalDetect(Detect):
                 pred_res,  # [batch_size, topk_post, 4 + num_classes]
                 pred_idx,  # [batch_size, topk_post]
             )
-        # just for fun, try updating the refined classes by a 1.2 multiplication
-        final_cls_preds = final_cls_preds * 1.2  # [1, topk_post, num_classes]
         y = self._update_predictions_with_refined_classes(raw_predictions, final_cls_preds, pred_idx)
 
         # y = raw_predictions
