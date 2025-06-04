@@ -133,7 +133,7 @@ if __name__ == "__main__":
     # All runs have 16 nbs, 10% warmup, 4.0 gain, freeze true, cos_lr,
 
     train_model_v(
-        name="waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-25.0_attn_scale-fixed-unfreeze",
+        name="waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-25.0_attn_scale-fixed-debug",
         model="dlt-models/yolo11n-temporal-nms-0.75.yaml",
         model_load_path=WAYMO_TEMPORAL_BASE,
         data="waymo_dark.yaml",
