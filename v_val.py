@@ -13,7 +13,7 @@ for i in range(0, 3):
         name=f"{model_name}-val-seed-{i}",
         data="waymo_dark.yaml",
         batch=1,
-        gframe=8,
+        gframe=16,
         # lframe=16,
         dataset_type="temporal",
         device="cuda",
