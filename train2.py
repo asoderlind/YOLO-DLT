@@ -277,14 +277,14 @@ if __name__ == "__main__":
     #     seed=1,
     # )
 
-    train_model(
-        name="bdd100k_night-yolo8n-seed-2",
-        model="runs/detect/bdd100k_night-yolo8n-seed-2/weights/last.pt",
-        data=data,
-        project="",
-        seed=2,
-        resume=True,
-    )
+    # train_model(
+    #     name="bdd100k_night-yolo8n-seed-2",
+    #     model="runs/detect/bdd100k_night-yolo8n-seed-2/weights/last.pt",
+    #     data=data,
+    #     project="",
+    #     seed=2,
+    #     resume=True,
+    # )
 
     train_model(
         name="bdd100k_night-yolo9t-seed-1",
