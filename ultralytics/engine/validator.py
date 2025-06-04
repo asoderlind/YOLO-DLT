@@ -188,6 +188,7 @@ class BaseValidator:
 
             # Postprocess
             with dt[3]:
+                breakpoint()
                 preds = self.postprocess(preds)
 
             self.update_metrics(preds, batch)
