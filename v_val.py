@@ -1,6 +1,6 @@
 from ultralytics import YOLO
 
-model_name = "waymo_dark-yolo11n-40_e-16_lframe-mosaic-fixed"
+model_name = "waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-12.5_attn_scale-fixed"
 
 model = YOLO(f"runs/detect/{model_name}/weights/last.pt")
 
@@ -14,8 +14,8 @@ for i in range(0, 3):
         name=f"{model_name}-val-seed-{i}",
         data="waymo_dark.yaml",
         batch=1,
-        # gframe=8,
-        lframe=16,
+        gframe=16,
+        # lframe=16,
         dataset_type="temporal",
         device="cuda",
         seed=i,
