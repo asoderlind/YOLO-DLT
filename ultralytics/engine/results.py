@@ -228,7 +228,19 @@ class Results(SimpleClass):
     """
 
     def __init__(
-        self, orig_img, path, names, boxes=None, masks=None, probs=None, keypoints=None, obb=None, speed=None
+        self,
+        orig_img,
+        path,
+        names,
+        boxes=None,
+        masks=None,
+        probs=None,
+        keypoints=None,
+        obb=None,
+        speed=None,
+        distances=None,
+        # max_dist=150,  # KITTI
+        max_dist=85,  # WAYMO
     ) -> None:
         """
         Initialize the Results class for storing and manipulating inference results.
@@ -259,6 +271,9 @@ class Results(SimpleClass):
         """
         self.orig_img = orig_img
         self.orig_shape = orig_img.shape[:2]
+        self.distances = (
+            BaseTensor(distances, self.orig_shape) if distances is not None else None
+        )  # native size distances
         self.boxes = Boxes(boxes, self.orig_shape) if boxes is not None else None  # native size boxes
         self.masks = Masks(masks, self.orig_shape) if masks is not None else None  # native size or imgsz masks
         self.probs = Probs(probs) if probs is not None else None
@@ -266,6 +281,7 @@ class Results(SimpleClass):
         self.obb = OBB(obb, self.orig_shape) if obb is not None else None
         self.speed = speed if speed is not None else {"preprocess": None, "inference": None, "postprocess": None}
         self.names = names
+        self.max_dist = max_dist
         self.path = path
         self.save_dir = None
         self._keys = "boxes", "masks", "probs", "keypoints", "obb"
@@ -536,11 +552,16 @@ class Results(SimpleClass):
             annotator.masks(pred_masks.data, colors=[colors(x, True) for x in idx], im_gpu=im_gpu)
 
         # Plot Detect results
-        if pred_boxes is not None and show_boxes:
-            for i, d in enumerate(reversed(pred_boxes)):
+        if pred_boxes is not None and self.distance.data is not None and show_boxes:
+            for i, (d, dist) in enumerate(zip(reversed(pred_boxes), reversed(self.distances.data))):
                 c, d_conf, id = int(d.cls), float(d.conf) if conf else None, None if d.id is None else int(d.id.item())
                 name = ("" if id is None else f"id:{id} ") + names[c]
-                label = (f"{name} {d_conf:.2f}" if conf else name) if labels else None
+
+                # reverse dist data tensor to match the order of boxes
+                dist = dist * self.max_dist if dist is not None else None
+                dist_string = f"/{dist:.2f}"
+
+                label = (f"{name} {d_conf:.2f}{dist_string}" if conf else name) if labels else None
                 box = d.xyxyxyxy.reshape(-1, 4, 2).squeeze() if is_obb else d.xyxy.squeeze()
                 annotator.box_label(
                     box,

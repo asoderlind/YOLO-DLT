@@ -13,6 +13,16 @@ feature_visualization/
 dist_gain*.png
 sample_images/*.jpg
 
+kitti-yolo_labels/
+waymo_dark_labels/
+
+kitti-yolo_predictions/
+waymo_dark_predictions/
+
+quality/
+
+*_grid.png
+
 # Distribution / packaging
 .Python
 build/
