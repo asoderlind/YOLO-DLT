@@ -3,7 +3,7 @@ from ultralytics import YOLO
 model = YOLO("dlt-models/yolo11n-temporal-nms-0.75-12.5-scale.yaml").load("waymo_dark-yolo11n.pt")
 # model2 = YOLO("dlt-models/yolo11n.yaml").load("waymo_dark-yolo11n.pt")
 # model = YOLO("yolo11n.yaml")
-model.train(
+model.val(
     name="waymo_dark-yolo11n-temporal-base-freeze-run",
     data="waymo_night.yaml",
     batch=1,
@@ -16,6 +16,7 @@ model.train(
     lr0=0.005,
     temporal_freeze=True,
     vid_cls_mapping=True,
+    device="mps",
 )
 
 # model = YOLO("runs/detect/waymo-yolo11n-bdd100k_night-50e-lr0.001-lrf0.01-freeze0-SGD/weights/last.pt")
