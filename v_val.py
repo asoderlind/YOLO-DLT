@@ -8,7 +8,7 @@ model = YOLO(f"runs/detect/{model_name}/weights/last.pt")
 # model = YOLO(WAYMO_TEMPORAL_BASE)
 
 model.val(
-    name="nms-log-test",
+    name="nms-log-test2",
     data="waymo_dark.yaml",
     batch=1,
     gframe=16,

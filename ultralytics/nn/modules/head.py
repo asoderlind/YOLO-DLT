@@ -369,6 +369,7 @@ class TemporalDetect(Detect):
                 pred_res,  # [batch_size, topk_post, 4 + num_classes]
                 pred_idx,  # [batch_size, topk_post]
             )
+        final_cls_preds = final_cls_preds.sigmoid()  # [1, topk_post, num_classes]
         y = self._update_predictions_with_refined_classes(raw_predictions, final_cls_preds, pred_idx)
 
         # y = raw_predictions
