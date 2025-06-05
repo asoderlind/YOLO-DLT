@@ -297,11 +297,12 @@ if __name__ == "__main__":
 
     train_model(
         name="bdd100k_night-yolo11n-bic-repc3k2-wiou2-seed-2",
-        model="dlt-models/yolo11n-bic-repc3k2.yaml",
+        model="runs/detect/bdd100k_night-yolo11n-bic-repc3k2-wiou2-seed-2/weights/last.pt",
         data=data,
         project="",
         seed=2,
         iou_type="wiou2",
+        resume=True,
     )
 
     train_model(
