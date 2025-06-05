@@ -129,7 +129,6 @@ class Detect(nn.Module):
             return dbox.transpose(1, 2), cls.sigmoid().permute(0, 2, 1)
         else:
             dbox = self.decode_bboxes(self.dfl(box), self.anchors.unsqueeze(0)) * self.strides
-            breakpoint()
         return torch.cat((dbox, cls.sigmoid()), 1)
 
     def bias_init(self):
@@ -369,7 +368,7 @@ class TemporalDetect(Detect):
                 pred_res,  # [batch_size, topk_post, 4 + num_classes]
                 pred_idx,  # [batch_size, topk_post]
             )
-        final_cls_preds = final_cls_preds.sigmoid()  # [1, topk_post, num_classes]
+        # final_cls_preds = final_cls_preds.sigmoid()  # [1, topk_post, num_classes]
         y = self._update_predictions_with_refined_classes(raw_predictions, final_cls_preds, pred_idx)
 
         # y = raw_predictions
