@@ -147,6 +147,7 @@ if __name__ == "__main__":
         dataset_type="temporal",
         lr0=0.005,
         nbs=16,
+        temporal_window=0,
     )
 
     # train_model_v(
