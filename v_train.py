@@ -134,8 +134,8 @@ if __name__ == "__main__":
 
     train_model_v(
         name="waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-25.0_attn_scale-fixed-debug",
-        model="dlt-models/yolo11n-temporal-nms-0.75.yaml",
-        model_load_path=WAYMO_TEMPORAL_BASE,
+        model="runs/detect/waymo_dark-yolo11n-40_e-16_gframe-0.005_lr0-0.75_nms-temporal_dl-25.0_attn_scale-fixed/weights/last.pt",
+        # model_load_path=WAYMO_TEMPORAL_BASE,
         data="waymo_dark.yaml",
         gframe=16,
         batch=1,
