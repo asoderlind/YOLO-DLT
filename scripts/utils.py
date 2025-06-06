@@ -1,5 +1,6 @@
 import cv2
 import matplotlib.pyplot as plt
+import os
 
 import numpy as np
 
@@ -113,8 +114,8 @@ def draw_yolo_bboxes(
     text_size=1,
     text_thickness=2,
 ):
-    print("image_path:", image_path)
-    print("label_path:", label_path)
+    # print("image_path:", image_path)
+    # print("label_path:", label_path)
     # Load the image
     img = cv2.imread(image_path)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -145,21 +146,39 @@ def draw_yolo_bboxes(
             _class = id2cls[cls] if cls in id2cls else str(cls)
             labels.append((x1, y1, x2, y2, _class, dist))
 
-    print("labels:", labels)
+    # print("labels:", labels)
     for label in labels:
         x1, y1, x2, y2, cls, dist = label
-        cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        color = {
+            "Pedestrian": (255, 100, 100),
+            "Car": (100, 255, 255),
+            "Cyclist": (150, 150, 255),
+            "Tram": (255, 150, 150),
+        }
+        cv2.rectangle(img, (x1, y1), (x2, y2), color[cls] if cls in color else (255, 255, 255), 2)
         cv2.putText(
             img,
-            f"{cls}{',' + str(dist) if dist != -1 else ''}",
+            f"{cls}{'/' + str(dist) if dist != -1 else ''}",
             (x1, y1 - 5),
             0,
             text_size,
-            (0, 255, 0),
+            color[cls] if cls in color else (255, 255, 255),
             text_thickness,
         )
 
     plt.figure(figsize=(10, 6))  # Set figure size
     plt.imshow(img)
     plt.axis("off")  # Hide axes
-    plt.show()
+    # tight
+    plt.tight_layout()  # Adjust layout to prevent clipping of tick-labels
+    dataset = image_path.split("/")[-4]
+    img_name = image_path.split("/")[-1].split(".")[0]
+
+    if not os.path.exists(f"../{dataset}_labels/"):
+        os.makedirs(f"../{dataset}_labels/")
+
+    plt.savefig(
+        f"../{dataset}_labels/labels-{dataset}-{img_name}.png", bbox_inches="tight", pad_inches=0.0
+    )  # Save the figure
+
+    plt.close()  # Close the figure to free memory
