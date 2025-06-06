@@ -219,26 +219,26 @@ class BaseValidator:
 
             # Enhanced NMS Analysis
             with dt[3]:
-                if isinstance(preds, list) and len(preds) >= 4:
-                    # Extract predictions
-                    enhanced_preds = preds[0]  # Enhanced predictions
-                    raw_preds = preds[3]  # Raw predictions
+                # if isinstance(preds, list) and len(preds) >= 4:
+                #     # Extract predictions
+                #     enhanced_preds = preds[0]  # Enhanced predictions
+                #     raw_preds = preds[3]  # Raw predictions
 
-                    # Analyze before NMS
-                    self._analyze_pre_nms(enhanced_preds, raw_preds, batch_i)
+                #     # Analyze before NMS
+                #     self._analyze_pre_nms(enhanced_preds, raw_preds, batch_i)
 
-                    # Apply NMS to both
-                    enhanced_output = self.postprocess((enhanced_preds,))
-                    raw_output = self.postprocess((raw_preds,))
+                #     # Apply NMS to both
+                #     enhanced_output = self.postprocess((enhanced_preds,))
+                #     raw_output = self.postprocess((raw_preds,))
 
-                    # Analyze after NMS
-                    self._analyze_post_nms(enhanced_output, raw_output, enhanced_preds, raw_preds, batch_i)
+                #     # Analyze after NMS
+                #     self._analyze_post_nms(enhanced_output, raw_output, enhanced_preds, raw_preds, batch_i)
 
-                    # Use enhanced predictions for metrics
-                    preds = enhanced_output
-                else:
-                    # Standard postprocess for non-temporal models
-                    preds = self.postprocess(preds)
+                #     # Use enhanced predictions for metrics
+                #     preds = enhanced_output
+                # else:
+                #     # Standard postprocess for non-temporal models
+                preds = self.postprocess(preds)
 
             self.update_metrics(preds, batch)
             if self.args.plots and batch_i < 3:
@@ -270,9 +270,9 @@ class BaseValidator:
             if self.args.plots or self.args.save_json:
                 LOGGER.info(f"Results saved to {colorstr('bold', self.save_dir)}")
 
-            # Save NMS analysis summary
-            if not self.training:
-                self._save_nms_analysis_summary()
+            # # Save NMS analysis summary
+            # if not self.training:
+            #     self._save_nms_analysis_summary()
             return stats
 
     def _analyze_pre_nms(self, enhanced_preds, raw_preds, batch_idx):
